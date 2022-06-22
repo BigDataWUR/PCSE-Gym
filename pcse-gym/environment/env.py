@@ -137,8 +137,10 @@ class PCSEEnv(gym.Env):
             }
         )
 
-    def _get_observation_space_crop_model(self):
-        return {var: gym.spaces.Box(0, np.inf, shape=()) for var in self._output_variables}
+    def _get_observation_space_crop_model(self) -> gym.spaces.Space:
+        return gym.spaces.Dict(
+            {var: gym.spaces.Box(0, np.inf, shape=()) for var in self._output_variables}
+        )
 
     def _get_action_space(self) -> gym.spaces.Space:
         space = gym.spaces.Dict(
