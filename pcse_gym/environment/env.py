@@ -68,6 +68,8 @@ class PCSEEnv(gym.Env):
                  latitude: float = 52,
                  longitude: float = 5.5,  # TODO -- right values
                  seed: int = None,
+                 timestep: int = 1,  # TODO
+                 batch_size: int = 1,  # TODO
                  ):
 
         # Optionally set the seed
@@ -76,6 +78,7 @@ class PCSEEnv(gym.Env):
 
         # Set location
         self._location = (latitude, longitude)
+        self._timestep = timestep
 
         # Load the PCSE Engine config
         model_config = pcse.util.ConfigurationLoader(model_config_file)
@@ -125,21 +128,21 @@ class PCSEEnv(gym.Env):
     def _get_observation_space_weather(self) -> gym.spaces.Space:
         return gym.spaces.Dict(
             {
-                'IRRAD': gym.spaces.Box(0, np.inf, ()),
-                'TMIN': gym.spaces.Box(-np.inf, np.inf, ()),
-                'TMAX': gym.spaces.Box(-np.inf, np.inf, ()),
-                'VAP': gym.spaces.Box(0, np.inf, ()),
-                'RAIN': gym.spaces.Box(0, np.inf, ()),
-                'E0': gym.spaces.Box(0, np.inf, ()),
-                'ES0': gym.spaces.Box(0, np.inf, ()),
-                'ET0': gym.spaces.Box(0, np.inf, ()),
-                'WIND': gym.spaces.Box(0, np.inf, ()),
+                'IRRAD': gym.spaces.Box(0, np.inf, (self._timestep,)),
+                'TMIN': gym.spaces.Box(-np.inf, np.inf, (self._timestep,)),
+                'TMAX': gym.spaces.Box(-np.inf, np.inf, (self._timestep,)),
+                'VAP': gym.spaces.Box(0, np.inf, (self._timestep,)),
+                'RAIN': gym.spaces.Box(0, np.inf, (self._timestep,)),
+                'E0': gym.spaces.Box(0, np.inf, (self._timestep,)),
+                'ES0': gym.spaces.Box(0, np.inf, (self._timestep,)),
+                'ET0': gym.spaces.Box(0, np.inf, (self._timestep,)),
+                'WIND': gym.spaces.Box(0, np.inf, (self._timestep,)),
             }
         )
 
     def _get_observation_space_crop_model(self) -> gym.spaces.Space:
         return gym.spaces.Dict(
-            {var: gym.spaces.Box(0, np.inf, shape=()) for var in self._output_variables}
+            {var: gym.spaces.Box(0, np.inf, shape=(self._timestep,)) for var in self._output_variables}
         )
 
     def _get_action_space(self) -> gym.spaces.Space:
@@ -215,15 +218,16 @@ class PCSEEnv(gym.Env):
         self._apply_action(action)
 
         # Run the crop growth model
-        self._model.run(days=1)  # TODO -- variable nr of days
+        self._model.run(days=self._timestep)
         # Get the model output
         # TODO -- should this be considered a state? It is much closer to an observation/partial state
-        output = self._model.get_output()
-        state = output[-1]
-        info['date'] = state['day']
+        output = self._model.get_output()[-self._timestep:]
+
+        print(output)
+
         # Construct an observation and reward from the new environment state
-        o = self._get_observation(state)
-        r = self._get_reward(state)
+        o = self._get_observation(output)
+        r = self._get_reward(output)
         # Check whether the environment has terminated
         done = self._model.terminated
         if done:
@@ -248,26 +252,35 @@ class PCSEEnv(gym.Env):
                                  K_recovery=0.7,  # TODO -- good values -- how to pass these to the function?
                                  )
 
-    def _get_observation(self, state) -> dict:
+    def _get_observation(self, output) -> dict:
 
-        o = {v: state[v] for v in self.output_variables}
+        # Get the datetime objects characterizing the specific days
+        days = [day['day'] for day in output]
 
-        weather_data = self._weather_data_provider(self._model.day)
-        weather_observation = {k: getattr(weather_data, k) for k in self._weather_variables}
+        # Get the output variables for each of the days
+        crop_model_observation = {v: [day[v] for day in output] for v in self._output_variables}
 
-        o['weather'] = weather_observation
+        # Get the weather data of the passed days
+        weather_data = [self._weather_data_provider(day) for day in days]
+        # Cast the weather data into a dict
+        weather_observation = {var: [getattr(weather_data[d], var) for d in range(len(days))] for var in self._weather_variables}
+
+        o = {
+            'crop_model': crop_model_observation,
+            'weather': weather_observation,
+        }
 
         return o
 
-    def _get_reward(self, state) -> float:
+    def _get_reward(self, _) -> float:
         output = self._model.get_output()
         # Consider different cases:
         if len(output) == 0:  # The simulation has not started -> 0 reward
             return 0
-        if len(output) == 1:  # Only one observation is made -> give initial yield as reward
-            return output[0]['WSO']
+        if len(output) <= self._timestep:  # Only one observation is made -> give initial yield as reward
+            return output[-1]['WSO']
         else:  # Multiple observations are made -> give difference of yield of the last time steps
-            return output[-1]['WSO'] - output[-2]['WSO']
+            return output[-1]['WSO'] - output[-self._timestep - 1]['WSO']
 
     def reset(self,
               *,
@@ -318,7 +331,7 @@ class PCSEEnv(gym.Env):
 if __name__ == '__main__':
     import time
 
-    _env = PCSEEnv()
+    _env = PCSEEnv(timestep=3)
 
     print(_env.start_date)
 
