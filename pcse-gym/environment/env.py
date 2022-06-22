@@ -101,7 +101,7 @@ class PCSEEnv(gym.Env):
                                                                )
 
         # Get the weather data source
-        self._weather_data_provider = self._get_weather_data_provider()
+        self._weather_data_provider, self._weather_variables = self._get_weather_data_provider()
 
         # Create a PCSE engine / crop growth model
         self._model = Engine(self._parameter_provider,
@@ -140,8 +140,10 @@ class PCSEEnv(gym.Env):
         )
         return space  # TODO -- add more actions?
 
-    def _get_weather_data_provider(self) -> pcse.db.NASAPowerWeatherDataProvider:
-        return pcse.db.NASAPowerWeatherDataProvider(*self._location)  # TODO -- other weather data providers
+    def _get_weather_data_provider(self) -> tuple:
+        wdp = pcse.db.NASAPowerWeatherDataProvider(*self._location)  # TODO -- other weather data providers
+        variables = list(pcse.base.weather.WeatherDataContainer.required)
+        return wdp, variables
 
     """
     Properties of the crop model config file
@@ -233,12 +235,12 @@ class PCSEEnv(gym.Env):
                                  K_recovery=0.7,  # TODO -- good values -- how to pass these to the function?
                                  )
 
-    def _get_observation(self, state) -> dict:  # TODO -- weather variables are now hardcoded
+    def _get_observation(self, state) -> dict:
 
         o = {v: state[v] for v in self.output_variables}
 
         weather_data = self._weather_data_provider(self._model.day)
-        weather_observation = {k: getattr(weather_data, k) for k in ['IRRAD', 'TMIN', 'TMAX', 'VAP', 'RAIN']}
+        weather_observation = {k: getattr(weather_data, k) for k in self._weather_variables}
 
         o['weather'] = weather_observation
 
