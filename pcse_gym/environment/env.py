@@ -173,6 +173,10 @@ class PCSEEnv(gym.Env):
     def summary_variables(self) -> list:
         return list(self._summary_variables)
 
+    @property
+    def weather_variables(self):
+        return list(self._weather_variables)
+
     """
     Properties derived from the agro management config:
     """
