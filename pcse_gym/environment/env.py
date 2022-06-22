@@ -220,10 +220,8 @@ class PCSEEnv(gym.Env):
         # Run the crop growth model
         self._model.run(days=self._timestep)
         # Get the model output
-        # TODO -- should this be considered a state? It is much closer to an observation/partial state
         output = self._model.get_output()[-self._timestep:]
-
-        print(output)
+        info['days'] = [day['day'] for day in output]
 
         # Construct an observation and reward from the new environment state
         o = self._get_observation(output)
@@ -303,9 +301,9 @@ class PCSEEnv(gym.Env):
                              config=self._model_config_file,
                              )
 
-        state = self._model.get_output()[-1]
-        o = self._get_observation(state)
-        info['date'] = state['day']
+        output = self._model.get_output()[-1:]
+        o = self._get_observation(output)
+        info['date'] = self.date
 
         return o, info if return_info else o
 
@@ -331,7 +329,7 @@ class PCSEEnv(gym.Env):
 if __name__ == '__main__':
     import time
 
-    _env = PCSEEnv(timestep=3)
+    _env = PCSEEnv(timestep=1)
 
     print(_env.start_date)
 
