@@ -116,18 +116,29 @@ class PCSEEnv(gym.Env):
         self.action_space = self._get_action_space()
 
     def _get_observation_space(self) -> gym.spaces.Space:   # TODO -- proper Box min/max values
-        space = {var: gym.spaces.Box(0, np.inf, shape=()) for var in self._output_variables}
-        space['weather'] = gym.spaces.Dict(  # TODO -- separate weather/crop model observation spaces?
+        space = gym.spaces.Dict({
+            'crop_model': self._get_observation_space_crop_model(),
+            'weather': self._get_observation_space_weather(),
+        })
+        return space
+
+    def _get_observation_space_weather(self) -> gym.spaces.Space:
+        return gym.spaces.Dict(
             {
                 'IRRAD': gym.spaces.Box(0, np.inf, ()),
                 'TMIN': gym.spaces.Box(-np.inf, np.inf, ()),
                 'TMAX': gym.spaces.Box(-np.inf, np.inf, ()),
                 'VAP': gym.spaces.Box(0, np.inf, ()),
                 'RAIN': gym.spaces.Box(0, np.inf, ()),
+                'E0': gym.spaces.Box(0, np.inf, ()),
+                'ES0': gym.spaces.Box(0, np.inf, ()),
+                'ET0': gym.spaces.Box(0, np.inf, ()),
+                'WIND': gym.spaces.Box(0, np.inf, ()),
             }
         )
-        space = gym.spaces.Dict(space)
-        return space
+
+    def _get_observation_space_crop_model(self):
+        return {var: gym.spaces.Box(0, np.inf, shape=()) for var in self._output_variables}
 
     def _get_action_space(self) -> gym.spaces.Space:
         space = gym.spaces.Dict(
