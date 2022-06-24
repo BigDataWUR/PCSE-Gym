@@ -59,12 +59,16 @@ class PCSEEnv(gym.Env):
 
     # TODO -- various pre-configured models
 
+    # TODO possibility to change dates? Utility function to create agro management files?
+
+    # TODO -- pass weather data provider as parameter?
+
     def __init__(self,
-                 model_config_file: str = _DEFAULT_CONFIG,
-                 agro_config_file: str = _DEFAULT_AGRO_FILE_PATH,
-                 crop_config_file: str = _DEFAULT_CROP_FILE_PATH,
-                 site_config_file: str = _DEFAULT_SITE_FILE_PATH,
-                 soil_config_file: str = _DEFAULT_SOIL_FILE_PATH,
+                 model_config: str =_DEFAULT_CONFIG,
+                 agro_config: str =_DEFAULT_AGRO_FILE_PATH,
+                 crop_parameters=_DEFAULT_CROP_FILE_PATH,
+                 site_parameters=_DEFAULT_SITE_FILE_PATH,
+                 soil_parameters=_DEFAULT_SOIL_FILE_PATH,
                  latitude: float = 52,
                  longitude: float = 5.5,  # TODO -- right values
                  seed: int = None,
@@ -74,6 +78,13 @@ class PCSEEnv(gym.Env):
         assert timestep > 0
         assert batch_size > 0
 
+        if isinstance(crop_parameters, str):
+            crop_parameters = pcse.fileinput.PCSEFileReader(crop_parameters)
+        if isinstance(site_parameters, str):
+            site_parameters = pcse.fileinput.PCSEFileReader(site_parameters)
+        if isinstance(soil_parameters, str):
+            soil_parameters = pcse.fileinput.PCSEFileReader(soil_parameters)
+
         # Optionally set the seed
         if seed is not None:
             self.seed(seed)
@@ -82,38 +93,29 @@ class PCSEEnv(gym.Env):
         self._location = (latitude, longitude)
         self._timestep = timestep
 
-        # Load the PCSE Engine config
-        model_config = pcse.util.ConfigurationLoader(model_config_file)
-        # Store model config file for re-initialization
-        self._model_config_file = model_config_file
-        # Store which variables are given by the PCSE model output
-        self._output_variables = model_config.OUTPUT_VARS
-        self._summary_variables = model_config.SUMMARY_OUTPUT_VARS  # Summary variables are given at the end of a run
+        # Store the crop/soil/site parameters
+        self._crop_params = crop_parameters
+        self._site_params = site_parameters
+        self._soil_params = soil_parameters
 
-        # Read agro config file
-        with open(agro_config_file, 'r') as f:
-            self._agro_management = yaml.load(f, Loader=yaml.SafeLoader)  # TODO possibility to change dates? Utility function to create agro management files?
+        # Store the agro-management config
+        with open(agro_config, 'r') as f:
+            self._agro_management = yaml.load(f, Loader=yaml.SafeLoader)
 
-        # Read all other config files
-        crop_config = pcse.fileinput.PCSEFileReader(crop_config_file)
-        site_config = pcse.fileinput.PCSEFileReader(site_config_file)
-        soil_config = pcse.fileinput.PCSEFileReader(soil_config_file)
-
-        # Combine the config files in a single PCSE ParameterProvider object
-        self._parameter_provider = pcse.base.ParameterProvider(cropdata=crop_config,
-                                                               sitedata=site_config,
-                                                               soildata=soil_config,
-                                                               )
+        # Store the PCSE Engine config
+        self._model_config = model_config
 
         # Get the weather data source
-        self._weather_data_provider, self._weather_variables = self._get_weather_data_provider()
+        self._weather_data_provider = self._get_weather_data_provider()
 
         # Create a PCSE engine / crop growth model
-        self._model = self._init_pcse_model(self._parameter_provider,
-                                            self._weather_data_provider,
-                                            self._agro_management,
-                                            config=self._model_config_file,
-                                            )
+        self._model = self._init_pcse_model()
+
+        # Use the config files to extract relevant settings
+        model_config = pcse.util.ConfigurationLoader(model_config)
+        self._output_variables = model_config.OUTPUT_VARS  # variables given by the PCSE model output
+        self._summary_variables = model_config.SUMMARY_OUTPUT_VARS  # Summary variables are given at the end of a run
+        self._weather_variables = list(pcse.base.weather.WeatherDataContainer.required)  # TODO -- configurable?
 
         # Define Gym observation space
         self.observation_space = self._get_observation_space()
@@ -121,7 +123,18 @@ class PCSEEnv(gym.Env):
         self.action_space = self._get_action_space()
 
     def _init_pcse_model(self, *args, **kwargs) -> Engine:
-        model = Engine(*args, **kwargs)
+
+        # Combine the config files in a single PCSE ParameterProvider object
+        self._parameter_provider = pcse.base.ParameterProvider(cropdata=self._crop_params,
+                                                               sitedata=self._site_params,
+                                                               soildata=self._soil_params,
+                                                               )
+        # Create a PCSE engine / crop growth model
+        model = Engine(self._parameter_provider,
+                       self._weather_data_provider,
+                       self._agro_management,
+                       config=self._model_config,
+                       )
         # The model starts with output values for the initial date
         # The initial observation should contain output values for an entire timestep
         # If the timestep > 1, generate the remaining outputs by running the model
@@ -167,10 +180,9 @@ class PCSEEnv(gym.Env):
         )
         return space  # TODO -- add more actions?
 
-    def _get_weather_data_provider(self) -> tuple:
+    def _get_weather_data_provider(self) -> pcse.db.NASAPowerWeatherDataProvider:
         wdp = pcse.db.NASAPowerWeatherDataProvider(*self._location)  # TODO -- other weather data providers
-        variables = list(pcse.base.weather.WeatherDataContainer.required)
-        return wdp, variables
+        return wdp
 
     """
     Properties of the crop model config file
@@ -311,11 +323,7 @@ class PCSEEnv(gym.Env):
             self.seed(seed)
 
         # Create a PCSE engine / crop growth model
-        self._model = self._init_pcse_model(self._parameter_provider,
-                                            self._weather_data_provider,
-                                            self._agro_management,
-                                            config=self._model_config_file,
-                                            )
+        self._model = self._init_pcse_model()
 
         output = self._model.get_output()[-1:]
         o = self._get_observation(output)
@@ -392,4 +400,4 @@ if __name__ == '__main__':
     _stds = [std([day[_var][0] for day in _observations]) for _var in _env.output_variables + _env.weather_variables]
 
     # print(_means)
-    # print(_stds)
+    print(_stds)
