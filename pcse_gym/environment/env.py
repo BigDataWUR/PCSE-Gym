@@ -68,11 +68,9 @@ class PCSEEnv(gym.Env):
                  latitude: float = 52,
                  longitude: float = 5.5,  # TODO -- right values
                  seed: int = None,
-                 timestep: int = 1,
+                 timestep: int = 1,  # TODO
                  batch_size: int = 1,  # TODO
                  ):
-        assert timestep > 0
-        assert batch_size > 0
 
         # Optionally set the seed
         if seed is not None:
@@ -109,25 +107,16 @@ class PCSEEnv(gym.Env):
         self._weather_data_provider, self._weather_variables = self._get_weather_data_provider()
 
         # Create a PCSE engine / crop growth model
-        self._model = self._init_pcse_model(self._parameter_provider,
-                                            self._weather_data_provider,
-                                            self._agro_management,
-                                            config=self._model_config_file,
-                                            )
+        self._model = Engine(self._parameter_provider,
+                             self._weather_data_provider,
+                             self._agro_management,
+                             config=model_config_file,
+                             )
 
         # Define Gym observation space
         self.observation_space = self._get_observation_space()
         # Define Gym action space
         self.action_space = self._get_action_space()
-
-    def _init_pcse_model(self, *args, **kwargs) -> Engine:
-        model = Engine(*args, **kwargs)
-        # The model starts with output values for the initial date
-        # The initial observation should contain output values for an entire timestep
-        # If the timestep > 1, generate the remaining outputs by running the model
-        if self._timestep > 1:
-            model.run(days=self._timestep - 1)
-        return model
 
     def _get_observation_space(self) -> gym.spaces.Space:   # TODO -- proper Box min/max values
         space = gym.spaces.Dict({
@@ -158,7 +147,7 @@ class PCSEEnv(gym.Env):
 
     def _get_action_space(self) -> gym.spaces.Box:
         space = gym.spaces.Box(0, np.inf, shape=(1,))
-        return space
+        return space  # TODO -- add more actions?
 
     def _get_weather_data_provider(self) -> tuple:
         wdp = pcse.db.NASAPowerWeatherDataProvider(*self._location)  # TODO -- other weather data providers
@@ -219,9 +208,6 @@ class PCSEEnv(gym.Env):
 
     def step(self, action) -> tuple:
 
-        # Create a dict for storing info
-        info = dict()
-
         # Apply action
         self._apply_action(action)
 
@@ -244,13 +230,11 @@ class PCSEEnv(gym.Env):
             info['output_history'] = self._model.get_output()
             info['summary_output'] = self._model.get_summary_output()
             info['terminal_output'] = self._model.get_terminal_output()
-
         # Return all values
         return o, r, done, info
 
     def _apply_action(self, action):
         self._model._send_signal(signal=pcse.signals.apply_n, amount=action, recovery=0.7)
-
 
     def _get_observation(self, output) -> dict:
 
@@ -297,11 +281,11 @@ class PCSEEnv(gym.Env):
             self.seed(seed)
 
         # Create a PCSE engine / crop growth model
-        self._model = self._init_pcse_model(self._parameter_provider,
-                                            self._weather_data_provider,
-                                            self._agro_management,
-                                            config=self._model_config_file,
-                                            )
+        self._model = Engine(self._parameter_provider,
+                             self._weather_data_provider,
+                             self._agro_management,
+                             config=self._model_config_file,
+                             )
 
         output = self._model.get_output()[-1:]
         o = self._get_observation(output)
@@ -332,29 +316,16 @@ if __name__ == '__main__':
     import time
 
     _env = PCSEEnv(timestep=1)
-    _env.reset()
 
     print(_env.start_date)
 
-    def _as_action(i, n, p, k):
-        return {
-            'irrigation': i,
-            'N': n,
-            'P': p,
-            'K': k,
-        }
 
-    # _a = _as_action(1, 2, 3, 4)
-    _a = _as_action(0, 0, 0, 0)
-
-    _observations = []
+    _a = (1, 2, 3, 4)
 
     _d = False
     while not _d:
-        # time.sleep(0.1)
+        time.sleep(0.1)
         _o, _r, _d, _info = _env.step(_a)
-
-        _observations += [{**_o['crop_model'], **_o['weather']}]
 
         print('\n'.join(
             [
@@ -365,17 +336,6 @@ if __name__ == '__main__':
             ]
         ))
 
-    _output = _env._model.get_output()
 
-    def mean(xs):
-        return sum(xs) / len(xs)
 
-    import math
-    def std(xs):
-        return math.sqrt(sum([(x - sum(xs)) ** 2 for x in xs]) / len(xs))
 
-    _means = [mean([day[_var][0] for day in _observations]) for _var in _env.output_variables + _env.weather_variables]
-    _stds = [std([day[_var][0] for day in _observations]) for _var in _env.output_variables + _env.weather_variables]
-
-    # print(_means)
-    # print(_stds)
