@@ -145,15 +145,8 @@ class PCSEEnv(gym.Env):
             {var: gym.spaces.Box(0, np.inf, shape=(self._timestep,)) for var in self._output_variables}
         )
 
-    def _get_action_space(self) -> gym.spaces.Space:
-        space = gym.spaces.Dict(
-            {
-                'irrigation': gym.spaces.Box(0, np.inf, shape=()),
-                'N': gym.spaces.Box(0, np.inf, shape=()),
-                'P': gym.spaces.Box(0, np.inf, shape=()),
-                'K': gym.spaces.Box(0, np.inf, shape=()),
-            }
-        )
+    def _get_action_space(self) -> gym.spaces.Box:
+        space = gym.spaces.Box(0, np.inf, shape=(1,))
         return space  # TODO -- add more actions?
 
     def _get_weather_data_provider(self) -> tuple:
@@ -217,7 +210,6 @@ class PCSEEnv(gym.Env):
 
         # Create a dict for storing info
         info = dict()
-
         # Apply action
         self._apply_action(action)
 
@@ -225,7 +217,8 @@ class PCSEEnv(gym.Env):
         self._model.run(days=self._timestep)
         # Get the model output
         output = self._model.get_output()[-self._timestep:]
-        info['days'] = [day['day'] for day in output]
+        import pandas as pd
+        info = {**pd.DataFrame(self._model.get_output()).set_index("day").fillna(value=np.nan).to_dict()}
 
         # Construct an observation and reward from the new environment state
         o = self._get_observation(output)
@@ -240,19 +233,7 @@ class PCSEEnv(gym.Env):
         return o, r, done, info
 
     def _apply_action(self, action):
-
-        self._model._send_signal(signal=pcse.signals.irrigate,
-                                 amount=action['irrigation'],
-                                 efficiency=0.8,  # TODO -- what is a good value?
-                                 )
-        self._model._send_signal(signal=pcse.signals.apply_npk,
-                                 N_amount=action['N'],
-                                 P_amount=action['P'],
-                                 K_amount=action['K'],
-                                 N_recovery=0.7,
-                                 P_recovery=0.7,
-                                 K_recovery=0.7,  # TODO -- good values -- how to pass these to the function?
-                                 )
+        self._model._send_signal(signal=pcse.signals.apply_n, amount=action, recovery=0.7)
 
     def _get_observation(self, output) -> dict:
 
@@ -337,15 +318,8 @@ if __name__ == '__main__':
 
     print(_env.start_date)
 
-    def _as_action(i, n, p, k):
-        return {
-            'irrigation': i,
-            'N': n,
-            'P': p,
-            'K': k,
-        }
 
-    _a = _as_action(1, 2, 3, 4)
+    _a = (1, 2, 3, 4)
 
     _d = False
     while not _d:
