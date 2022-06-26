@@ -39,6 +39,7 @@ class Engine(pcse.engine.Engine):
 class PCSEEnv(gym.Env):
 
     # TODO -- render modes for agent (render nothing) and humans (show plots of progression)
+    # TODO -- replace hiske's setup as default? it requires a patch of the pcse library
 
     _PATH_TO_FILE = os.path.dirname(os.path.realpath(__file__))
     _CONFIG_PATH = os.path.join(_PATH_TO_FILE, 'configs')
@@ -75,9 +76,33 @@ class PCSEEnv(gym.Env):
                  timestep: int = 1,
                  batch_size: int = 1,  # TODO
                  ):
+        """
+        Create a new PCSE-Gym environment
+
+        :param model_config: PCSE config file name (must be available in the pcse/conf/ folder inside the pcse library)
+        :param agro_config: file name of the yaml file specifying the agro-management configuration
+        :param crop_parameters: Can be specified in two ways:
+                                    - A path to the crop parameter file
+                                      Will be read by a `pcse.fileinput.PCSEFileReader`
+                                    - An object that is directly passed to the `pcse.base.ParameterProvider`
+        :param site_parameters: Can be specified in two ways:
+                                    - A path to the site parameter file
+                                      Will be read by a `pcse.fileinput.PCSEFileReader`
+                                    - An object that is directly passed to the `pcse.base.ParameterProvider`
+        :param soil_parameters: Can be specified in two ways:
+                                    - A path to the soil parameter file
+                                      Will be read by a `pcse.fileinput.PCSEFileReader`
+                                    - An object that is directly passed to the `pcse.base.ParameterProvider`
+        :param latitude: latitude
+        :param longitude: longitude
+        :param seed: A seed for the random number generators used in PCSE-Gym (which are currently none)
+        :param timestep: Number of days that are simulated during a single time step
+        :param batch_size: The number of simulations that are executed simultaneously
+        """
         assert timestep > 0
         assert batch_size > 0
 
+        # If any parameter files are specified as path, convert them to a suitable object for pcse
         if isinstance(crop_parameters, str):
             crop_parameters = pcse.fileinput.PCSEFileReader(crop_parameters)
         if isinstance(site_parameters, str):
@@ -237,6 +262,17 @@ class PCSEEnv(gym.Env):
     """
 
     def step(self, action) -> tuple:
+        """
+        Perform a single step in the Gym environment. The provided action is performed and the environment transitions
+        from state s_t to s_t+1. Based on s_t+1 an observation and reward are generated.
+
+        :param action: an action that respects the action space definition as described by `self._get_action_space()`
+        :return: a 4-tuple containing
+            - an observation that respects the observation space definition as described by `self._get_observation_space()`
+            - a scalar reward
+            - a boolean flag indicating whether the environment/simulation has ended
+            - a dict containing extra info about the environment and state transition
+        """
 
         # Create a dict for storing info
         info = dict()
@@ -279,6 +315,12 @@ class PCSEEnv(gym.Env):
                                  )
 
     def _get_observation(self, output) -> dict:
+        """
+        Generate an observation based on the current environment state
+        :param output: the output of the model after the state transition
+        :return: an observation. The default implementation returns a dict containing two dicts containing crop model
+                 and weather data, respectively
+        """
 
         # Get the datetime objects characterizing the specific days
         days = [day['day'] for day in output]
@@ -298,7 +340,13 @@ class PCSEEnv(gym.Env):
 
         return o
 
-    def _get_reward(self, _) -> float:
+    def _get_reward(self, output) -> float:
+        """
+        Generate a reward based on the current environment state
+        :param output: the output of the model after the state transition
+        :return: a scalar reward. The default implementation gives the increase in yield during the last state transition
+                 if the environment is in its initial state, the initial yield is returned
+        """
         output = self._model.get_output()
         # Consider different cases:
         if len(output) == 0:  # The simulation has not started -> 0 reward
@@ -314,6 +362,14 @@ class PCSEEnv(gym.Env):
               return_info: bool = False,
               options: dict = None
               ):
+        """
+        Reset the PCSE-Gym environment to its initial state
+        :param seed:
+        :param return_info: flag indicating whether an info dict should be returned
+        :param options: optional dict containing options for reinitialization
+        :return: depending on the `return_info` flag, an initial observation is returned or a two-tuple of the initial
+                 observation and the info dict
+        """
 
         # Create an info dict
         info = dict()
@@ -400,4 +456,4 @@ if __name__ == '__main__':
     _stds = [std([day[_var][0] for day in _observations]) for _var in _env.output_variables + _env.weather_variables]
 
     # print(_means)
-    print(_stds)
+    # print(_stds)
