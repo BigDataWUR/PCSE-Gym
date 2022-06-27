@@ -1,6 +1,6 @@
 Version: 1.0
 AgroManagement:
-- 2006-01-01:
+- 2006-04-05:
     CropCalendar:
         crop_name: 'sugar-beet'
         variety_name: 'sugar-beet-601'

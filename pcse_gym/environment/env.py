@@ -40,6 +40,7 @@ class PCSEEnv(gym.Env):
 
     # TODO -- render modes for agent (render nothing) and humans (show plots of progression)
     # TODO -- replace hiske's setup as default? it requires a patch of the pcse library
+    # TODO -- if agromanagement file definition starts before crop start the model will return None and break
 
     _PATH_TO_FILE = os.path.dirname(os.path.realpath(__file__))
     _CONFIG_PATH = os.path.join(_PATH_TO_FILE, 'configs')
@@ -300,7 +301,6 @@ class PCSEEnv(gym.Env):
         return o, r, done, info
 
     def _apply_action(self, action):
-
         self._model._send_signal(signal=pcse.signals.irrigate,
                                  amount=action['irrigation'],
                                  efficiency=0.8,  # TODO -- what is a good value?
@@ -348,13 +348,16 @@ class PCSEEnv(gym.Env):
                  if the environment is in its initial state, the initial yield is returned
         """
         output = self._model.get_output()
+        # Define the variable on which the reward is based
+        var = 'WSO'
+        # var = 'LAI'  # For debugging
         # Consider different cases:
         if len(output) == 0:  # The simulation has not started -> 0 reward
             return 0
         if len(output) <= self._timestep:  # Only one observation is made -> give initial yield as reward
-            return output[-1]['WSO']
+            return output[-1][var] or 0
         else:  # Multiple observations are made -> give difference of yield of the last time steps
-            return output[-1]['WSO'] - output[-self._timestep - 1]['WSO']
+            return (output[-1][var] or 0) - (output[-self._timestep - 1][var] or 0)
 
     def reset(self,
               *,
@@ -408,8 +411,16 @@ class PCSEEnv(gym.Env):
 
 if __name__ == '__main__':
     import time
+    from pcse.fileinput import CABOFileReader
+    from pcse.util import WOFOST80SiteDataProvider, WOFOST72SiteDataProvider
 
-    _env = PCSEEnv(timestep=1)
+    _env = PCSEEnv(
+        # model_config='Wofost72_WLP_FD.conf',
+        # agro_config=os.path.join(PCSEEnv._CONFIG_PATH, 'agro', 'sugarbeet_calendar.yaml'),
+        # crop_parameters=CABOFileReader(os.path.join(PCSEEnv._CONFIG_PATH, 'crop', 'SUG0601.CAB')),
+        # site_parameters=WOFOST72SiteDataProvider(WAV=10),
+        # soil_parameters=CABOFileReader(os.path.join(PCSEEnv._CONFIG_PATH, 'soil', 'ec3.CAB')),
+        timestep=1)
     _env.reset()
 
     print(_env.start_date)
@@ -455,5 +466,5 @@ if __name__ == '__main__':
     _means = [mean([day[_var][0] for day in _observations]) for _var in _env.output_variables + _env.weather_variables]
     _stds = [std([day[_var][0] for day in _observations]) for _var in _env.output_variables + _env.weather_variables]
 
-    # print(_means)
-    # print(_stds)
+    print(_means)
+    print(_stds)
