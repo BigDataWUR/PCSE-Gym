@@ -39,6 +39,8 @@ class Engine(pcse.engine.Engine):
 class PCSEEnv(gym.Env):
 
     # TODO -- render modes for agent (render nothing) and humans (show plots of progression)
+    # TODO -- replace hiske's setup as default? it requires a patch of the pcse library
+    # TODO -- if agromanagement file definition starts before crop start the model will return None and break
 
     _PATH_TO_FILE = os.path.dirname(os.path.realpath(__file__))
     _CONFIG_PATH = os.path.join(_PATH_TO_FILE, 'configs')
@@ -59,18 +61,55 @@ class PCSEEnv(gym.Env):
 
     # TODO -- various pre-configured models
 
+    # TODO possibility to change dates? Utility function to create agro management files?
+
+    # TODO -- pass weather data provider as parameter?
+
     def __init__(self,
-                 model_config_file: str = _DEFAULT_CONFIG,
-                 agro_config_file: str = _DEFAULT_AGRO_FILE_PATH,
-                 crop_config_file: str = _DEFAULT_CROP_FILE_PATH,
-                 site_config_file: str = _DEFAULT_SITE_FILE_PATH,
-                 soil_config_file: str = _DEFAULT_SOIL_FILE_PATH,
+                 model_config: str =_DEFAULT_CONFIG,
+                 agro_config: str =_DEFAULT_AGRO_FILE_PATH,
+                 crop_parameters=_DEFAULT_CROP_FILE_PATH,
+                 site_parameters=_DEFAULT_SITE_FILE_PATH,
+                 soil_parameters=_DEFAULT_SOIL_FILE_PATH,
                  latitude: float = 52,
                  longitude: float = 5.5,  # TODO -- right values
                  seed: int = None,
-                 timestep: int = 1,  # TODO
+                 timestep: int = 1,
                  batch_size: int = 1,  # TODO
                  ):
+        """
+        Create a new PCSE-Gym environment
+
+        :param model_config: PCSE config file name (must be available in the pcse/conf/ folder inside the pcse library)
+        :param agro_config: file name of the yaml file specifying the agro-management configuration
+        :param crop_parameters: Can be specified in two ways:
+                                    - A path to the crop parameter file
+                                      Will be read by a `pcse.fileinput.PCSEFileReader`
+                                    - An object that is directly passed to the `pcse.base.ParameterProvider`
+        :param site_parameters: Can be specified in two ways:
+                                    - A path to the site parameter file
+                                      Will be read by a `pcse.fileinput.PCSEFileReader`
+                                    - An object that is directly passed to the `pcse.base.ParameterProvider`
+        :param soil_parameters: Can be specified in two ways:
+                                    - A path to the soil parameter file
+                                      Will be read by a `pcse.fileinput.PCSEFileReader`
+                                    - An object that is directly passed to the `pcse.base.ParameterProvider`
+        :param latitude: latitude
+        :param longitude: longitude
+        :param seed: A seed for the random number generators used in PCSE-Gym (which are currently none)
+        :param timestep: Number of days that are simulated during a single time step
+        :param batch_size: The number of simulations that are executed simultaneously
+        """
+        assert timestep > 0
+        assert batch_size > 0
+
+        # If any parameter files are specified as path, convert them to a suitable object for pcse
+        if isinstance(crop_parameters, str):
+            crop_parameters = pcse.fileinput.PCSEFileReader(crop_parameters)
+        if isinstance(site_parameters, str):
+            site_parameters = pcse.fileinput.PCSEFileReader(site_parameters)
+        if isinstance(soil_parameters, str):
+            soil_parameters = pcse.fileinput.PCSEFileReader(soil_parameters)
 
         # Optionally set the seed
         if seed is not None:
@@ -80,43 +119,54 @@ class PCSEEnv(gym.Env):
         self._location = (latitude, longitude)
         self._timestep = timestep
 
-        # Load the PCSE Engine config
-        model_config = pcse.util.ConfigurationLoader(model_config_file)
-        # Store model config file for re-initialization
-        self._model_config_file = model_config_file
-        # Store which variables are given by the PCSE model output
-        self._output_variables = model_config.OUTPUT_VARS
-        self._summary_variables = model_config.SUMMARY_OUTPUT_VARS  # Summary variables are given at the end of a run
+        # Store the crop/soil/site parameters
+        self._crop_params = crop_parameters
+        self._site_params = site_parameters
+        self._soil_params = soil_parameters
 
-        # Read agro config file
-        with open(agro_config_file, 'r') as f:
-            self._agro_management = yaml.load(f, Loader=yaml.SafeLoader)  # TODO possibility to change dates? Utility function to create agro management files?
+        # Store the agro-management config
+        with open(agro_config, 'r') as f:
+            self._agro_management = yaml.load(f, Loader=yaml.SafeLoader)
 
-        # Read all other config files
-        crop_config = pcse.fileinput.PCSEFileReader(crop_config_file)
-        site_config = pcse.fileinput.PCSEFileReader(site_config_file)
-        soil_config = pcse.fileinput.PCSEFileReader(soil_config_file)
-
-        # Combine the config files in a single PCSE ParameterProvider object
-        self._parameter_provider = pcse.base.ParameterProvider(cropdata=crop_config,
-                                                               sitedata=site_config,
-                                                               soildata=soil_config,
-                                                               )
+        # Store the PCSE Engine config
+        self._model_config = model_config
 
         # Get the weather data source
-        self._weather_data_provider, self._weather_variables = self._get_weather_data_provider()
+        self._weather_data_provider = self._get_weather_data_provider()
 
         # Create a PCSE engine / crop growth model
-        self._model = Engine(self._parameter_provider,
-                             self._weather_data_provider,
-                             self._agro_management,
-                             config=model_config_file,
-                             )
+        self._model = self._init_pcse_model()
+
+        # Use the config files to extract relevant settings
+        model_config = pcse.util.ConfigurationLoader(model_config)
+        self._output_variables = model_config.OUTPUT_VARS  # variables given by the PCSE model output
+        self._summary_variables = model_config.SUMMARY_OUTPUT_VARS  # Summary variables are given at the end of a run
+        self._weather_variables = list(pcse.base.weather.WeatherDataContainer.required)  # TODO -- configurable?
 
         # Define Gym observation space
         self.observation_space = self._get_observation_space()
         # Define Gym action space
         self.action_space = self._get_action_space()
+
+    def _init_pcse_model(self, *args, **kwargs) -> Engine:
+
+        # Combine the config files in a single PCSE ParameterProvider object
+        self._parameter_provider = pcse.base.ParameterProvider(cropdata=self._crop_params,
+                                                               sitedata=self._site_params,
+                                                               soildata=self._soil_params,
+                                                               )
+        # Create a PCSE engine / crop growth model
+        model = Engine(self._parameter_provider,
+                       self._weather_data_provider,
+                       self._agro_management,
+                       config=self._model_config,
+                       )
+        # The model starts with output values for the initial date
+        # The initial observation should contain output values for an entire timestep
+        # If the timestep > 1, generate the remaining outputs by running the model
+        if self._timestep > 1:
+            model.run(days=self._timestep - 1)
+        return model
 
     def _get_observation_space(self) -> gym.spaces.Space:   # TODO -- proper Box min/max values
         space = gym.spaces.Dict({
@@ -145,14 +195,20 @@ class PCSEEnv(gym.Env):
             {var: gym.spaces.Box(0, np.inf, shape=(self._timestep,)) for var in self._output_variables}
         )
 
-    def _get_action_space(self) -> gym.spaces.Box:
-        space = gym.spaces.Box(0, np.inf, shape=(1,))
+    def _get_action_space(self) -> gym.spaces.Space:
+        space = gym.spaces.Dict(
+            {
+                'irrigation': gym.spaces.Box(0, np.inf, shape=()),
+                'N': gym.spaces.Box(0, np.inf, shape=()),
+                'P': gym.spaces.Box(0, np.inf, shape=()),
+                'K': gym.spaces.Box(0, np.inf, shape=()),
+            }
+        )
         return space  # TODO -- add more actions?
 
-    def _get_weather_data_provider(self) -> tuple:
+    def _get_weather_data_provider(self) -> pcse.db.NASAPowerWeatherDataProvider:
         wdp = pcse.db.NASAPowerWeatherDataProvider(*self._location)  # TODO -- other weather data providers
-        variables = list(pcse.base.weather.WeatherDataContainer.required)
-        return wdp, variables
+        return wdp
 
     """
     Properties of the crop model config file
@@ -207,7 +263,20 @@ class PCSEEnv(gym.Env):
     """
 
     def step(self, action) -> tuple:
+        """
+        Perform a single step in the Gym environment. The provided action is performed and the environment transitions
+        from state s_t to s_t+1. Based on s_t+1 an observation and reward are generated.
 
+        :param action: an action that respects the action space definition as described by `self._get_action_space()`
+        :return: a 4-tuple containing
+            - an observation that respects the observation space definition as described by `self._get_observation_space()`
+            - a scalar reward
+            - a boolean flag indicating whether the environment/simulation has ended
+            - a dict containing extra info about the environment and state transition
+        """
+
+        # Create a dict for storing info
+        info = dict()
         # Apply action
         self._apply_action(action)
 
@@ -230,15 +299,34 @@ class PCSEEnv(gym.Env):
             info['output_history'] = self._model.get_output()
             info['summary_output'] = self._model.get_summary_output()
             info['terminal_output'] = self._model.get_terminal_output()
+
         # Return all values
         return o, r, done, info
 
     def _apply_action(self, action):
-        self._model._send_signal(signal=pcse.signals.apply_n, amount=action, recovery=0.7)
+        self._model._send_signal(signal=pcse.signals.irrigate,
+                                 amount=action['irrigation'],
+                                 efficiency=0.8,  # TODO -- what is a good value?
+                                 )
+        self._model._send_signal(signal=pcse.signals.apply_npk,
+                                 N_amount=action['N'],
+                                 P_amount=action['P'],
+                                 K_amount=action['K'],
+                                 N_recovery=0.7,
+                                 P_recovery=0.7,
+                                 K_recovery=0.7,  # TODO -- good values -- how to pass these to the function?
+                                 )
 
     def _get_observation(self, output) -> dict:
+        """
+        Generate an observation based on the current environment state
+        :param output: the output of the model after the state transition
+        :return: an observation. The default implementation returns a dict containing two dicts containing crop model
+                 and weather data, respectively
+        """
 
         # Get the datetime objects characterizing the specific days
+
         days = [day['day'] for day in output]
 
         # Get the output variables for each of the days
@@ -256,15 +344,24 @@ class PCSEEnv(gym.Env):
 
         return o
 
-    def _get_reward(self, _) -> float:
+    def _get_reward(self, output) -> float:
+        """
+        Generate a reward based on the current environment state
+        :param output: the output of the model after the state transition
+        :return: a scalar reward. The default implementation gives the increase in yield during the last state transition
+                 if the environment is in its initial state, the initial yield is returned
+        """
         output = self._model.get_output()
+        # Define the variable on which the reward is based
+        var = 'WSO'
+        # var = 'LAI'  # For debugging
         # Consider different cases:
         if len(output) == 0:  # The simulation has not started -> 0 reward
             return 0
         if len(output) <= self._timestep:  # Only one observation is made -> give initial yield as reward
-            return output[-1]['WSO']
+            return output[-1][var] or 0
         else:  # Multiple observations are made -> give difference of yield of the last time steps
-            return output[-1]['WSO'] - output[-self._timestep - 1]['WSO']
+            return (output[-1][var] or 0) - (output[-self._timestep - 1][var] or 0)
 
     def reset(self,
               *,
@@ -272,6 +369,14 @@ class PCSEEnv(gym.Env):
               return_info: bool = False,
               options: dict = None
               ):
+        """
+        Reset the PCSE-Gym environment to its initial state
+        :param seed:
+        :param return_info: flag indicating whether an info dict should be returned
+        :param options: optional dict containing options for reinitialization
+        :return: depending on the `return_info` flag, an initial observation is returned or a two-tuple of the initial
+                 observation and the info dict
+        """
 
         # Create an info dict
         info = dict()
@@ -281,13 +386,8 @@ class PCSEEnv(gym.Env):
             self.seed(seed)
 
         # Create a PCSE engine / crop growth model
-        self._model = Engine(self._parameter_provider,
-                             self._weather_data_provider,
-                             self._agro_management,
-                             config=self._model_config_file,
-                             )
-
-        output = self._model.get_output()[-1:]
+        self._model = self._init_pcse_model()
+        output = self._model.get_output()[-self._timestep:]
         o = self._get_observation(output)
         info['date'] = self.date
 
@@ -314,18 +414,39 @@ class PCSEEnv(gym.Env):
 
 if __name__ == '__main__':
     import time
+    from pcse.fileinput import CABOFileReader
+    from pcse.util import WOFOST80SiteDataProvider, WOFOST72SiteDataProvider
 
-    _env = PCSEEnv(timestep=1)
+    _env = PCSEEnv(
+        # model_config='Wofost72_WLP_FD.conf',
+        # agro_config=os.path.join(PCSEEnv._CONFIG_PATH, 'agro', 'sugarbeet_calendar.yaml'),
+        # crop_parameters=CABOFileReader(os.path.join(PCSEEnv._CONFIG_PATH, 'crop', 'SUG0601.CAB')),
+        # site_parameters=WOFOST72SiteDataProvider(WAV=10),
+        # soil_parameters=CABOFileReader(os.path.join(PCSEEnv._CONFIG_PATH, 'soil', 'ec3.CAB')),
+        timestep=1)
+    _env.reset()
 
     print(_env.start_date)
 
+    def _as_action(i, n, p, k):
+        return {
+            'irrigation': i,
+            'N': n,
+            'P': p,
+            'K': k,
+        }
 
-    _a = (1, 2, 3, 4)
+    # _a = _as_action(1, 2, 3, 4)
+    _a = _as_action(0, 0, 0, 0)
+
+    _observations = []
 
     _d = False
     while not _d:
-        time.sleep(0.1)
+        # time.sleep(0.1)
         _o, _r, _d, _info = _env.step(_a)
+
+        _observations += [{**_o['crop_model'], **_o['weather']}]
 
         print('\n'.join(
             [
@@ -336,6 +457,17 @@ if __name__ == '__main__':
             ]
         ))
 
+    _output = _env._model.get_output()
 
+    def mean(xs):
+        return sum(xs) / len(xs)
 
+    import math
+    def std(xs):
+        return math.sqrt(sum([(x - sum(xs)) ** 2 for x in xs]) / len(xs))
 
+    _means = [mean([day[_var][0] for day in _observations]) for _var in _env.output_variables + _env.weather_variables]
+    _stds = [std([day[_var][0] for day in _observations]) for _var in _env.output_variables + _env.weather_variables]
+
+    print(_means)
+    print(_stds)
