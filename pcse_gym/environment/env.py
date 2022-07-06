@@ -277,6 +277,7 @@ class PCSEEnv(gym.Env):
 
         # Create a dict for storing info
         info = dict()
+
         # Apply action
         self._apply_action(action)
 
@@ -284,11 +285,7 @@ class PCSEEnv(gym.Env):
         self._model.run(days=self._timestep)
         # Get the model output
         output = self._model.get_output()[-self._timestep:]
-        import pandas as pd
-        info = {**pd.DataFrame(output).set_index("day").fillna(value=np.nan).to_dict()}
-        if 'action' not in info.keys():
-            info['action'] = {}
-        info['action'][output[0]['day']] = action
+        info['days'] = [day['day'] for day in output]
 
         # Construct an observation and reward from the new environment state
         o = self._get_observation(output)
@@ -326,7 +323,6 @@ class PCSEEnv(gym.Env):
         """
 
         # Get the datetime objects characterizing the specific days
-
         days = [day['day'] for day in output]
 
         # Get the output variables for each of the days
