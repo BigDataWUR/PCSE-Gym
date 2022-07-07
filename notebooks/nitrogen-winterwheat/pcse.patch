@@ -79,7 +79,7 @@ index f65034b..555fbd5 100644
          init["LAI"] = self.LAII
          init["ANLV"] = self.ANLVI
 +
-+    	# BEGIN REVISION Herman Berghuijs (January 5 2020)
++   # BEGIN REVISION Herman Berghuijs (January 5 2020)
 +        init["ANSO"] = self.ANSOI
 +	# END REVISION
 +

@@ -66,8 +66,8 @@ class PCSEEnv(gym.Env):
     # TODO -- pass weather data provider as parameter?
 
     def __init__(self,
-                 model_config: str =_DEFAULT_CONFIG,
-                 agro_config: str =_DEFAULT_AGRO_FILE_PATH,
+                 model_config: str = _DEFAULT_CONFIG,
+                 agro_config: str = _DEFAULT_AGRO_FILE_PATH,
                  crop_parameters=_DEFAULT_CROP_FILE_PATH,
                  site_parameters=_DEFAULT_SITE_FILE_PATH,
                  soil_parameters=_DEFAULT_SOIL_FILE_PATH,
@@ -289,7 +289,7 @@ class PCSEEnv(gym.Env):
 
         # Construct an observation and reward from the new environment state
         o = self._get_observation(output)
-        r = self._get_reward(output)
+        r = self._get_reward()
         # Check whether the environment has terminated
         done = self._model.terminated
         if done:
@@ -340,16 +340,15 @@ class PCSEEnv(gym.Env):
 
         return o
 
-    def _get_reward(self, output) -> float:
+    def _get_reward(self, var='WSO') -> float:
         """
         Generate a reward based on the current environment state
-        :param output: the output of the model after the state transition
+        :param var: the variable extracted from the model output
         :return: a scalar reward. The default implementation gives the increase in yield during the last state transition
                  if the environment is in its initial state, the initial yield is returned
         """
+
         output = self._model.get_output()
-        # Define the variable on which the reward is based
-        var = 'WSO'
         # var = 'LAI'  # For debugging
         # Consider different cases:
         if len(output) == 0:  # The simulation has not started -> 0 reward
@@ -357,7 +356,8 @@ class PCSEEnv(gym.Env):
         if len(output) <= self._timestep:  # Only one observation is made -> give initial yield as reward
             return output[-1][var] or 0
         else:  # Multiple observations are made -> give difference of yield of the last time steps
-            return (output[-1][var] or 0) - (output[-self._timestep - 1][var] or 0)
+            last_index_previous_state = (np.ceil(len(output) / self._timestep).astype('int') - 1) * self._timestep - 1
+            return (output[-1][var] or 0) - (output[last_index_previous_state][var] or 0)
 
     def reset(self,
               *,
@@ -406,64 +406,3 @@ class PCSEEnv(gym.Env):
         pass  # TODO
 
     # TODO -- save state/ load state?
-
-
-if __name__ == '__main__':
-    import time
-    from pcse.fileinput import CABOFileReader
-    from pcse.util import WOFOST80SiteDataProvider, WOFOST72SiteDataProvider
-
-    _env = PCSEEnv(
-        # model_config='Wofost72_WLP_FD.conf',
-        # agro_config=os.path.join(PCSEEnv._CONFIG_PATH, 'agro', 'sugarbeet_calendar.yaml'),
-        # crop_parameters=CABOFileReader(os.path.join(PCSEEnv._CONFIG_PATH, 'crop', 'SUG0601.CAB')),
-        # site_parameters=WOFOST72SiteDataProvider(WAV=10),
-        # soil_parameters=CABOFileReader(os.path.join(PCSEEnv._CONFIG_PATH, 'soil', 'ec3.CAB')),
-        timestep=1)
-    _env.reset()
-
-    print(_env.start_date)
-
-    def _as_action(i, n, p, k):
-        return {
-            'irrigation': i,
-            'N': n,
-            'P': p,
-            'K': k,
-        }
-
-    # _a = _as_action(1, 2, 3, 4)
-    _a = _as_action(0, 0, 0, 0)
-
-    _observations = []
-
-    _d = False
-    while not _d:
-        # time.sleep(0.1)
-        _o, _r, _d, _info = _env.step(_a)
-
-        _observations += [{**_o['crop_model'], **_o['weather']}]
-
-        print('\n'.join(
-            [
-                f'O: {_o}',
-                f'R: {_r}',
-                f'D: {_d}',
-                f'I: {_info}',
-            ]
-        ))
-
-    _output = _env._model.get_output()
-
-    def mean(xs):
-        return sum(xs) / len(xs)
-
-    import math
-    def std(xs):
-        return math.sqrt(sum([(x - sum(xs)) ** 2 for x in xs]) / len(xs))
-
-    _means = [mean([day[_var][0] for day in _observations]) for _var in _env.output_variables + _env.weather_variables]
-    _stds = [std([day[_var][0] for day in _observations]) for _var in _env.output_variables + _env.weather_variables]
-
-    print(_means)
-    print(_stds)
