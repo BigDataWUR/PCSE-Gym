@@ -383,8 +383,7 @@ class PCSEEnv(gym.Env):
 
         # Create a PCSE engine / crop growth model
         self._model = self._init_pcse_model()
-
-        output = self._model.get_output()[-1:]
+        output = self._model.get_output()[-self._timestep:]
         o = self._get_observation(output)
         info['date'] = self.date
 
