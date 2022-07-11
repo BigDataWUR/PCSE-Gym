@@ -21,7 +21,7 @@ import pcse
 def replace_years(agro_management, years):
     if not isinstance(years, list):
         years = [years]
-    updated_agro_management = [{k.replace(year=year):v for k,v in agro.items()} for agro, year in zip(agro_management, years)]
+    updated_agro_management = [{k.replace(year=year): v for k, v in agro.items()} for agro, year in zip(agro_management, years)]
 
     def replace_year_value(d, year):
         for k,v in d.items():
@@ -29,7 +29,7 @@ def replace_years(agro_management, years):
                 replace_year_value(v, year)
             else:
                 if isinstance(v, datetime.date):
-                    up_dict = {k:v.replace(year=year)}
+                    up_dict = {k: v.replace(year=year)}
                     d.update(up_dict)
 
     for agro, year in zip(updated_agro_management, years):
@@ -93,7 +93,7 @@ class PCSEEnv(gym.Env):
                  soil_parameters=_DEFAULT_SOIL_FILE_PATH,
                  latitude: float = 52,
                  longitude: float = 5.5,  # TODO -- right values
-                 years = None,
+                 years=None,
                  seed: int = None,
                  timestep: int = 1,
                  batch_size: int = 1,  # TODO
@@ -117,6 +117,7 @@ class PCSEEnv(gym.Env):
                                     - An object that is directly passed to the `pcse.base.ParameterProvider`
         :param latitude: latitude
         :param longitude: longitude
+        :param years: years
         :param seed: A seed for the random number generators used in PCSE-Gym (which are currently none)
         :param timestep: Number of days that are simulated during a single time step
         :param batch_size: The number of simulations that are executed simultaneously
