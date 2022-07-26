@@ -351,7 +351,7 @@ def train(log_dir, n_steps,
           crop_features=get_default_crop_features(),
           weather_features=get_default_weather_features(),
           train_years=get_default_train_years(),
-          test_years=get_default_train_years(),
+          test_years=get_default_test_years(),
           seed=0, tag="Exp", costs_nitrogen=10.0):
     """
     Train a PPO agent
