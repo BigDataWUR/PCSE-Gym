@@ -210,6 +210,13 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=None, ax
     return ax
 
 
+def compute_average(results_dict: dict, filter_list=None):
+    if filter_list is None:
+        filter_list = list(results_dict.keys())
+    filtered_results = [results_dict[f] for f in filter_list]
+    return sum(filtered_results) / len(filtered_results)
+
+
 class EvalCallback(BaseCallback):
     """
     Callback for evaluating an agent.
@@ -218,9 +225,10 @@ class EvalCallback(BaseCallback):
     :param eval_freq: (int) Evaluate the agent every eval_freq call of the callback.
     """
 
-    def __init__(self, test_years=get_default_test_years(), n_eval_episodes=1, eval_freq=1000):
+    def __init__(self, train_years=get_default_train_years(), test_years=get_default_test_years(), n_eval_episodes=1, eval_freq=1000):
         super(EvalCallback, self).__init__()
         self.test_years = test_years
+        self.train_years = train_years
         self.n_eval_episodes = n_eval_episodes
         self.eval_freq = eval_freq
         def def_value(): return 0
@@ -262,17 +270,17 @@ class EvalCallback(BaseCallback):
             fig, ax = plt.subplots()
             ax.bar(range(len(self.histogram_training_years)), list(self.histogram_training_years.values()), align='center')
             ax.set_xticks(range(len(self.histogram_training_years)), minor=False)
-            ax.set_xticklabels(list(self.histogram_training_years.keys()), fontdict=None, minor=False)
+            ax.set_xticklabels(list(self.histogram_training_years.keys()), fontdict=None, minor=False, rotation=90)
             self.logger.record(f'figures/training-years', Figure(fig, close=True))
 
-            result_model = {}
             costs_nitrogen = list(self.model.get_env().get_attr('costs_nitrogen'))[0]
             action_multiplier = list(self.model.get_env().get_attr('action_multiplier'))[0]
             action_space = self.model.get_env().get_attr('action_space')
             crop_features = self.model.get_env().get_attr('crop_features')[0]
             weather_features = self.model.get_env().get_attr('weather_features')[0]
 
-            for year in self.test_years:
+            reward, fertilizer, result_model = {}, {}, {}
+            for year in self.test_years + self.train_years:
                 env_pcse_evaluation = ReferenceEnv(crop_features, weather_features, costs_nitrogen=costs_nitrogen,
                                                    years=year, action_space=action_space, action_multiplier=action_multiplier)
                 env_pcse_evaluation = VecNormalize(DummyVecEnv([lambda: env_pcse_evaluation]), norm_obs=True, norm_reward=False,
@@ -280,12 +288,17 @@ class EvalCallback(BaseCallback):
                 sync_envs_normalization(self.model.get_env(), env_pcse_evaluation)
                 env_pcse_evaluation.training, env_pcse_evaluation.norm_reward = False, False
                 episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=env_pcse_evaluation)
-                reward = episode_rewards[0].item()
-                fertilizer = sum(episode_infos[0]['fertilizer'].values())
-                self.logger.record(f'eval/reward-{year}', reward)
-                self.logger.record(f'eval/nitrogen-{year}', fertilizer)
+                reward[year] = episode_rewards[0].item()
+                fertilizer[year] = sum(episode_infos[0]['fertilizer'].values())
+                self.logger.record(f'eval/reward-{year}', reward[year])
+                self.logger.record(f'eval/nitrogen-{year}', fertilizer[year])
                 result_model[year] = episode_infos
                 del env_pcse_evaluation
+
+            self.logger.record(f'eval/reward-average-test', compute_average(reward, self.test_years))
+            self.logger.record(f'eval/nitrogen-average-test', compute_average(fertilizer, self.test_years))
+            self.logger.record(f'eval/reward-average-train', compute_average(reward, self.train_years))
+            self.logger.record(f'eval/nitrogen-average-train', compute_average(fertilizer, self.train_years))
 
             for i, variable in enumerate(variables):
                 fig, ax = plt.subplots()
@@ -307,28 +320,39 @@ def determine_and_log_optimum(log_dir, costs_nitrogen=10.0, train_years=get_defa
     optimum_test_path_tb = os.path.join(log_dir, f"Optimum-Ncosts-{costs_nitrogen}-test")
     optimum_test_writer = SummaryWriter(log_dir=optimum_test_path_tb)
 
+    reward_train, fertilizer_train = {}, {}
+    reward_test, fertilizer_test = {}, {}
     for year in train_years + test_years:
         env_test = ReferenceEnv(costs_nitrogen=costs_nitrogen, years=year)
         env_test = VecNormalize(DummyVecEnv([lambda: env_test]), norm_obs=True, norm_reward=False, clip_obs=10., gamma=1)
         optimum_train_rewards, optimum_train_results = evaluate_policy('start-dump', env_test, amount=optimum_train)
-        optimum_train_reward = optimum_train_rewards[0].item()
-        optimum_train_fertilizer = sum(optimum_train_results[0]['action'].values())
-        print(f'optimum-train: {year} {optimum_train_fertilizer} {optimum_train_reward}')
+        reward_train[year] = optimum_train_rewards[0].item()
+        fertilizer_train[year] = sum(optimum_train_results[0]['action'].values())
+        print(f'optimum-train: {year} {fertilizer_train[year]} {reward_train[year]}')
 
         print(f'find optimum for year {year}')
         optimizer_test = FindOptimum(env_test)
         optimum_test = optimizer_test.optimize_start_dump()
         optimum_test_rewards, optimum_test_results = evaluate_policy('start-dump', env_test, amount=optimum_test)
-        optimum_test_reward = optimum_test_rewards[0].item()
-        optimum_test_fertilizer = sum(optimum_test_results[0]['action'].values())
+        reward_test[year] = optimum_test_rewards[0].item()
+        fertilizer_test[year] = sum(optimum_test_results[0]['action'].values())
 
         for step in [0, n_steps]:
-            optimum_train_writer.add_scalar(f'eval/reward-{year}', optimum_train_reward, step)
-            optimum_train_writer.add_scalar(f'eval/nitrogen-{year}', optimum_train_fertilizer, step)
-            optimum_test_writer.add_scalar(f'eval/reward-{year}', optimum_test_reward, step)
-            optimum_test_writer.add_scalar(f'eval/nitrogen-{year}', optimum_test_fertilizer, step)
+            optimum_train_writer.add_scalar(f'eval/reward-{year}', reward_train[year], step)
+            optimum_train_writer.add_scalar(f'eval/nitrogen-{year}', fertilizer_train[year], step)
+            optimum_test_writer.add_scalar(f'eval/reward-{year}', reward_test[year], step)
+            optimum_test_writer.add_scalar(f'eval/nitrogen-{year}', fertilizer_test[year], step)
         optimum_train_writer.flush()
         optimum_test_writer.flush()
+
+    for step in [0, n_steps]:
+        optimum_train_writer.add_scalar(f'eval/reward-average-test', compute_average(reward_train, test_years), step)
+        optimum_train_writer.add_scalar(f'eval/nitrogen-average-test', compute_average(fertilizer_train, test_years), step)
+        optimum_train_writer.add_scalar(f'eval/reward-average-train', compute_average(reward_train, train_years), step)
+        optimum_train_writer.add_scalar(f'eval/nitrogen-average-train', compute_average(fertilizer_train, train_years), step)
+
+    optimum_train_writer.flush()
+    optimum_test_writer.flush()
 
 def determine_and_log_standard_practise(log_dir, costs_nitrogen=10.0,
                                         years=get_default_train_years() + get_default_test_years(),
@@ -392,4 +416,4 @@ def train(log_dir, n_steps,
                                               clip_obs=10., gamma=1)
 
     model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams, tensorboard_log=log_dir)
-    model.learn(total_timesteps=n_steps, callback=EvalCallback(test_years=train_years + test_years), tb_log_name = f'{tag}-Ncosts-{costs_nitrogen}-run')
+    model.learn(total_timesteps=n_steps, callback=EvalCallback(test_years=test_years, train_years=train_years), tb_log_name = f'{tag}-Ncosts-{costs_nitrogen}-run')

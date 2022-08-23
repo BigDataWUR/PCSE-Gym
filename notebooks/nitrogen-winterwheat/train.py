@@ -9,20 +9,22 @@ if rootdir not in sys.path:
     print(f'insert {os.path.join(rootdir)}')
     sys.path.insert(0, os.path.join(rootdir))
 
-from helper import train
+from helper import train, determine_and_log_optimum
 
 if __name__ == "__main__":
 
     # Initialize parser
     parser = argparse.ArgumentParser()
-    parser.add_argument("-s", "--seed", type=int, help="Set seed")
+    parser.add_argument("-s", "--seed", type=int, default=0, help="Set seed")
+    parser.add_argument("-n", "--nsteps", type=int, default=400000, help="Number of steps")
+    parser.add_argument("-c", "--costs_nitrogen", type=float, default=10.0, help="Costs for nitrogen")
     args = parser.parse_args()
 
-    log_dir = os.path.join(rootdir, 'notebooks', 'nitrogen-winterwheat', 'tensorboard_logs', 'ExperimentsLong')
-    costs_nitrogen = 10.0
-    print(f'train with costs_nitrogen={costs_nitrogen}')
-    train_years = [2014, 2015, 2016]
-    test_years = [2018, 2019, 2020]
-    #determine_and_log_optimum(log_dir, costs_nitrogen=costs_nitrogen, train_years=train_years, test_years=test_years)
+    log_dir = os.path.join(rootdir, 'notebooks', 'nitrogen-winterwheat', 'tensorboard_logs', 'Experiments-ManyYears')
+    print(f'train for {args.nsteps} steps with costs_nitrogen={args.costs_nitrogen} (seed={args.seed})')
+    all_years = [*range(1990, 2022)]
+    train_years = [year for year in all_years if year % 2 == 1]
+    test_years = [year for year in all_years if year % 2 == 0]
 
-    train(log_dir, n_steps=400000, seed=args.seed, tag=f'AllFeatures-seed-{args.seed}', costs_nitrogen=costs_nitrogen)
+    determine_and_log_optimum(log_dir, costs_nitrogen=args.costs_nitrogen, train_years=train_years, test_years=test_years, n_steps=args.nsteps)
+    train(log_dir, train_years=train_years, test_years=test_years, n_steps=args.nsteps, seed=args.seed, tag=f'AllFeatures-seed-{args.seed}', costs_nitrogen=args.costs_nitrogen)
