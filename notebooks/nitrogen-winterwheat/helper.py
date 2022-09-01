@@ -180,6 +180,9 @@ def get_titles():
     return_dict["WRT"] = ("Weight roots", "g/m2")
     return_dict["WSO"] = ("Weight storage organs", "g/m2")
     return_dict["WST"] = ("Weight stems", "g/m2")
+    return_dict["TGROWTHr"] = ("Growth rate", "g/m2/day")
+    return_dict["NRF"] = ("Nitrogen reduction factor", "-")
+    return_dict["GRF"] = ("Growth reduction factor", "-")
     return return_dict
 
 
