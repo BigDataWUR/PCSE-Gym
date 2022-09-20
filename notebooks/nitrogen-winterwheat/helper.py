@@ -16,8 +16,10 @@ from scipy.optimize import minimize_scalar
 import torch.nn.functional as F
 import torch
 import os
+import pandas as pd
 from wrapper import ReferenceEnv
-from wrapper import get_default_crop_features, get_default_weather_features, get_default_train_years, get_default_test_years
+from wrapper import get_default_crop_features, get_default_weather_features, get_default_train_years, \
+    get_default_test_years, get_policy_kwargs
 
 
 def get_prob(model, obs):
@@ -186,18 +188,29 @@ def get_titles():
     return return_dict
 
 
-def plot_variable(results_dict, variable='reward', cumulative_variables=None, ax=None, ylim=None, put_legend=True):
-    if cumulative_variables is None:
-        cumulative_variables = ['fertilizer', 'reward']
+def get_cumulative_variables():
+    return ['fertilizer', 'reward']
 
+
+def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumulative_variables(), ax=None, ylim=None,
+                  put_legend=True, plot_average=False):
     titles = get_titles()
-    xmax=0
+    xmax = 0
     for label, results in results_dict.items():
         x, y = zip(*results[0][variable].items())
         x = ([i.timetuple().tm_yday for i in x])
         if variable in cumulative_variables: y = np.cumsum(y)
         if max(x) > xmax: xmax = max(x)
-        ax.step(x, y, label=label, where='post')
+        if not plot_average:
+            ax.step(x, y, label=label, where='post')
+
+    if plot_average:
+        plot_df = pd.concat([pd.DataFrame.from_dict(results[0][variable], orient='index', columns=[label])
+                 .rename(lambda i: i.timetuple().tm_yday) for label, results in results_dict.items()], axis=1)
+        plot_df['mean'] = plot_df.mean(axis=1)
+        plot_df['std'] = plot_df.std(axis=1)
+        ax.plot(plot_df.index, plot_df['mean'], 'k-')
+        ax.fill_between(plot_df.index, plot_df['mean'] - plot_df['std'], plot_df['mean'] + plot_df['std'])
 
     for x in range(0, xmax, 7):
         ax.axvline(x=x, color='lightgrey', zorder=1)
@@ -219,6 +232,14 @@ def compute_average(results_dict: dict, filter_list=None):
     filtered_results = [results_dict[f] for f in filter_list]
     return sum(filtered_results) / len(filtered_results)
 
+def get_test_tensor(crop_features=get_default_crop_features(), weather_features=get_default_weather_features(), n_days=7):
+    test_tensor = torch.zeros(2, n_days*len(weather_features) + len(crop_features))
+    for d in range(n_days):
+        for i in range(len(weather_features)):
+            j = d * len(weather_features) + len(crop_features) + i
+            test_tensor[0, j] = test_tensor[0, j] + d + i * 0.1
+            test_tensor[1, j] = test_tensor[1, j] + 100 + d + i * 0.1
+    return test_tensor
 
 class EvalCallback(BaseCallback):
     """
@@ -228,15 +249,17 @@ class EvalCallback(BaseCallback):
     :param eval_freq: (int) Evaluate the agent every eval_freq call of the callback.
     """
 
-    def __init__(self, train_years=get_default_train_years(), test_years=get_default_test_years(), n_eval_episodes=1, eval_freq=1000):
+    def __init__(self, train_years=get_default_train_years(), test_years=get_default_test_years(), n_eval_episodes=1,
+                 eval_freq=1000):
         super(EvalCallback, self).__init__()
         self.test_years = test_years
         self.train_years = train_years
         self.n_eval_episodes = n_eval_episodes
         self.eval_freq = eval_freq
-        def def_value(): return 0
-        self.histogram_training_years = defaultdict(def_value)
 
+        def def_value(): return 0
+
+        self.histogram_training_years = defaultdict(def_value)
 
     def _on_step(self):
         """
@@ -398,25 +421,29 @@ def train(log_dir, n_steps,
     """
 
     print(f'Train model with seed {seed}')
-    hyperparams = {'batch_size': 64,
-                'n_steps': 2048,
-                   'learning_rate': 0.0003,
-                   'ent_coef': 0.0,
-                   'clip_range': 0.3,
-                   'n_epochs': 10,
-                   'gae_lambda': 0.95,
-                   'max_grad_norm': 0.5,
-                   'vf_coef': 0.5,
-                   'policy_kwargs': dict(net_arch=[dict(pi=[64, 64], vf=[64, 64])],
-                                         activation_fn=nn.Tanh,
-                                         ortho_init=False)
-                  }
+    hyperparams = {'batch_size': 64, 'n_steps': 2048, 'learning_rate': 0.0003, 'ent_coef': 0.0, 'clip_range': 0.3,
+                   'n_epochs': 10, 'gae_lambda': 0.95, 'max_grad_norm': 0.5, 'vf_coef': 0.5
+    }
+    hyperparams['policy_kwargs'] = {}
+    hyperparams['policy_kwargs'] = get_policy_kwargs(crop_features, weather_features)
+    hyperparams['policy_kwargs']['net_arch'] = [dict(pi=[64, 64], vf=[64, 64])]
+    hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
+    hyperparams['policy_kwargs']['ortho_init'] = False
+
 
     env_pcse_train = ReferenceEnv(crop_features, weather_features, costs_nitrogen=costs_nitrogen, years=train_years,
-                                  action_space = gym.spaces.Discrete(3), action_multiplier=2.0)
+                                  action_space=gym.spaces.Discrete(3), action_multiplier=2.0)
     env_pcse_train = Monitor(env_pcse_train)
     env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=False,
-                                              clip_obs=10., gamma=1)
+                                  clip_obs=10., gamma=1)
 
     model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams, tensorboard_log=log_dir)
-    model.learn(total_timesteps=n_steps, callback=EvalCallback(test_years=test_years, train_years=train_years), tb_log_name = f'{tag}-Ncosts-{costs_nitrogen}-run')
+
+    debug = False
+    if debug:
+        print(model.policy)
+        actions, values, log_probs = model.policy(get_test_tensor(crop_features, weather_features))
+        print(f'{actions} {values} {log_probs}')
+
+    model.learn(total_timesteps=n_steps, callback=EvalCallback(test_years=test_years, train_years=train_years),
+                tb_log_name=f'{tag}-Ncosts-{costs_nitrogen}-run')

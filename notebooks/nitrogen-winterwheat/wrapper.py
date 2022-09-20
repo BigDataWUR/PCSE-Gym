@@ -4,6 +4,9 @@ import numpy as np
 import pandas as pd
 import pcse
 from collections import defaultdict
+import torch as th
+import torch.nn as nn
+from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 import pcse_gym.environment.env
 
 
@@ -23,6 +26,41 @@ def get_default_train_years():
 
 def get_default_test_years():
     return [2018, 2019, 2020]
+
+
+class CustomFeatureExtractor(BaseFeaturesExtractor):
+    def __init__(self, observation_space: gym.spaces.Box, n_timeseries, n_scalars, n_timesteps = 7):
+        self.n_timeseries = n_timeseries
+        self.n_scalars = n_scalars
+        self.n_timesteps = n_timesteps
+        super(CustomFeatureExtractor, self).__init__(gym.spaces.Box(0, np.inf, shape=(n_timeseries + n_scalars,)),
+                                                     features_dim=n_timeseries + n_scalars)
+
+        self.avg_timeseries = nn.Sequential(
+            nn.AvgPool1d(kernel_size=self.n_timesteps)
+        )
+
+    def forward(self, observations) -> th.Tensor:
+        batch_size = observations.shape[0]
+        scalars, timeseries = observations[:, 0:self.n_scalars], \
+                              observations[:, self.n_scalars:]
+        reshaped = timeseries.reshape(batch_size, self.n_timesteps, self.n_timeseries).permute(0,2,1)
+        x1 = self.avg_timeseries(reshaped)
+        x1 = th.squeeze(x1,2)
+        x = th.cat((x1, scalars), dim=1)
+        return x
+
+
+def get_policy_kwargs(crop_features=get_default_crop_features(),
+                      weather_features=get_default_weather_features(),
+                      n_timesteps=7):
+    policy_kwargs = dict(
+        features_extractor_class=CustomFeatureExtractor,
+        features_extractor_kwargs=dict(n_timeseries=len(weather_features),
+                                       n_scalars=len(crop_features),
+                                       n_timesteps=n_timesteps),
+    )
+    return policy_kwargs
 
 
 class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
