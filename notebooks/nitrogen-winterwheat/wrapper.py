@@ -20,6 +20,11 @@ def get_default_weather_features():
     return ["IRRAD", "TMIN", "TMAX", "VAP", "RAIN", "E0", "ES0", "ET0", "WIND"]
 
 
+def get_default_action_features():
+    return []
+    #return ["cumulative_nitrogen"]
+
+
 def get_default_train_years():
     return [2014, 2015, 2016]
 
@@ -53,11 +58,12 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
 
 def get_policy_kwargs(crop_features=get_default_crop_features(),
                       weather_features=get_default_weather_features(),
+                      action_features=get_default_action_features(),
                       n_timesteps=7):
     policy_kwargs = dict(
         features_extractor_class=CustomFeatureExtractor,
         features_extractor_kwargs=dict(n_timeseries=len(weather_features),
-                                       n_scalars=len(crop_features),
+                                       n_scalars=len(crop_features) + len(action_features),
                                        n_timesteps=n_timesteps),
     )
     return policy_kwargs
@@ -65,18 +71,19 @@ def get_policy_kwargs(crop_features=get_default_crop_features(),
 
 class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
     def __init__(self, crop_features=get_default_crop_features(), weather_features=get_default_weather_features(),
-                 costs_nitrogen=5.0, timestep=7,
+                 action_features=get_default_action_features(), costs_nitrogen=5.0, timestep=7,
                  years=None, action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
                  action_multiplier=1.0):
         self.costs_nitrogen = costs_nitrogen
         self.crop_features = crop_features
         self.weather_features = weather_features
+        self.action_features = action_features
         super().__init__(timestep=timestep, years=years)
         self.action_space = action_space
         self.action_multiplier = action_multiplier
 
     def _get_observation_space(self):
-        nvars = len(self.crop_features) + len(self.weather_features) * self._timestep
+        nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self._timestep
         return gym.spaces.Box(0, np.inf, shape=(nvars,))
 
     def _apply_action(self, action):
@@ -122,23 +129,30 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
         if 'reward' not in info.keys():
             info['reward'] = {}
         info['reward'][self.date] = reward
+        obs['actions'] = {'cumulative_nitrogen': sum(info['fertilizer'].values())}
         return self._observation(obs), reward, done, info
 
     def reset(self):
         obs = super().reset()
+        if isinstance(obs, tuple):
+            obs = obs[0]
+        obs['actions'] = {'cumulative_nitrogen': 0.0}
         return self._observation(obs)
 
     def _observation(self, observation):
         obs = np.zeros(self.observation_space.shape)
 
-        if (isinstance(observation, tuple)):
+        if isinstance(observation, tuple):
             observation = observation[0]
 
         for i, feature in enumerate(self.crop_features):
             obs[i] = observation['crop_model'][feature][-1]
+        for i, feature in enumerate(self.action_features):
+            j = len(self.crop_features) + i
+            obs[j] = observation['actions'][feature]
         for d in range(self._timestep):
             for i, feature in enumerate(self.weather_features):
-                j = d * len(self.weather_features) + len(self.crop_features) + i
+                j = d * len(self.weather_features) + len(self.crop_features) + len(self.action_features) + i
                 obs[j] = observation['weather'][feature][d]
         return obs
 
@@ -176,22 +190,29 @@ class ZeroNitrogenEnvStorage():
 
 
 class ReferenceEnv(gym.Env):
-    def __init__(self, crop_features=get_default_crop_features(), weather_features=get_default_weather_features(),
+    def __init__(self, crop_features=get_default_crop_features(),
+                 action_features=get_default_action_features(),
+                 weather_features=get_default_weather_features(),
                  seed=0, costs_nitrogen=10.0, timestep=7, years=None,
                  action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
                  action_multiplier=1.0):
         self.crop_features = crop_features
+        self.action_features = action_features
         self.weather_features = weather_features
         self.costs_nitrogen = costs_nitrogen
         self.years = years
         self.action_multiplier = action_multiplier
         self.action_space = action_space
         self._timestep = timestep
-        self._env_baseline = StableBaselinesWrapper(crop_features=crop_features, weather_features=weather_features,
+        self._env_baseline = StableBaselinesWrapper(crop_features=crop_features,
+                                                    action_features=action_features,
+                                                    weather_features=weather_features,
                                                     costs_nitrogen=costs_nitrogen,
                                                     timestep=timestep, years=[years][0], action_space=action_space,
                                                     action_multiplier=action_multiplier)
-        self._env = StableBaselinesWrapper(crop_features=crop_features, weather_features=weather_features,
+        self._env = StableBaselinesWrapper(crop_features=crop_features,
+                                           action_features=action_features,
+                                           weather_features=weather_features,
                                            costs_nitrogen=costs_nitrogen,
                                            timestep=timestep, years=[years][0], action_space=action_space,
                                            action_multiplier=action_multiplier)
@@ -201,14 +222,14 @@ class ReferenceEnv(gym.Env):
         self.seed(seed)
 
     def _get_observation_space(self):
-        nvars = len(self.crop_features) + len(self.weather_features) * self._timestep
+        nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self._timestep
         return gym.spaces.Box(0, np.inf, shape=(nvars,))
 
     def step(self, action):
         if isinstance(action, np.ndarray):
             action = action.item()
-
         obs, _, done, info = self._env.step(action)
+
         output = self._env._model.get_output()
         last_index_previous_state = (np.ceil(len(output) / self._timestep) - 1).astype('int') * self._timestep - 1
         growth = output[-1]['WSO'] - output[last_index_previous_state]['WSO']

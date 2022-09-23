@@ -17,9 +17,8 @@ import torch.nn.functional as F
 import torch
 import os
 import pandas as pd
-from wrapper import ReferenceEnv
-from wrapper import get_default_crop_features, get_default_weather_features, get_default_train_years, \
-    get_default_test_years, get_policy_kwargs
+from wrapper import ReferenceEnv, get_default_crop_features, get_default_weather_features, get_default_train_years, \
+    get_default_test_years, get_policy_kwargs, get_default_action_features
 
 
 def get_prob(model, obs):
@@ -31,7 +30,8 @@ def get_prob(model, obs):
         latent_pi, latent_vf = model.policy.mlp_extractor(features)
         mean_actions = model.policy.action_net(latent_pi)
         probabilities = F.softmax(mean_actions, dim=-1).cpu().numpy()
-    return np.argmax(probabilities), np.amax(probabilities)
+        values = model.policy.value_net(latent_vf)
+    return np.argmax(probabilities), np.amax(probabilities), values
 
 
 def evaluate_policy(
@@ -39,7 +39,7 @@ def evaluate_policy(
         env: Union[gym.Env, VecEnv],
         n_eval_episodes: int = 1,
         deterministic: bool = True,
-        amount = 1
+        amount=1
 ):
     """
     Runs policy for ``n_eval_episodes`` episodes and returns average reward.
@@ -79,26 +79,38 @@ def evaluate_policy(
         fert_dates = [datetime.date(year, 2, 24), datetime.date(year, 3, 26), datetime.date(year, 4, 29)]
         action = [amount * 0]
         infos_this_episode = []
-        prob = None
+        prob, val = None, None
 
         while not done:
-            if policy == 'start-dump' and (episode_length==0):
+            if policy == 'start-dump' and (episode_length == 0):
                 action = [amount * 1]
             if isinstance(policy, base_class.BaseAlgorithm):
                 action, state = policy.predict(obs, state=state, deterministic=deterministic)
-                _, prob = get_prob(policy, obs)
+                sb_actions, sb_values, sb_log_probs = policy.policy(torch.from_numpy(obs), deterministic=deterministic)
+                sb_prob = np.exp(sb_log_probs.detach().numpy()).item()
+                sb_val = sb_values.detach().item()
+                #act, prob, values = get_prob(policy, obs)
+                #print(f'sb: action: {sb_actions} val: {sb_val} prob: {sb_prob}')
+                #print(f'action: {act} val: {values} prob: {prob}')
+                prob = sb_prob
+                val = sb_val
 
             obs, reward, done, info = env.step(action)
+
             if prob:
                 action_date = list(info[0]['action'].keys())[0]
                 info[0]['prob'] = {action_date: prob}
+                info[0]['dvs'] = {action_date: info[0]['DVS'][action_date]}
+            if val:
+                val_date = list(info[0]['action'].keys())[0]
+                info[0]['val'] = {val_date: val}
 
             action = [amount * 0]
             if policy in ['standard-practice', 'standard-practise']:
                 date = env.get_attr("date")[0]
                 for fert_date in fert_dates:
                     if date > fert_date and date <= fert_date + datetime.timedelta(7):
-                        action = [amount *3]
+                        action = [amount * 3]
             if policy == 'no-nitrogen':
                 action = [0]
             episode_reward += reward
@@ -198,24 +210,35 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
     xmax = 0
     for label, results in results_dict.items():
         x, y = zip(*results[0][variable].items())
+        #_, x_dvs = zip(*results[0]['DVS'].items())
+        #if not (len(y) == len(x_dvs)):
+        #    _, x_dvs = zip(*results[0]['dvs'].items())
         x = ([i.timetuple().tm_yday for i in x])
         if variable in cumulative_variables: y = np.cumsum(y)
         if max(x) > xmax: xmax = max(x)
         if not plot_average:
             ax.step(x, y, label=label, where='post')
+            #ax.step(x_dvs, y, label=label, where='post')
 
     if plot_average:
         plot_df = pd.concat([pd.DataFrame.from_dict(results[0][variable], orient='index', columns=[label])
                  .rename(lambda i: i.timetuple().tm_yday) for label, results in results_dict.items()], axis=1)
+        if variable in cumulative_variables: plot_df = plot_df.apply(np.cumsum, axis=0)
         plot_df['mean'] = plot_df.mean(axis=1)
         plot_df['std'] = plot_df.std(axis=1)
-        ax.plot(plot_df.index, plot_df['mean'], 'k-')
-        ax.fill_between(plot_df.index, plot_df['mean'] - plot_df['std'], plot_df['mean'] + plot_df['std'])
+        plot_df['median'] = plot_df.median(axis=1)
+        plot_df['lower'] = plot_df.quantile(0.25, axis=1)
+        plot_df['upper'] = plot_df.quantile(0.75, axis=1)
+        ax.plot(plot_df.index, plot_df['median'], 'k-')
+        ax.fill_between(plot_df.index, plot_df['lower'], plot_df['upper'])
+
 
     for x in range(0, xmax, 7):
         ax.axvline(x=x, color='lightgrey', zorder=1)
     ax.axhline(y=0, color='lightgrey', zorder=1)
     ax.margins(x=0)
+
+
     name, unit = titles[variable]
     ax.set_title(f"{variable} - {name}")
     ax.set_ylabel(f"[{unit}]")
@@ -232,11 +255,12 @@ def compute_average(results_dict: dict, filter_list=None):
     filtered_results = [results_dict[f] for f in filter_list]
     return sum(filtered_results) / len(filtered_results)
 
-def get_test_tensor(crop_features=get_default_crop_features(), weather_features=get_default_weather_features(), n_days=7):
-    test_tensor = torch.zeros(2, n_days*len(weather_features) + len(crop_features))
+def get_test_tensor(crop_features=get_default_crop_features(), action_features=get_default_action_features(),
+                    weather_features=get_default_weather_features(), n_days=7):
+    test_tensor = torch.zeros(2, n_days*len(weather_features) + len(crop_features) + len(action_features))
     for d in range(n_days):
         for i in range(len(weather_features)):
-            j = d * len(weather_features) + len(crop_features) + i
+            j = d * len(weather_features) + len(crop_features) + len(action_features) + i
             test_tensor[0, j] = test_tensor[0, j] + d + i * 0.1
             test_tensor[1, j] = test_tensor[1, j] + 100 + d + i * 0.1
     return test_tensor
@@ -294,7 +318,8 @@ class EvalCallback(BaseCallback):
                 self.logger.record(f'train/{variable}', variable_mean)
 
             fig, ax = plt.subplots()
-            ax.bar(range(len(self.histogram_training_years)), list(self.histogram_training_years.values()), align='center')
+            ax.bar(range(len(self.histogram_training_years)), list(self.histogram_training_years.values()),
+                   align='center')
             ax.set_xticks(range(len(self.histogram_training_years)), minor=False)
             ax.set_xticklabels(list(self.histogram_training_years.keys()), fontdict=None, minor=False, rotation=90)
             self.logger.record(f'figures/training-years', Figure(fig, close=True))
@@ -303,14 +328,20 @@ class EvalCallback(BaseCallback):
             action_multiplier = list(self.model.get_env().get_attr('action_multiplier'))[0]
             action_space = self.model.get_env().get_attr('action_space')
             crop_features = self.model.get_env().get_attr('crop_features')[0]
+            action_features = self.model.get_env().get_attr('action_features')[0]
             weather_features = self.model.get_env().get_attr('weather_features')[0]
 
             reward, fertilizer, result_model = {}, {}, {}
             for year in self.test_years + self.train_years:
-                env_pcse_evaluation = ReferenceEnv(crop_features, weather_features, costs_nitrogen=costs_nitrogen,
-                                                   years=year, action_space=action_space, action_multiplier=action_multiplier)
-                env_pcse_evaluation = VecNormalize(DummyVecEnv([lambda: env_pcse_evaluation]), norm_obs=True, norm_reward=False,
-                                              clip_obs=10., gamma=1)
+                env_pcse_evaluation = ReferenceEnv(crop_features=crop_features,
+                                                   action_features=action_features,
+                                                   weather_features=weather_features,
+                                                   costs_nitrogen=costs_nitrogen,
+                                                   years=year, action_space=action_space,
+                                                   action_multiplier=action_multiplier)
+                env_pcse_evaluation = VecNormalize(DummyVecEnv([lambda: env_pcse_evaluation]),
+                                                   norm_obs=True, norm_reward=False,
+                                                   clip_obs=10., gamma=1)
                 sync_envs_normalization(self.model.get_env(), env_pcse_evaluation)
                 env_pcse_evaluation.training, env_pcse_evaluation.norm_reward = False, False
                 episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=env_pcse_evaluation)
@@ -350,7 +381,8 @@ def determine_and_log_optimum(log_dir, costs_nitrogen=10.0, train_years=get_defa
     reward_test, fertilizer_test = {}, {}
     for year in train_years + test_years:
         env_test = ReferenceEnv(costs_nitrogen=costs_nitrogen, years=year)
-        env_test = VecNormalize(DummyVecEnv([lambda: env_test]), norm_obs=True, norm_reward=False, clip_obs=10., gamma=1)
+        env_test = VecNormalize(DummyVecEnv([lambda: env_test]), norm_obs=True, norm_reward=False, clip_obs=10.,
+                                gamma=1)
         optimum_train_rewards, optimum_train_results = evaluate_policy('start-dump', env_test, amount=optimum_train)
         reward_train[year] = optimum_train_rewards[0].item()
         fertilizer_train[year] = sum(optimum_train_results[0]['action'].values())
@@ -400,6 +432,7 @@ def determine_and_log_standard_practise(log_dir, costs_nitrogen=10.0,
 def train(log_dir, n_steps,
           crop_features=get_default_crop_features(),
           weather_features=get_default_weather_features(),
+          action_features=get_default_action_features(),
           train_years=get_default_train_years(),
           test_years=get_default_test_years(),
           seed=0, tag="Exp", costs_nitrogen=10.0):
@@ -425,13 +458,15 @@ def train(log_dir, n_steps,
                    'n_epochs': 10, 'gae_lambda': 0.95, 'max_grad_norm': 0.5, 'vf_coef': 0.5
     }
     hyperparams['policy_kwargs'] = {}
-    hyperparams['policy_kwargs'] = get_policy_kwargs(crop_features, weather_features)
-    hyperparams['policy_kwargs']['net_arch'] = [dict(pi=[64, 64], vf=[64, 64])]
+    hyperparams['policy_kwargs'] = get_policy_kwargs(crop_features=crop_features, weather_features=weather_features,
+                                                     action_features=action_features)
+    hyperparams['policy_kwargs']['net_arch'] = [dict(pi=[10,10], vf=[10,10])]
     hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
     hyperparams['policy_kwargs']['ortho_init'] = False
 
-
-    env_pcse_train = ReferenceEnv(crop_features, weather_features, costs_nitrogen=costs_nitrogen, years=train_years,
+    env_pcse_train = ReferenceEnv(crop_features=crop_features, action_features=action_features,
+                                  weather_features=weather_features,
+                                  costs_nitrogen=costs_nitrogen, years=train_years,
                                   action_space=gym.spaces.Discrete(3), action_multiplier=2.0)
     env_pcse_train = Monitor(env_pcse_train)
     env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=False,
@@ -442,8 +477,11 @@ def train(log_dir, n_steps,
     debug = False
     if debug:
         print(model.policy)
-        actions, values, log_probs = model.policy(get_test_tensor(crop_features, weather_features))
-        print(f'{actions} {values} {log_probs}')
+        actions, values, log_probs = model.policy(get_test_tensor(crop_features, action_features, weather_features))
+        print(f'actions: {actions} values: {values} log_probs: {log_probs} probs: {np.exp(log_probs.detach().numpy())}')
+        #ac, prob = get_prob(model, get_test_tensor(crop_features, action_features, weather_features))
+        #print(f'{ac} {prob}')
+        return
 
     model.learn(total_timesteps=n_steps, callback=EvalCallback(test_years=test_years, train_years=train_years),
                 tb_log_name=f'{tag}-Ncosts-{costs_nitrogen}-run')
