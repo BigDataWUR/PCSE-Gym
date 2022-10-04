@@ -24,6 +24,8 @@ def get_default_action_features():
     return []
     #return ["cumulative_nitrogen"]
 
+def get_default_location():
+    return (52,5.5)
 
 def get_default_train_years():
     return [2014, 2015, 2016]
@@ -72,13 +74,13 @@ def get_policy_kwargs(crop_features=get_default_crop_features(),
 class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
     def __init__(self, crop_features=get_default_crop_features(), weather_features=get_default_weather_features(),
                  action_features=get_default_action_features(), costs_nitrogen=5.0, timestep=7,
-                 years=None, action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
+                 years=None, location=None, action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
                  action_multiplier=1.0):
         self.costs_nitrogen = costs_nitrogen
         self.crop_features = crop_features
         self.weather_features = weather_features
         self.action_features = action_features
-        super().__init__(timestep=timestep, years=years)
+        super().__init__(timestep=timestep, years=years, location=location)
         self.action_space = action_space
         self.action_multiplier = action_multiplier
 
@@ -98,6 +100,8 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
         last_index_previous_state = (np.ceil(len(output) / self._timestep).astype('int') - 1) * self._timestep - 1
         wso_start = output[last_index_previous_state]['WSO']
         wso_finish = output[-1]['WSO']
+        if wso_start is None: wso_start=0.0
+        if wso_finish is None: wso_finish=0.0
         benefits = wso_finish - wso_start
         amount = action * self.action_multiplier
         costs = self.costs_nitrogen * amount
@@ -179,7 +183,8 @@ class ZeroNitrogenEnvStorage():
 
     def get_key(self, env):
         year = env.date.year
-        return year
+        location = env._location
+        return f'{year}-{location}'
 
     def get_episode_output(self, env):
         key = self.get_key(env)
@@ -193,28 +198,34 @@ class ReferenceEnv(gym.Env):
     def __init__(self, crop_features=get_default_crop_features(),
                  action_features=get_default_action_features(),
                  weather_features=get_default_weather_features(),
-                 seed=0, costs_nitrogen=10.0, timestep=7, years=None,
+                 seed=0, costs_nitrogen=10.0, timestep=7, years=None, locations=None,
                  action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
                  action_multiplier=1.0):
         self.crop_features = crop_features
         self.action_features = action_features
         self.weather_features = weather_features
         self.costs_nitrogen = costs_nitrogen
-        self.years = years
+        self.years = [years] if isinstance(years, int) else years
+        self.locations = [locations] if isinstance(locations, tuple) else locations
         self.action_multiplier = action_multiplier
         self.action_space = action_space
         self._timestep = timestep
+
         self._env_baseline = StableBaselinesWrapper(crop_features=crop_features,
                                                     action_features=action_features,
                                                     weather_features=weather_features,
                                                     costs_nitrogen=costs_nitrogen,
-                                                    timestep=timestep, years=[years][0], action_space=action_space,
+                                                    timestep=timestep,
+                                                    years=self.years[0], location=self.locations[0],
+                                                    action_space=action_space,
                                                     action_multiplier=action_multiplier)
         self._env = StableBaselinesWrapper(crop_features=crop_features,
                                            action_features=action_features,
                                            weather_features=weather_features,
                                            costs_nitrogen=costs_nitrogen,
-                                           timestep=timestep, years=[years][0], action_space=action_space,
+                                           timestep=timestep,
+                                           years=self.years[0], location=self.locations[0],
+                                           action_space=action_space,
                                            action_multiplier=action_multiplier)
         self.observation_space = self._get_observation_space()
         self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
@@ -232,14 +243,20 @@ class ReferenceEnv(gym.Env):
 
         output = self._env._model.get_output()
         last_index_previous_state = (np.ceil(len(output) / self._timestep) - 1).astype('int') * self._timestep - 1
-        growth = output[-1]['WSO'] - output[last_index_previous_state]['WSO']
 
+        wso_finish = output[-1]['WSO']
+        wso_start = output[last_index_previous_state]['WSO']
+        if wso_start is None: wso_start=0.0
+        if wso_finish is None: wso_finish=0.0
+        growth = wso_finish - wso_start
         current_date = output[-1]['day']
         previous_date = output[last_index_previous_state]['day']
 
-        self.zero_nitrogen_env_storage.get_episode_output(self._env_baseline)
-        wso_current = self.zero_nitrogen_env_storage.results[current_date.year]['WSO'][current_date]
-        wso_previous = self.zero_nitrogen_env_storage.results[current_date.year]['WSO'][previous_date]
+        zero_nitrogen_results = self.zero_nitrogen_env_storage.get_episode_output(self._env_baseline)
+        wso_current = zero_nitrogen_results['WSO'][current_date]
+        wso_previous = zero_nitrogen_results['WSO'][previous_date]
+        if wso_current is None: wso_current=0.0
+        if wso_previous is None: wso_previous=0.0
         growth_baseline = wso_current - wso_previous
 
         benefits = growth - growth_baseline
@@ -248,7 +265,6 @@ class ReferenceEnv(gym.Env):
         reward = benefits - costs
         if 'reward' not in info.keys(): info['reward'] = {}
         info['reward'][self.date] = reward
-
         if 'growth' not in info.keys(): info['growth'] = {}
         info['growth'][self.date] = growth
 
@@ -267,12 +283,22 @@ class ReferenceEnv(gym.Env):
             self._env_baseline._agro_management, year)
         self._env._agro_management = pcse_gym.environment.env.replace_years(self._env._agro_management, year)
 
+    def set_location(self, location):
+        self._env_baseline._location = location
+        self._env_baseline._weather_data_provider = pcse_gym.environment.env.get_weather_data_provider(location)
+        self._env._location = location
+        self._env._weather_data_provider = pcse_gym.environment.env.get_weather_data_provider(location)
+
     def reset(self):
         if isinstance(self.years, list):
             year = self.np_random.choice(self.years)
             self._env_baseline._agro_management = pcse_gym.environment.env.replace_years(
                 self._env_baseline._agro_management, year)
             self._env._agro_management = pcse_gym.environment.env.replace_years(self._env._agro_management, year)
+
+        if isinstance(self.locations, list):
+            location = self.locations[self.np_random.choice(len(self.locations), 1)[0]]
+            self.set_location(location)
 
         self._env_baseline.reset()
         obs = self._env.reset()
@@ -285,3 +311,7 @@ class ReferenceEnv(gym.Env):
     @property
     def date(self) -> datetime.date:
         return self._env._model.day
+
+    @property
+    def loc(self) -> datetime.date:
+        return self._env._location

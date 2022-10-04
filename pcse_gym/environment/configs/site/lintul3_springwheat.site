@@ -1,6 +1,6 @@
 # initial soil conditions
-WCI    = 0.20 			# Initial water content in cm3 of water/(cm3 of soil).
-WCSUBS = 0.15 			# water content subsoil
+WCI    = 0.30 			# Initial water content in cm3 of water/(cm3 of soil).
+WCSUBS = 0.20 			# water content subsoil
 
 # Water management
 # We will represent two water management situations in the model

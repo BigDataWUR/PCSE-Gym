@@ -21,6 +21,7 @@ import pcse
 def replace_years(agro_management, years):
     if not isinstance(years, list):
         years = [years]
+
     updated_agro_management = [{k.replace(year=year): v for k, v in agro.items()} for agro, year in zip(agro_management, years)]
 
     def replace_year_value(d, year):
@@ -36,6 +37,10 @@ def replace_years(agro_management, years):
         replace_year_value(agro, year)
     return updated_agro_management
 
+
+def get_weather_data_provider(location) -> pcse.db.NASAPowerWeatherDataProvider:
+    wdp = pcse.db.NASAPowerWeatherDataProvider(*location)  # TODO -- other weather data providers
+    return wdp
 
 
 class Engine(pcse.engine.Engine):
@@ -91,9 +96,8 @@ class PCSEEnv(gym.Env):
                  crop_parameters=_DEFAULT_CROP_FILE_PATH,
                  site_parameters=_DEFAULT_SITE_FILE_PATH,
                  soil_parameters=_DEFAULT_SOIL_FILE_PATH,
-                 latitude: float = 52,
-                 longitude: float = 5.5,  # TODO -- right values
                  years=None,
+                 location=None,
                  seed: int = None,
                  timestep: int = 1,
                  batch_size: int = 1,  # TODO
@@ -115,9 +119,8 @@ class PCSEEnv(gym.Env):
                                     - A path to the soil parameter file
                                       Will be read by a `pcse.fileinput.PCSEFileReader`
                                     - An object that is directly passed to the `pcse.base.ParameterProvider`
-        :param latitude: latitude
-        :param longitude: longitude
         :param years: years
+        :param location: latitude, longitude
         :param seed: A seed for the random number generators used in PCSE-Gym (which are currently none)
         :param timestep: Number of days that are simulated during a single time step
         :param batch_size: The number of simulations that are executed simultaneously
@@ -138,7 +141,9 @@ class PCSEEnv(gym.Env):
             self.seed(seed)
 
         # Set location
-        self._location = (latitude, longitude)
+        if location is None:
+            location = (52, 5.5)
+        self._location = location
         self._timestep = timestep
 
         # Store the crop/soil/site parameters
@@ -157,7 +162,7 @@ class PCSEEnv(gym.Env):
         self._model_config = model_config
 
         # Get the weather data source
-        self._weather_data_provider = self._get_weather_data_provider()
+        self._weather_data_provider = get_weather_data_provider(self._location)
 
         # Create a PCSE engine / crop growth model
         self._model = self._init_pcse_model()
@@ -230,10 +235,6 @@ class PCSEEnv(gym.Env):
             }
         )
         return space  # TODO -- add more actions?
-
-    def _get_weather_data_provider(self) -> pcse.db.NASAPowerWeatherDataProvider:
-        wdp = pcse.db.NASAPowerWeatherDataProvider(*self._location)  # TODO -- other weather data providers
-        return wdp
 
     """
     Properties of the crop model config file
