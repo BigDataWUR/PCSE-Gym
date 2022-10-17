@@ -95,21 +95,11 @@ def evaluate_policy(
                 sb_actions, sb_values, sb_log_probs = policy.policy(torch.from_numpy(obs), deterministic=deterministic)
                 sb_prob = np.exp(sb_log_probs.detach().numpy()).item()
                 sb_val = sb_values.detach().item()
-                #act, prob, values = get_prob(policy, obs)
-                #if debug:
-                #    print(obs)
-                #    print(f'year:{year} sb: action: {sb_actions.item()} val: {sb_val} prob: {sb_prob}')
-                #print(f'action: {act} val: {values} prob: {prob}')
                 prob = sb_prob
                 val = sb_val
 
             obs, rew , done, info = env.step(action)
             reward = env.get_original_reward()
-
-            #print(f'mean: {env.obs_rms.mean}')
-            #print(f'var: {env.obs_rms.var}')
-            #print(f'obs: {obs}')
-            #print(f'orig-obs: {env.get_original_obs()}')
 
             if prob:
                 action_date = list(info[0]['action'].keys())[0]
@@ -270,6 +260,29 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
         ax.legend()
     return ax
 
+
+def save_results(results_dict, results_path):
+    def intersection(lst1, lst2):
+        lst3 = [value for value in lst1 if value in lst2]
+        return lst3
+
+    all_variables = list(list(results_dict.values())[0][0].keys())
+    weather_variables = intersection(['TMIN', 'RAIN'], all_variables)
+    variables_average = weather_variables
+    variables_cum = intersection(['DVS', 'fertilizer', 'TGROWTHr', 'TRANRF', 'WLL', 'reward'], all_variables)
+    variables_end = intersection(['WSO'], all_variables)
+    variables_max = intersection(['val'], all_variables)
+
+    save_data = {}
+    for year, result in results_dict.items():
+        ndays = len(result[0]['IRRAD'].values())
+        a = [(sum(result[0][variable].values())/ndays) for variable in variables_average]
+        c = [(sum(result[0][variable].values())) for variable in variables_cum]
+        d = [(list(result[0][variable].values())[-1]) for variable in variables_end]
+        m = [max(list(result[0][variable].values())) for variable in variables_max]
+        save_data[year] = a + c + d + m + [year, ndays]
+    df = pd.DataFrame.from_dict(save_data, orient='index', columns=variables_average + variables_cum + variables_end + variables_max + ['year', 'ndays'])
+    df.to_csv(results_path, index=False)
 
 def compute_average(results_dict: dict, filter_list=None):
     if filter_list is None:
