@@ -9,12 +9,10 @@ if rootdir not in sys.path:
     print(f'insert {os.path.join(rootdir)}')
     sys.path.insert(0, os.path.join(rootdir))
 
-from helper import train, determine_and_log_optimum, get_default_crop_features, get_default_weather_features, \
-    get_default_action_features, get_default_location
+from helper import train, determine_and_log_optimum
 
 if __name__ == "__main__":
 
-    # Initialize parser
     parser = argparse.ArgumentParser()
     parser.add_argument("-s", "--seed", type=int, default=0, help="Set seed")
     parser.add_argument("-n", "--nsteps", type=int, default=400000, help="Number of steps")
@@ -29,18 +27,21 @@ if __name__ == "__main__":
 
     train_locations = [(52,5.5), (51.5,5), (52.5,6.0)]
     test_locations= [(52,5.5), (48,0)]
-    determine_and_log_optimum(log_dir, costs_nitrogen=args.costs_nitrogen, train_years=train_years, test_years=test_years,
+
+    if True:
+        determine_and_log_optimum(log_dir, costs_nitrogen=args.costs_nitrogen, train_years=train_years, test_years=test_years,
                               train_locations=train_locations, test_locations=test_locations,
                               n_steps=args.nsteps)
     crop_features = ["DVS", "TGROWTH", "LAI", "NUPTT", "TRAN", "TNSOIL", "TRAIN", "TRANRF", "WSO"]
     weather_features = ["IRRAD", "TMIN", "RAIN"]
-    action_features = [] #"cumulative_nitrogen"]
+    action_features = [] #alternative: "cumulative_nitrogen"
+    tag = f'LessFeatures-seed-{args.seed}'
 
     train(log_dir, train_years=train_years, test_years=test_years,
           train_locations=train_locations,
           test_locations=test_locations,
           n_steps=args.nsteps, seed=args.seed,
-          tag=f'LessFeatures-seed-{args.seed}',
+          tag=tag,
           costs_nitrogen=args.costs_nitrogen,
           crop_features=crop_features,
           weather_features=weather_features,
