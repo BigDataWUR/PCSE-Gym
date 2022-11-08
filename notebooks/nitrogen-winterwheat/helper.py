@@ -208,12 +208,33 @@ def get_titles():
     return_dict["TGROWTHr"] = ("Growth rate", "g/m2/day")
     return_dict["NRF"] = ("Nitrogen reduction factor", "-")
     return_dict["GRF"] = ("Growth reduction factor", "-")
+    return_dict["fertilizer"] = ("Nitrogen application", "gN/m2")
+    return_dict["TMIN"] = ("Minimum temperature", "°C")
+    return_dict["TMAX"] = ("Maximum temperature", "°C")
+    return_dict["IRRAD"] = ("Incoming global radiation ", "J/m2/day")
+    return_dict["RAIN"] = ("Incoming global radiation ", "cm/day")
+
     return return_dict
 
 
 def get_cumulative_variables():
     return ['fertilizer', 'reward']
 
+
+def identity_line(ax=None, ls='--', *args, **kwargs):
+    # see: https://stackoverflow.com/q/22104256/3986320
+    ax = ax or plt.gca()
+    identity, = ax.plot([], [], ls=ls, *args, **kwargs)
+    def callback(axes):
+        low_x, high_x = ax.get_xlim()
+        low_y, high_y = ax.get_ylim()
+        low = min(low_x, low_y)
+        high = max(high_x, high_y)
+        identity.set_data([low, high], [low, high])
+    callback(ax)
+    ax.callbacks.connect('xlim_changed', callback)
+    ax.callbacks.connect('ylim_changed', callback)
+    return ax
 
 def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumulative_variables(), ax=None, ylim=None,
                   put_legend=True, plot_average=False):
@@ -244,15 +265,26 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
         ax.plot(plot_df.index, plot_df['median'], 'k-')
         ax.fill_between(plot_df.index, plot_df['lower'], plot_df['upper'])
 
-
-    for x in range(0, xmax, 7):
-        ax.axvline(x=x, color='lightgrey', zorder=1)
     ax.axhline(y=0, color='lightgrey', zorder=1)
     ax.margins(x=0)
 
+    from matplotlib.ticker import FixedLocator
+    ax.xaxis.set_minor_locator(FixedLocator(range(0, xmax, 7)))
+    ax.xaxis.grid(True, which='minor')
+    ax.tick_params(axis='x', which='minor', grid_alpha=0.7, colors=ax.get_figure().get_facecolor(), grid_ls=":")
+
+    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec']
+    month_days = [0, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
+    extra_month = next(x[0] for x in enumerate(month_days) if x[1] >= xmax)
+    month_days = month_days[0:extra_month+1]
+    months = months[0:extra_month+1]
+    ax.set_xticks(month_days)
+    ax.set_xticklabels(months)
 
     name, unit = titles[variable]
     ax.set_title(f"{variable} - {name}")
+    if variable in cumulative_variables:
+        ax.set_title(f"{variable} (cumulative) - {name}")
     ax.set_ylabel(f"[{unit}]")
     if ylim != None:
         ax.set_ylim(ylim)
