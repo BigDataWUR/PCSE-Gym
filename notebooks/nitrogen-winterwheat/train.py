@@ -19,7 +19,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--costs_nitrogen", type=float, default=10.0, help="Costs for nitrogen")
     args = parser.parse_args()
 
-    log_dir = os.path.join(rootdir, 'notebooks', 'nitrogen-winterwheat', 'tensorboard_logs', 'Experiments-Bugfix-PCSE-norm-reward-WCI-0.3-multiple-locs')
+    log_dir = os.path.join(rootdir, 'notebooks', 'nitrogen-winterwheat', 'tensorboard_logs', 'Experiments-Paper')
     print(f'train for {args.nsteps} steps with costs_nitrogen={args.costs_nitrogen} (seed={args.seed})')
     all_years = [*range(1990, 2022)]
     train_years = [year for year in all_years if year % 2 == 1]
@@ -28,14 +28,14 @@ if __name__ == "__main__":
     train_locations = [(52,5.5), (51.5,5), (52.5,6.0)]
     test_locations= [(52,5.5), (48,0)]
 
-    if True:
+    if False:
         determine_and_log_optimum(log_dir, costs_nitrogen=args.costs_nitrogen, train_years=train_years, test_years=test_years,
                               train_locations=train_locations, test_locations=test_locations,
                               n_steps=args.nsteps)
     crop_features = ["DVS", "TGROWTH", "LAI", "NUPTT", "TRAN", "TNSOIL", "TRAIN", "TRANRF", "WSO"]
     weather_features = ["IRRAD", "TMIN", "RAIN"]
     action_features = [] #alternative: "cumulative_nitrogen"
-    tag = f'LessFeatures-seed-{args.seed}'
+    tag = f'Seed-{args.seed}'
 
     train(log_dir, train_years=train_years, test_years=test_years,
           train_locations=train_locations,
