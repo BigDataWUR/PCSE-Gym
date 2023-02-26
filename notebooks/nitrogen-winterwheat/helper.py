@@ -208,10 +208,11 @@ def get_titles():
     return_dict["TGROWTHr"] = ("Growth rate", "g/m2/day")
     return_dict["NRF"] = ("Nitrogen reduction factor", "-")
     return_dict["GRF"] = ("Growth reduction factor", "-")
-    return_dict["fertilizer"] = ("Nitrogen application", "gN/m2")
+    return_dict["fertilizer"] = ("Nitrogen application", "g/m2")
+    return_dict["Fertilizer"] = ("Nitrogen application", "kg/ha")
     return_dict["TMIN"] = ("Minimum temperature", "°C")
     return_dict["TMAX"] = ("Maximum temperature", "°C")
-    return_dict["IRRAD"] = ("Incoming global radiation ", "J/m2/day")
+    return_dict["IRRAD"] = ("Incoming global radiation", "J/m2/day")
     return_dict["RAIN"] = ("Incoming global radiation ", "cm/day")
 
     return return_dict
@@ -257,13 +258,8 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
                  .rename(lambda i: i.timetuple().tm_yday) for label, results in results_dict.items()], axis=1)
         if variable in cumulative_variables: plot_df = plot_df.apply(np.cumsum, axis=0)
         plot_df.fillna(method='ffill', inplace=True)
-        plot_df['mean'] = plot_df.mean(axis=1)
-        plot_df['std'] = plot_df.std(axis=1)
-        plot_df['median'] = plot_df.median(axis=1)
-        plot_df['lower'] = plot_df.quantile(0.25, axis=1)
-        plot_df['upper'] = plot_df.quantile(0.75, axis=1)
-        ax.plot(plot_df.index, plot_df['median'], 'k-')
-        ax.fill_between(plot_df.index, plot_df['lower'], plot_df['upper'])
+        ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where='post')
+        ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step='post')
 
     ax.axhline(y=0, color='lightgrey', zorder=1)
     ax.margins(x=0)
@@ -290,6 +286,9 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
         ax.set_ylim(ylim)
     if put_legend:
         ax.legend()
+    else:
+        ax.legend()
+        ax.get_legend().set_visible(False)
     return ax
 
 
@@ -299,28 +298,51 @@ def save_results(results_dict, results_path):
         return lst3
 
     all_variables = list(list(results_dict.values())[0][0].keys())
-    weather_variables = intersection(['TMIN', 'RAIN'], all_variables)
+    weather_variables = intersection(['TMIN', 'TMAX', 'IRRAD', 'RAIN'], all_variables)
     variables_average = weather_variables
     variables_cum = intersection(['DVS', 'fertilizer', 'TGROWTHr', 'TRANRF', 'WLL', 'reward'], all_variables)
     variables_end = intersection(['WSO'], all_variables)
     variables_max = intersection(['val'], all_variables)
 
     save_data = {}
-    for year, result in results_dict.items():
+    for k, result in results_dict.items():
         ndays = len(result[0]['IRRAD'].values())
+        nfertilizer = sum(map(lambda x : x != 0, list(result[0]['fertilizer'].values())))
         a = [(sum(result[0][variable].values())/ndays) for variable in variables_average]
         c = [(sum(result[0][variable].values())) for variable in variables_cum]
         d = [(list(result[0][variable].values())[-1]) for variable in variables_end]
         m = [max(list(result[0][variable].values())) for variable in variables_max]
-        save_data[year] = a + c + d + m + [year, ndays]
-    df = pd.DataFrame.from_dict(save_data, orient='index', columns=variables_average + variables_cum + variables_end + variables_max + ['year', 'ndays'])
+        year, location = k
+        location = ';'.join([str(loc) for loc in location])
+        save_data[k] = a + c + d + m + [nfertilizer, year, ndays, location]
+    df = pd.DataFrame.from_dict(save_data, orient='index',
+                                columns=variables_average + variables_cum + variables_end + variables_max +
+                                ['nevents', 'year', 'ndays', 'location'])
     df.to_csv(results_path, index=False)
+
+def get_variable(results, variable='fertilizer', cumulative=get_cumulative_variables()):
+    if variable in cumulative:
+        return sum([results][0][0][variable].values())
+    return list([results][0][0][variable].values())[-1]
+
+
+def compute_economic_reward(wso, fertilizer, price_yield_ton=400.0, price_fertilizer_ton=300.0):
+    g_m2_to_ton_hectare = 0.01
+    convert_wso = g_m2_to_ton_hectare * price_yield_ton
+    convert_fert = g_m2_to_ton_hectare * price_fertilizer_ton
+    return 0.001 * (convert_wso * wso - convert_fert * fertilizer)
 
 def compute_average(results_dict: dict, filter_list=None):
     if filter_list is None:
         filter_list = list(results_dict.keys())
     filtered_results = [results_dict[f] for f in filter_list if f in results_dict.keys()]
     return sum(filtered_results) / len(filtered_results)
+
+def compute_median(results_dict: dict, filter_list=None):
+    if filter_list is None:
+        filter_list = list(results_dict.keys())
+    filtered_results = [results_dict[f] for f in filter_list if f in results_dict.keys()]
+    return np.median(filtered_results)
 
 
 def get_test_tensor(crop_features=get_default_crop_features(), action_features=get_default_action_features(),
@@ -467,11 +489,15 @@ class EvalCallback(BaseCallback):
                 test_keys = [(a, test_location) for a in self.test_years]
                 self.logger.record(f'eval/reward-average-test-{test_location}', compute_average(reward, test_keys))
                 self.logger.record(f'eval/nitrogen-average-test-{test_location}', compute_average(fertilizer, test_keys))
+                self.logger.record(f'eval/reward-median-test-{test_location}', compute_median(reward, test_keys))
+                self.logger.record(f'eval/nitrogen-median-test-{test_location}', compute_median(fertilizer, test_keys))
 
             if log_training:
                 train_keys = [(a, b) for a in self.train_years for b in self.train_locations]
                 self.logger.record(f'eval/reward-average-train', compute_average(reward, train_keys))
                 self.logger.record(f'eval/nitrogen-average-train', compute_average(fertilizer, train_keys))
+                self.logger.record(f'eval/reward-median-train', compute_median(reward, train_keys))
+                self.logger.record(f'eval/nitrogen-median-train', compute_median(fertilizer, train_keys))
 
             variables = 'action', 'WSO', 'reward', 'TNSOIL', 'val'
 
