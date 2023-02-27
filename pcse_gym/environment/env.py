@@ -312,14 +312,21 @@ class PCSEEnv(gym.Env):
         return o, r, done, info
 
     def _apply_action(self, action):
+
+        irrigation = action.get('irrigation', 0)
+        N = action.get('N', 0)
+        P = action.get('P', 0)
+        K = action.get('K', 0)
+
         self._model._send_signal(signal=pcse.signals.irrigate,
-                                 amount=action['irrigation'],
+                                 amount=irrigation,
                                  efficiency=0.8,
                                  )
+
         self._model._send_signal(signal=pcse.signals.apply_npk,
-                                 N_amount=action['N'],
-                                 P_amount=action['P'],
-                                 K_amount=action['K'],
+                                 N_amount=N,
+                                 P_amount=P,
+                                 K_amount=K,
                                  N_recovery=0.7,
                                  P_recovery=0.7,
                                  K_recovery=0.7,
@@ -351,7 +358,7 @@ class PCSEEnv(gym.Env):
 
         return o
 
-    def _get_reward(self, var='WSO') -> float:
+    def _get_reward(self, var='TWSO') -> float:
         """
         Generate a reward based on the current environment state
         :param var: the variable extracted from the model output
