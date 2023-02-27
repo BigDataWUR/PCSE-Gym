@@ -30,9 +30,9 @@ if __name__ == '__main__':
     # Define an action that does nothing
     a = {
         'irrigation': 0,
-        'N': 0,
-        'P': 0,
-        'K': 0,
+        'N': 100,
+        # 'P': 0,
+        # 'K': 0,
     }
 
     o, r, done, info = env.step(a)
