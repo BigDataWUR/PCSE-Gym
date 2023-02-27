@@ -92,6 +92,9 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
         amount = action * self.action_multiplier
         self._model._send_signal(signal=pcse.signals.apply_n, amount=amount, recovery=0.7)
 
+    def _get_reward(self):
+        return super()._get_reward(var='WSO')
+
     def step(self, action):
         if isinstance(action, np.ndarray):
             action = action.item()
