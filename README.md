@@ -12,8 +12,8 @@ To install a minimalistic version, do the following:
 
 The code has been tested using python 3.8.10.
 ## Example
-- [Basic example](https://github.com/BigDataWUR/PCSE-Gym/blob/master/tutorials/basic.md)
-- [Advanced example](https://github.com/BigDataWUR/PCSE-Gym/blob/master/tutorials/customization.md)
+- [Basic example](tutorials/basic.md)
+- [Advanced example](tutorials/customization.md)
 
 ## Use case
 A use case is built for nitrogen fertilization in winter wheat. A Jupiter notebook (readily usable in [Google Colab](https://colab.research.google.com/)) showing a trained RL agent in action can be found [here](https://github.com/BigDataWUR/PCSE-Gym/blob/master/notebooks/nitrogen-winterwheat/results_paper.ipynb).
