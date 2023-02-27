@@ -71,6 +71,8 @@ a = {
 # Apply it to our environment, to see how the PCSE model progresses in 1 day without interference
 o, r, done, info = env.step(a)
 
+# By choosing different action values we can evaluate the effects of different agro-management policies. Which actions are supported by default depends on the PCSE model, which can be extended manually.
+
 ```
 From the model, we obtain an observation of how the crops behave on day 2. Also, we obtain a scalar reward that indicates the desirability of the current crop state. By default, this has been set to the difference in WSO (weight storage organ, that is eventually the yield that is harvested) that was accumulated during this time step. Furthermore, the environment gives a boolean `done` flag indicating whether the environment has terminated, as well as an `info` dict that provides the possibility of returning additional information that might be of interest for analysis/debugging.
 
