@@ -11,6 +11,7 @@ from pcse.fileinput import CABOFileReader
 from pcse.util import WOFOST72SiteDataProvider
 
 # Create and configure a PCSE-Gym environment
+# Note: the following configuration has not been chosen for its realism
 env = PCSEEnv(
     model_config='Wofost72_WLP_FD.conf',
     agro_config='../pcse_gym/environment/configs/agro/sugarbeet_calendar.yaml',
@@ -71,7 +72,7 @@ a = {
 o, r, done, info = env.step(a)
 
 ```
-From the model, we obtain an observation of how the crops behave on day 2. Also, we obtain a scalar reward that indicates the desirability of the current crop state. By default, this has been set to the difference in WSO (weight storage organ, that is eventually the yield that is harvested) that was acculated during this time step. Furthermore, the environment gives a boolean `done` flag indicating whether the environment has terminated, as well as an `info` dict that provides the possibility of returning additional information that might be of interest for analysis/debugging.
+From the model, we obtain an observation of how the crops behave on day 2. Also, we obtain a scalar reward that indicates the desirability of the current crop state. By default, this has been set to the difference in WSO (weight storage organ, that is eventually the yield that is harvested) that was accumulated during this time step. Furthermore, the environment gives a boolean `done` flag indicating whether the environment has terminated, as well as an `info` dict that provides the possibility of returning additional information that might be of interest for analysis/debugging.
 
 We can run the model until termination, to observe how the crops would develop completely without interference:
 
