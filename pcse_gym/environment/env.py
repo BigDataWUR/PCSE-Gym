@@ -39,7 +39,7 @@ def replace_years(agro_management, years):
 
 
 def get_weather_data_provider(location) -> pcse.db.NASAPowerWeatherDataProvider:
-    wdp = pcse.db.NASAPowerWeatherDataProvider(*location)  # TODO -- other weather data providers
+    wdp = pcse.db.NASAPowerWeatherDataProvider(*location)
     return wdp
 
 
@@ -63,10 +63,6 @@ class Engine(pcse.engine.Engine):
 
 class PCSEEnv(gym.Env):
 
-    # TODO -- render modes for agent (render nothing) and humans (show plots of progression)
-    # TODO -- replace hiske's setup as default? it requires a patch of the pcse library
-    # TODO -- if agromanagement file definition starts before crop start the model will return None and break
-
     _PATH_TO_FILE = os.path.dirname(os.path.realpath(__file__))
     _CONFIG_PATH = os.path.join(_PATH_TO_FILE, 'configs')
 
@@ -82,14 +78,6 @@ class PCSEEnv(gym.Env):
 
     _DEFAULT_CONFIG = 'Lintul3.conf'
 
-    # TODO -- logging?
-
-    # TODO -- various pre-configured models
-
-    # TODO possibility to change dates? Utility function to create agro management files?
-
-    # TODO -- pass weather data provider as parameter?
-
     def __init__(self,
                  model_config: str = _DEFAULT_CONFIG,
                  agro_config: str = _DEFAULT_AGRO_FILE_PATH,
@@ -100,7 +88,6 @@ class PCSEEnv(gym.Env):
                  location=None,
                  seed: int = None,
                  timestep: int = 1,
-                 batch_size: int = 1,  # TODO
                  ):
         """
         Create a new PCSE-Gym environment
@@ -119,14 +106,12 @@ class PCSEEnv(gym.Env):
                                     - A path to the soil parameter file
                                       Will be read by a `pcse.fileinput.PCSEFileReader`
                                     - An object that is directly passed to the `pcse.base.ParameterProvider`
-        :param years: years
+        :param years: years  TODO -- elaborate
         :param location: latitude, longitude
         :param seed: A seed for the random number generators used in PCSE-Gym (which are currently none)
         :param timestep: Number of days that are simulated during a single time step
-        :param batch_size: The number of simulations that are executed simultaneously
         """
         assert timestep > 0
-        assert batch_size > 0
 
         # If any parameter files are specified as path, convert them to a suitable object for pcse
         if isinstance(crop_parameters, str):
@@ -171,7 +156,7 @@ class PCSEEnv(gym.Env):
         model_config = pcse.util.ConfigurationLoader(model_config)
         self._output_variables = model_config.OUTPUT_VARS  # variables given by the PCSE model output
         self._summary_variables = model_config.SUMMARY_OUTPUT_VARS  # Summary variables are given at the end of a run
-        self._weather_variables = list(pcse.base.weather.WeatherDataContainer.required)  # TODO -- configurable?
+        self._weather_variables = list(pcse.base.weather.WeatherDataContainer.required)
 
         # Define Gym observation space
         self.observation_space = self._get_observation_space()
@@ -198,7 +183,7 @@ class PCSEEnv(gym.Env):
             model.run(days=self._timestep - 1)
         return model
 
-    def _get_observation_space(self) -> gym.spaces.Space:   # TODO -- proper Box min/max values
+    def _get_observation_space(self) -> gym.spaces.Space:
         space = gym.spaces.Dict({
             'crop_model': self._get_observation_space_crop_model(),
             'weather': self._get_observation_space_weather(),
@@ -234,7 +219,7 @@ class PCSEEnv(gym.Env):
                 'K': gym.spaces.Box(0, np.inf, shape=()),
             }
         )
-        return space  # TODO -- add more actions?
+        return space
 
     """
     Properties of the crop model config file
@@ -329,7 +314,7 @@ class PCSEEnv(gym.Env):
     def _apply_action(self, action):
         self._model._send_signal(signal=pcse.signals.irrigate,
                                  amount=action['irrigation'],
-                                 efficiency=0.8,  # TODO -- what is a good value?
+                                 efficiency=0.8,
                                  )
         self._model._send_signal(signal=pcse.signals.apply_npk,
                                  N_amount=action['N'],
@@ -337,7 +322,7 @@ class PCSEEnv(gym.Env):
                                  K_amount=action['K'],
                                  N_recovery=0.7,
                                  P_recovery=0.7,
-                                 K_recovery=0.7,  # TODO -- good values -- how to pass these to the function?
+                                 K_recovery=0.7,
                                  )
 
     def _get_observation(self, output) -> dict:
@@ -418,17 +403,3 @@ class PCSEEnv(gym.Env):
     def render(self, mode="human"):
         pass  # Nothing to see here
 
-    """
-    Other functions
-    """
-
-    def save(self):
-        # is it possible to save and restore pcse engine state?
-        # Maybe pickle all the things?
-        pass  # TODO
-
-    @staticmethod
-    def load():
-        pass  # TODO
-
-    # TODO -- save state/ load state?
