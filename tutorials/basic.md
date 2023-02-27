@@ -68,7 +68,7 @@ a = {
     'K': 0,
 }
 
-# Apply it to our environment, to see how the crops develop in 1 day without interference
+# Apply it to our environment, to see how the PCSE model progresses in 1 day without interference
 o, r, done, info = env.step(a)
 
 ```
