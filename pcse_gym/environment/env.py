@@ -106,9 +106,9 @@ class PCSEEnv(gym.Env):
                                     - A path to the soil parameter file
                                       Will be read by a `pcse.fileinput.PCSEFileReader`
                                     - An object that is directly passed to the `pcse.base.ParameterProvider`
-        :param years: years  TODO -- elaborate
-        :param location: latitude, longitude
-        :param seed: A seed for the random number generators used in PCSE-Gym (which are currently none)
+        :param years: A single year, or list of years to get weather data for. If not set use year from agro_config
+        :param location: latitude, longitude to get weather data for
+        :param seed: A seed for the random number generators used in PCSE-Gym
         :param timestep: Number of days that are simulated during a single time step
         """
         assert timestep > 0
