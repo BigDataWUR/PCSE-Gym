@@ -56,7 +56,7 @@ env = CustomPCSEEnv(
 
 o = env.reset()
 
-# Define an action that does nothing
+# Define an action that applies N
 a = {
     'irrigation': 0,
     'N': 10,
