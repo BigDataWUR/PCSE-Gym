@@ -45,13 +45,18 @@ if __name__ == '__main__':
 
 
     from pcse.fileinput import CABOFileReader
-    from pcse.util import WOFOST72SiteDataProvider
+    from pcse.fileinput import CABOFileReader, YAMLCropDataProvider
+    from pcse.util import WOFOST80SiteDataProvider
 
     env = CustomPCSEEnv(
-        model_config='Wofost72_WLP_FD.conf',
-        agro_config='../pcse_gym/environment/configs/agro/sugarbeet_calendar.yaml',
-        crop_parameters=CABOFileReader('../pcse_gym/environment/configs/crop/SUG0601.CAB'),
-        site_parameters=WOFOST72SiteDataProvider(WAV=10),
+        model_config='Wofost80_NWLP_FD.conf',
+        agro_config='../pcse_gym/environment/configs/agro/potato_cropcalendar.yaml',
+        crop_parameters=YAMLCropDataProvider(force_reload=True),
+        site_parameters=WOFOST80SiteDataProvider(WAV=10,  # Initial amount of water in total soil profile [cm]
+                                                 NAVAILI=10,  # Amount of N available in the pool at initialization of the system [kg/ha]
+                                                 PAVAILI=50,  # Amount of P available in the pool at initialization of the system [kg/ha]
+                                                 KAVAILI=100,  # Amount of K available in the pool at initialization of the system [kg/ha]
+                                                 ),
         soil_parameters=CABOFileReader('../pcse_gym/environment/configs/soil/ec3.CAB'),
     )
 

@@ -7,16 +7,20 @@ Here we show a basic example of how to use the PCSE Environment
 from pcse_gym.environment.env import PCSEEnv
 
 # PCSE contains various utility classes to load parameter configurations
-from pcse.fileinput import CABOFileReader
-from pcse.util import WOFOST72SiteDataProvider
+from pcse.fileinput import CABOFileReader, YAMLCropDataProvider
+from pcse.util import WOFOST80SiteDataProvider
 
 # Create and configure a PCSE-Gym environment
 # Note: the following configuration has not been chosen for its realism
 env = PCSEEnv(
-    model_config='Wofost72_WLP_FD.conf',
-    agro_config='../pcse_gym/environment/configs/agro/sugarbeet_calendar.yaml',
-    crop_parameters=CABOFileReader('../pcse_gym/environment/configs/crop/SUG0601.CAB'),
-    site_parameters=WOFOST72SiteDataProvider(WAV=10),
+    model_config='Wofost80_NWLP_FD.conf',
+    agro_config='../pcse_gym/environment/configs/agro/potato_cropcalendar.yaml',
+    crop_parameters=YAMLCropDataProvider(force_reload=True),
+    site_parameters=WOFOST80SiteDataProvider(WAV=10,  # Initial amount of water in total soil profile [cm]
+                                             NAVAILI=10,  # Amount of N available in the pool at initialization of the system [kg/ha]
+                                             PAVAILI=50,  # Amount of P available in the pool at initialization of the system [kg/ha]
+                                             KAVAILI=100,  # Amount of K available in the pool at initialization of the system [kg/ha]
+                                             ),
     soil_parameters=CABOFileReader('../pcse_gym/environment/configs/soil/ec3.CAB'),
 )
 
@@ -28,32 +32,52 @@ o = env.reset()
 By default, the PCSE Environment observations contain the crop model output variables as specified by the config file (in this case Wofost72_WLP_FD.conf), as well as weather statistics. Printing the observation gives the following initial information:
 
 ```python
+
+
 {
-   "crop_model":{
-      "DVS":[0.0],
-      "LAI":[0.0006936],
-      "TAGP":[0.40800000000000003],
-      "TWSO":[0.0],
-      "TWLV":[0.3468],
-      "TWST":[0.061200000000000004],
-      "TWRT":[0.10200000000000001],
-      "TRA":[5.411819351515599e-05],
-      "RD":[10.0],
-      "SM":[0.4],
-      "WWLOW":[22.479999999999997]
-   },
-   "weather":{
-      "IRRAD":[16610000.0],
-      "TMIN":[-1.63],
-      "TMAX":[7.12],
-      "VAP":[6.046046468551459],
-      "RAIN":[0.022],
-      "E0":[0.16351492813999075],
-      "ES0":[0.13357184194043034],
-      "ET0":[0.1508001566684669],
-      "WIND":[2.65]
-   }
+    'crop_model': {
+        'DVS': [0.0],
+        'LAI': [0.14400000000000002],
+        'TAGP': [60.0],
+        'TWSO': [0.0],
+        'TWLV': [48.0],
+        'TWST': [12.0],
+        'TWRT': [15.0],
+        'TRA': [0.0003297839759043299],
+        'RD': [10.0],
+        'SM': [0.4],
+        'WWLOW': [22.479999999999997],
+        'RFTRA': [1.0],
+        'NNI': [1.0],
+        'KNI': [1.0],
+        'PNI': [1.0],
+        'NPKI': [1.0],
+        'RFNPK': [0.999999989],
+        'NAVAIL': [10.0],
+        'PAVAIL': [50.0],
+        'KAVAIL': [100.0],
+        'Ndemand': [0.0],
+        'RNuptake': [0.0],
+        'Pdemand': [0.0],
+        'RPuptake': [0.0],
+        'Kdemand': [0.0],
+        'RKuptake': [0.0],
+        'NamountSO': [0.0],
+        'PamountSO': [0.0],
+        'KamountSO': [0.0]},
+    'weather': {
+        'IRRAD': [2240000.0],
+        'TMIN': [-1.24],
+        'TMAX': [3.75],
+        'VAP': [6.705809327134126],
+        'RAIN': [0.028000000000000004],
+        'E0': [0.0],
+        'ES0': [0.0],
+        'ET0': [0.0032214147993529507],
+        'WIND': [2.23]
+    }
 }
+
 ```
 
 Next, we can define actions to apply to the crops. By default, the PCSE gym supports irrigation and fertilization

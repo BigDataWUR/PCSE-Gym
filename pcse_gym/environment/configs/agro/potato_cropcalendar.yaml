@@ -1,0 +1,12 @@
+AgroManagement:
+- 2006-01-01:
+    CropCalendar:
+        crop_name: potato
+        variety_name: Potato_701
+        crop_start_date: 2006-01-01
+        crop_start_type: emergence
+        crop_end_date: 2006-09-01
+        crop_end_type: earliest
+        max_duration: 365
+    TimedEvents: null
+    StateEvents: null
