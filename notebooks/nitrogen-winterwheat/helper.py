@@ -213,7 +213,7 @@ def get_titles():
     return_dict["TMIN"] = ("Minimum temperature", "°C")
     return_dict["TMAX"] = ("Maximum temperature", "°C")
     return_dict["IRRAD"] = ("Incoming global radiation", "J/m2/day")
-    return_dict["RAIN"] = ("Incoming global radiation ", "cm/day")
+    return_dict["RAIN"] = ("Daily rainfall", "cm/day")
 
     return return_dict
 
