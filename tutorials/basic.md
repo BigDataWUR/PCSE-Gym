@@ -29,7 +29,7 @@ o = env.reset()
 
 ```
 
-By default, the PCSE Environment observations contain the crop model output variables as specified by the config file (in this case Wofost72_WLP_FD.conf), as well as weather statistics. Printing the observation gives the following initial information:
+By default, the PCSE Environment observations contain the crop model output variables as specified by the config file (in this case Wofost80_NWLP_FD.conf), as well as weather statistics. Printing the observation gives the following initial information:
 
 ```python
 
