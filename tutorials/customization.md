@@ -73,3 +73,6 @@ print(r)
 ```
 
 Considering the costs of N and its application, the reward of this time step becomes -30.
+
+The figure below shows the reward progression for simple policies using this model.
+![Rewards for two simple policies](figure_policies.png)
