@@ -17,6 +17,7 @@ import torch.nn.functional as F
 import torch
 import os
 import pandas as pd
+from bisect import bisect_left
 from wrapper import ReferenceEnv, get_default_crop_features, get_default_weather_features, get_default_train_years, \
     get_default_test_years, get_policy_kwargs, get_default_action_features, get_default_location
 
@@ -236,6 +237,18 @@ def identity_line(ax=None, ls='--', *args, **kwargs):
     ax.callbacks.connect('xlim_changed', callback)
     ax.callbacks.connect('ylim_changed', callback)
     return ax
+
+def report_ci(boot_metric, report_p = False):
+    ci_lower = np.quantile(boot_metric, 0.025)
+    ci_upper = np.quantile(boot_metric, 0.975)
+    return_string = f'(95% CI={ci_lower:0.2f} {ci_upper:0.2f})'
+    if (report_p):
+        boot_metric_sorted = np.sort(boot_metric)
+        n_boot = len(boot_metric)
+        idx = bisect_left(boot_metric_sorted, 0.0, hi=n_boot - 1)
+        return_string = return_string + f' one-sided-p={(idx/n_boot):0.4f}'
+    return return_string
+
 
 def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumulative_variables(), ax=None, ylim=None,
                   put_legend=True, plot_average=False):
