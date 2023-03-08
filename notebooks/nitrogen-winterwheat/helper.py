@@ -256,15 +256,11 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
     xmax = 0
     for label, results in results_dict.items():
         x, y = zip(*results[0][variable].items())
-        #_, x_dvs = zip(*results[0]['DVS'].items())
-        #if not (len(y) == len(x_dvs)):
-        #    _, x_dvs = zip(*results[0]['dvs'].items())
         x = ([i.timetuple().tm_yday for i in x])
         if variable in cumulative_variables: y = np.cumsum(y)
         if max(x) > xmax: xmax = max(x)
         if not plot_average:
             ax.step(x, y, label=label, where='post')
-            #ax.step(x_dvs, y, label=label, where='post')
 
     if plot_average:
         plot_df = pd.concat([pd.DataFrame.from_dict(results[0][variable], orient='index', columns=[label])
