@@ -11,6 +11,9 @@ jobs:
       - name: Install dependencies
         run: |
           pip install sphinx sphinx_rtd_theme
+      - name: Sphinx apidoc
+        run: |
+          sphinx-apidoc -o doc pcse_gym/
       - name: Sphinx build
         run: |
           sphinx-build doc _build -va
