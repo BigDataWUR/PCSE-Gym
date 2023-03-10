@@ -62,6 +62,28 @@ class Engine(pcse.engine.Engine):
 
 
 class PCSEEnv(gym.Env):
+    """
+    Create a new PCSE-Gym environment
+
+    :param model_config: PCSE config file name (must be available in the pcse/conf/ folder inside the pcse library)
+    :param agro_config: file name of the yaml file specifying the agro-management configuration
+    :param crop_parameters: Can be specified in two ways:
+                                - A path to the crop parameter file
+                                  Will be read by a `pcse.fileinput.PCSEFileReader`
+                                - An object that is directly passed to the `pcse.base.ParameterProvider`
+    :param site_parameters: Can be specified in two ways:
+                                - A path to the site parameter file
+                                  Will be read by a `pcse.fileinput.PCSEFileReader`
+                                - An object that is directly passed to the `pcse.base.ParameterProvider`
+    :param soil_parameters: Can be specified in two ways:
+                                - A path to the soil parameter file
+                                  Will be read by a `pcse.fileinput.PCSEFileReader`
+                                - An object that is directly passed to the `pcse.base.ParameterProvider`
+    :param years: A single year, or list of years to get weather data for. If not set use year from agro_config
+    :param location: latitude, longitude to get weather data for
+    :param seed: A seed for the random number generators used in PCSE-Gym
+    :param timestep: Number of days that are simulated during a single time step
+    """
 
     _PATH_TO_FILE = os.path.dirname(os.path.realpath(__file__))
     _CONFIG_PATH = os.path.join(_PATH_TO_FILE, 'configs')
@@ -89,28 +111,7 @@ class PCSEEnv(gym.Env):
                  seed: int = None,
                  timestep: int = 1,
                  ):
-        """
-        Create a new PCSE-Gym environment
 
-        :param model_config: PCSE config file name (must be available in the pcse/conf/ folder inside the pcse library)
-        :param agro_config: file name of the yaml file specifying the agro-management configuration
-        :param crop_parameters: Can be specified in two ways:
-                                    - A path to the crop parameter file
-                                      Will be read by a `pcse.fileinput.PCSEFileReader`
-                                    - An object that is directly passed to the `pcse.base.ParameterProvider`
-        :param site_parameters: Can be specified in two ways:
-                                    - A path to the site parameter file
-                                      Will be read by a `pcse.fileinput.PCSEFileReader`
-                                    - An object that is directly passed to the `pcse.base.ParameterProvider`
-        :param soil_parameters: Can be specified in two ways:
-                                    - A path to the soil parameter file
-                                      Will be read by a `pcse.fileinput.PCSEFileReader`
-                                    - An object that is directly passed to the `pcse.base.ParameterProvider`
-        :param years: A single year, or list of years to get weather data for. If not set use year from agro_config
-        :param location: latitude, longitude to get weather data for
-        :param seed: A seed for the random number generators used in PCSE-Gym
-        :param timestep: Number of days that are simulated during a single time step
-        """
         assert timestep > 0
 
         # If any parameter files are specified as path, convert them to a suitable object for pcse
@@ -335,6 +336,7 @@ class PCSEEnv(gym.Env):
     def _get_observation(self, output) -> dict:
         """
         Generate an observation based on the current environment state
+
         :param output: the output of the model after the state transition
         :return: an observation. The default implementation returns a dict containing two dicts containing crop model
                  and weather data, respectively
@@ -361,6 +363,7 @@ class PCSEEnv(gym.Env):
     def _get_reward(self, var='TWSO') -> float:
         """
         Generate a reward based on the current environment state
+
         :param var: the variable extracted from the model output
         :return: a scalar reward. The default implementation gives the increase in yield during the last state transition
                  if the environment is in its initial state, the initial yield is returned
@@ -385,6 +388,7 @@ class PCSEEnv(gym.Env):
               ):
         """
         Reset the PCSE-Gym environment to its initial state
+
         :param seed:
         :param return_info: flag indicating whether an info dict should be returned
         :param options: optional dict containing options for reinitialization
