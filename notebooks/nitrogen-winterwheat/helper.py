@@ -1,4 +1,8 @@
 import gym
+import os
+import datetime
+import numpy as np
+import pandas as pd
 from stable_baselines3 import PPO
 from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv, VecNormalize, sync_envs_normalization
 from stable_baselines3.common import base_class
@@ -6,33 +10,15 @@ from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.logger import Figure
 from stable_baselines3.common.monitor import Monitor
 from torch import nn as nn
+import torch
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
 from typing import Union
-import datetime
-import numpy as np
 from collections import defaultdict
 from scipy.optimize import minimize_scalar
-import torch.nn.functional as F
-import torch
-import os
-import pandas as pd
 from bisect import bisect_left
 from wrapper import ReferenceEnv, get_default_crop_features, get_default_weather_features, get_default_train_years, \
     get_default_test_years, get_policy_kwargs, get_default_action_features, get_default_location
-
-
-def get_prob(model, obs):
-    observation = np.array(obs)
-    observation = observation.reshape((-1,) + model.observation_space.shape)
-    observation = torch.as_tensor(observation).to(model.device)
-    with torch.no_grad():
-        features = model.policy.extract_features(observation)
-        latent_pi, latent_vf = model.policy.mlp_extractor(features)
-        mean_actions = model.policy.action_net(latent_pi)
-        probabilities = F.softmax(mean_actions, dim=-1).cpu().numpy()
-        values = model.policy.value_net(latent_vf)
-    return np.argmax(probabilities), np.amax(probabilities), values
 
 
 def evaluate_policy(
@@ -43,16 +29,22 @@ def evaluate_policy(
         amount=1,
 ):
     """
-    Runs policy for ``n_eval_episodes`` episodes and returns average reward.
+    Runs policy for ``n_eval_episodes`` episodes.
     This is made to work only with one env.
 
-    :param policy: The RL agent you want to evaluate.
+    :param policy: The (RL) agent you want to evaluate.
+        Implemented options:
+            (a) RL agent (base_class.BaseAlgorithm)
+            (b) Standard Practice ('standard-practice' / 'standard-practise')
+            (c) Zero Nitrogen ('no-nitrogen')
+            (d) Start Dump ('start-dump')
+
     :param env: The gym environment. In the case of a ``VecEnv``
         this must contain only one environment.
     :param n_eval_episodes: Number of episode to evaluate the agent
     :param deterministic: Whether to use deterministic or stochastic actions
     :param amount: Multiplier for action
-    :return: a list of reward per episode
+    :return: a list of episode_rewards, and episode_infos
     """
     training = True
 
@@ -136,6 +128,12 @@ def evaluate_policy(
 
 
 class FindOptimum():
+    """
+    Run optimizer to find action that maximizes return value
+    Implemented example: Find optimal amount of nitrogen to "dump" at the start of the season
+    Maximizes the sum of rewards over the (train) year(s)
+    """
+
     def __init__(self, env, train_years=None):
         self.train_years = train_years
         self.env = env
@@ -163,6 +161,7 @@ class FindOptimum():
                 infos_this_episode.append(info_this_episode)
             self.current_rewards[self.env.get_attr("date")[0].year] = total_reward
         returnvalue = 0
+        # We use minimize_scalar(); invert reward
         for year, reward in self.current_rewards.items():
             returnvalue = returnvalue - reward
         return returnvalue
@@ -329,6 +328,7 @@ def save_results(results_dict, results_path):
                                 ['nevents', 'year', 'ndays', 'location'])
     df.to_csv(results_path, index=False)
 
+
 def get_variable(results, variable='fertilizer', cumulative=get_cumulative_variables()):
     if variable in cumulative:
         return sum([results][0][0][variable].values())
@@ -341,11 +341,13 @@ def compute_economic_reward(wso, fertilizer, price_yield_ton=400.0, price_fertil
     convert_fert = g_m2_to_ton_hectare * price_fertilizer_ton
     return 0.001 * (convert_wso * wso - convert_fert * fertilizer)
 
+
 def compute_average(results_dict: dict, filter_list=None):
     if filter_list is None:
         filter_list = list(results_dict.keys())
     filtered_results = [results_dict[f] for f in filter_list if f in results_dict.keys()]
     return sum(filtered_results) / len(filtered_results)
+
 
 def compute_median(results_dict: dict, filter_list=None):
     if filter_list is None:
@@ -367,7 +369,13 @@ def get_test_tensor(crop_features=get_default_crop_features(), action_features=g
 
 class EvalCallback(BaseCallback):
     """
-    Callback for evaluating an agent.
+    Callback for evaluating an agent. Writes the following to tensorboard:
+        - Scalars:
+            - 'cumulative action', 'WSO', 'cumulative reward': per year, and summarized over years (average and median)
+        - Figures:
+            - Progress of crop/weather/reward etc. during season
+            - Histogram of years and locations used during training
+    Currently reporting is quite detailed and therefore time-consuming
 
     :param n_eval_episodes: (int) The number of episodes to test the agent
     :param eval_freq: (int) Evaluate the agent every eval_freq call of the callback.
@@ -411,12 +419,6 @@ class EvalCallback(BaseCallback):
         return log_training
 
     def _on_step(self):
-        """
-        This method will be called by the model.
-
-        :return: (bool)
-        """
-
         train_year = self.model.get_env().get_attr("date")[0].year
         self.histogram_training_years[train_year] = self.histogram_training_years[train_year] + 1
         train_location = self.model.get_env().get_attr("loc")[0]
@@ -538,6 +540,18 @@ def determine_and_log_optimum(log_dir, costs_nitrogen=10.0,
                               train_locations=get_default_location(),
                               test_locations=get_default_location(),
                               n_steps=250000):
+    """
+    Run optimizer to find action that maximizes return value. Log to tensorboard.
+    Wrapper around FindOptimum().
+
+    :param log_dir: Tensorboard dir
+    :param train_years: Optimum is determined on these years
+    :param test_years: Used for logging
+    :param train_locations: Optimum is determined on these locations
+    :param test_locations: Used for logging
+    :param n_steps: Used for tensorboard logging
+    """
+
     print(f'find optimum for {train_years}')
     train_locations = [train_locations] if isinstance(train_locations, tuple) else train_locations
     test_locations = [test_locations] if isinstance(test_locations, tuple) else test_locations
@@ -600,24 +614,6 @@ def determine_and_log_optimum(log_dir, costs_nitrogen=10.0,
     optimum_test_writer.flush()
 
 
-def determine_and_log_standard_practise(log_dir, costs_nitrogen=10.0,
-                                        years=get_default_train_years() + get_default_test_years(),
-                                        n_steps=250000):
-    path_tb = os.path.join(log_dir, f"Standard-Practise-Ncosts-{costs_nitrogen}")
-    writer = SummaryWriter(log_dir=path_tb)
-    for year in years:
-        env_test = ReferenceEnv(costs_nitrogen=costs_nitrogen, years=year)
-        env_test = VecNormalize(DummyVecEnv([lambda: env_test]), norm_obs=True, norm_reward=True, clip_obs=10.,
-                                clip_reward=50., gamma=1)
-        rewards, results = evaluate_policy('standard-practise', env_test, amount=2)
-        reward = rewards[0].item()
-        fertilizer = sum(results[0]['fertilizer'].values())
-        print(f'standard-practise: {year} {fertilizer} {reward}')
-        for step in [0, n_steps]:
-            writer.add_scalar(f'eval/reward-{year}', reward, step)
-            writer.add_scalar(f'eval/nitrogen-{year}', fertilizer, step)
-
-
 def train(log_dir, n_steps,
           crop_features=get_default_crop_features(),
           weather_features=get_default_weather_features(),
@@ -628,7 +624,7 @@ def train(log_dir, n_steps,
           test_locations=get_default_location(),
           seed=0, tag="Exp", costs_nitrogen=10.0):
     """
-    Train a PPO agent
+    Train a PPO agent (Stable Baselines3).
 
     Parameters
     ----------
@@ -636,6 +632,7 @@ def train(log_dir, n_steps,
     n_steps: int, number of timesteps the agent spends in the environment
     crop_features: crop features
     weather_features: weather features
+    action_features: action features
     train_years: train years
     test_years: test years
     train_locations: train locations (latitude,longitude)
@@ -646,16 +643,17 @@ def train(log_dir, n_steps,
 
     """
 
-    print(f'Train model with seed {seed}')
-    hyperparams = {'batch_size': 64, 'n_steps': 2048, 'learning_rate': 0.0003, 'ent_coef': 0.0, 'clip_range': 0.3,
-                   'n_epochs': 10, 'gae_lambda': 0.95, 'max_grad_norm': 0.5, 'vf_coef': 0.5
-    }
+    print(f'Train model with seed {seed}. Logdir: {log_dir}')
+    hyperparams =   {'batch_size': 64, 'n_steps': 2048, 'learning_rate': 0.0003, 'ent_coef': 0.0, 'clip_range': 0.3,
+                    'n_epochs': 10, 'gae_lambda': 0.95, 'max_grad_norm': 0.5, 'vf_coef': 0.5
+                    }
     hyperparams['policy_kwargs'] = {}
     hyperparams['policy_kwargs'] = get_policy_kwargs(crop_features=crop_features, weather_features=weather_features,
                                                      action_features=action_features)
     hyperparams['policy_kwargs']['net_arch'] = [dict(pi=[128,128], vf=[128,128])]
     hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
     hyperparams['policy_kwargs']['ortho_init'] = False
+
     env_pcse_train = ReferenceEnv(crop_features=crop_features, action_features=action_features,
                                   weather_features=weather_features,
                                   costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
@@ -670,8 +668,6 @@ def train(log_dir, n_steps,
         print(model.policy)
         actions, values, log_probs = model.policy(get_test_tensor(crop_features, action_features, weather_features))
         print(f'actions: {actions} values: {values} log_probs: {log_probs} probs: {np.exp(log_probs.detach().numpy())}')
-        #ac, prob = get_prob(model, get_test_tensor(crop_features, action_features, weather_features))
-        #print(f'{ac} {prob}')
         return
 
     model.learn(total_timesteps=n_steps, callback=EvalCallback(test_years=test_years, train_years=train_years,

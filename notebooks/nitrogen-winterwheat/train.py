@@ -26,15 +26,18 @@ if __name__ == "__main__":
     test_years = [year for year in all_years if year % 2 == 0]
 
     train_locations = [(52,5.5), (51.5,5), (52.5,6.0)]
-    test_locations= [(52,5.5), (48,0)]
+    test_locations = [(52,5.5), (48,0)]
 
-    if False:
-        determine_and_log_optimum(log_dir, costs_nitrogen=args.costs_nitrogen, train_years=train_years, test_years=test_years,
-                              train_locations=train_locations, test_locations=test_locations,
-                              n_steps=args.nsteps)
+    compute_baselines = False
+    if compute_baselines:
+        determine_and_log_optimum(log_dir, costs_nitrogen=args.costs_nitrogen,
+                                  train_years=train_years, test_years=test_years,
+                                  train_locations=train_locations, test_locations=test_locations,
+                                  n_steps=args.nsteps)
+    # see https://github.com/ajwdewit/pcse/blob/master/pcse/crop/lintul3.py
     crop_features = ["DVS", "TGROWTH", "LAI", "NUPTT", "TRAN", "TNSOIL", "TRAIN", "TRANRF", "WSO"]
     weather_features = ["IRRAD", "TMIN", "RAIN"]
-    action_features = [] #alternative: "cumulative_nitrogen"
+    action_features = []  # alternative: "cumulative_nitrogen"
     tag = f'Seed-{args.seed}'
 
     train(log_dir, train_years=train_years, test_years=test_years,

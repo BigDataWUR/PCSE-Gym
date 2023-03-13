@@ -9,33 +9,48 @@ import torch.nn as nn
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 import pcse_gym.environment.env
 
+"""
+    Wrapper functions around PCSEEnv for nitrogen use case
+    Includes also integration with Stable Baselines3
+
+"""
+
 
 def get_default_crop_features():
-    return ["DVS", "TGROWTH", "LAI", "NUPTT", "TRAN",
-            "TIRRIG", "TNSOIL", "TRAIN", "TRANRF", "TRUNOF", "TAGBM",
-            "TTRAN", "WC", "WLVD", "WLVG", "WRT", "WSO", "WST"]
+    # See helper.get_titles() for description of variables
+    return ["DVS", "TGROWTH", "LAI", "NUPTT", "TRAN", "TNSOIL", "TRAIN", "TRANRF", "WSO"]
 
 
 def get_default_weather_features():
-    return ["IRRAD", "TMIN", "TMAX", "VAP", "RAIN", "E0", "ES0", "ET0", "WIND"]
+    # See helper.get_titles() for description of variables
+    return ["IRRAD", "TMIN", "RAIN"]
 
 
 def get_default_action_features():
     return []
-    #return ["cumulative_nitrogen"]
+
 
 def get_default_location():
     return (52,5.5)
 
+
 def get_default_train_years():
-    return [2014, 2015, 2016]
+    all_years = [*range(1990, 2022)]
+    train_years = [year for year in all_years if year % 2 == 1]
+    return train_years
 
 
 def get_default_test_years():
-    return [2018, 2019, 2020]
+    all_years = [*range(1990, 2022)]
+    test_years = [year for year in all_years if year % 2 == 0]
+    return test_years
 
 
 class CustomFeatureExtractor(BaseFeaturesExtractor):
+    """
+    Processes input features: average pool timeseries (weather) and concat with scalars (crop features)
+    """
+
     def __init__(self, observation_space: gym.spaces.Box, n_timeseries, n_scalars, n_timesteps = 7):
         self.n_timeseries = n_timeseries
         self.n_scalars = n_scalars
@@ -48,6 +63,7 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
         )
 
     def forward(self, observations) -> th.Tensor:
+        # Returns a torch tensor in a format compatible with Stable Baselines3
         batch_size = observations.shape[0]
         scalars, timeseries = observations[:, 0:self.n_scalars], \
                               observations[:, self.n_scalars:]
@@ -62,6 +78,7 @@ def get_policy_kwargs(crop_features=get_default_crop_features(),
                       weather_features=get_default_weather_features(),
                       action_features=get_default_action_features(),
                       n_timesteps=7):
+    # Integration with BaseModel from Stable Baselines3
     policy_kwargs = dict(
         features_extractor_class=CustomFeatureExtractor,
         features_extractor_kwargs=dict(n_timeseries=len(weather_features),
@@ -72,8 +89,16 @@ def get_policy_kwargs(crop_features=get_default_crop_features(),
 
 
 class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
+    """
+    Establishes compatibility with Stable Baselines3
+
+    :param action_multiplier: conversion factor to map output node to g/m2 of nitrogen
+        action_space=gym.spaces.Discrete(3), action_multiplier=2.0 gives {0, 2.0, 4.0}
+        action_space=gym.spaces.Box(0, np.inf, shape=(1,), action_multiplier=1.0 gives 1.0*x
+    """
+
     def __init__(self, crop_features=get_default_crop_features(), weather_features=get_default_weather_features(),
-                 action_features=get_default_action_features(), costs_nitrogen=5.0, timestep=7,
+                 action_features=get_default_action_features(), costs_nitrogen=10.0, timestep=7,
                  years=None, location=None, action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
                  action_multiplier=1.0):
         self.costs_nitrogen = costs_nitrogen
@@ -96,6 +121,10 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
         return super()._get_reward(var='WSO')
 
     def step(self, action):
+        """
+        Computes customized reward and populates info
+        """
+
         if isinstance(action, np.ndarray):
             action = action.item()
         obs, _, done, info = super().step(action)
@@ -147,6 +176,9 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
         return self._observation(obs)
 
     def _observation(self, observation):
+        """
+        Converts observation into np array to facilitate integration with Stable Baseline3
+        """
         obs = np.zeros(self.observation_space.shape)
 
         if isinstance(observation, tuple):
@@ -165,6 +197,9 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
 
 
 class ZeroNitrogenEnvStorage():
+    """
+    Container to store results from zero nitrogen policy (for re-use)
+    """
     def __init__(self):
         self.results = {}
 
@@ -198,6 +233,13 @@ class ZeroNitrogenEnvStorage():
 
 
 class ReferenceEnv(gym.Env):
+    """
+    Environment with two sub-environments:
+        (1) environment for applying actions of RL agent
+        (2) a baseline environment (e.g. with zero nitrogen policy) for computing relative reward
+    Year and location of episode is randomly picked from years and locations through reset().
+    """
+
     def __init__(self, crop_features=get_default_crop_features(),
                  action_features=get_default_action_features(),
                  weather_features=get_default_weather_features(),
@@ -240,6 +282,10 @@ class ReferenceEnv(gym.Env):
         return gym.spaces.Box(0, np.inf, shape=(nvars,))
 
     def step(self, action):
+        """
+        Computes customized reward and populates info
+        """
+
         if isinstance(action, np.ndarray):
             action = action.item()
         obs, _, done, info = self._env.step(action)
