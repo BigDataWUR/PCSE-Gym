@@ -105,7 +105,7 @@ def get_wofost_kwargs(config_dir=get_config_dir()):
 
 def get_lintul_kwargs(config_dir=get_config_dir()):
     lintul_kwargs = dict(
-        model_config='Lintul3.conf',
+        model_config=os.path.join(config_dir, 'Lintul3.conf'),
         agro_config=os.path.join(config_dir, 'agro', 'agromanagement_fertilization.yaml'),
         crop_parameters=os.path.join(config_dir, 'crop', 'lintul3_winterwheat.crop'),
         site_parameters=os.path.join(config_dir, 'site', 'lintul3_springwheat'),
