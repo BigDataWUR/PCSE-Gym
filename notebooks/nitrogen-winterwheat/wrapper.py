@@ -1,3 +1,4 @@
+import os
 import gym
 import datetime
 import numpy as np
@@ -87,6 +88,31 @@ def get_policy_kwargs(crop_features=get_default_crop_features(),
     )
     return policy_kwargs
 
+def get_config_dir():
+    from pathlib import Path
+    config_dir=os.path.join(Path(os.path.realpath(__file__)).parents[2], 'pcse_gym', 'environment', 'configs')
+    return config_dir
+def get_wofost_kwargs(config_dir=get_config_dir()):
+    wofost_kwargs = dict(
+        model_config='Wofost80_NWLP_FD.conf',
+        agro_config=os.path.join(config_dir, 'agro', 'wheat_cropcalendar.yaml'),
+        crop_parameters=pcse.fileinput.YAMLCropDataProvider(force_reload=True),
+        site_parameters=pcse.util.WOFOST80SiteDataProvider(WAV=10, NAVAILI=10, PAVAILI=50, KAVAILI=100),
+        soil_parameters=pcse.fileinput.CABOFileReader(os.path.join(config_dir, 'soil', 'ec3.CAB'))
+    )
+    return wofost_kwargs
+
+
+def get_lintul_kwargs(config_dir=get_config_dir()):
+    lintul_kwargs = dict(
+        model_config='Lintul3.conf',
+        agro_config=os.path.join(config_dir, 'agro', 'agromanagement_fertilization.yaml'),
+        crop_parameters=os.path.join(config_dir, 'crop', 'lintul3_winterwheat.crop'),
+        site_parameters=os.path.join(config_dir, 'site', 'lintul3_springwheat'),
+        soil_parameters=os.path.join(config_dir, 'soil', 'lintul3_springwheat.soil'),
+        reward_var='WSO'
+    )
+    return lintul_kwargs
 
 class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
     """
@@ -100,14 +126,15 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
     def __init__(self, crop_features=get_default_crop_features(), weather_features=get_default_weather_features(),
                  action_features=get_default_action_features(), costs_nitrogen=10.0, timestep=7,
                  years=None, location=None, action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
-                 action_multiplier=1.0):
+                 action_multiplier=1.0, *args, **kwargs):
         self.costs_nitrogen = costs_nitrogen
         self.crop_features = crop_features
         self.weather_features = weather_features
         self.action_features = action_features
-        super().__init__(timestep=timestep, years=years, location=location)
+        super().__init__(timestep=timestep, years=years, location=location, *args, **kwargs)
         self.action_space = action_space
         self.action_multiplier = action_multiplier
+        self.reward_var = kwargs.get('reward_var', "TWSO")
 
     def _get_observation_space(self):
         nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self._timestep
@@ -118,7 +145,7 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
         self._model._send_signal(signal=pcse.signals.apply_n, amount=amount, recovery=0.7)
 
     def _get_reward(self):
-        return super()._get_reward(var='WSO')
+        return super()._get_reward(var=self.reward_var)
 
     def step(self, action):
         """
@@ -130,8 +157,8 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
         obs, _, done, info = super().step(action)
         output = self._model.get_output()
         last_index_previous_state = (np.ceil(len(output) / self._timestep).astype('int') - 1) * self._timestep - 1
-        wso_start = output[last_index_previous_state]['WSO']
-        wso_finish = output[-1]['WSO']
+        wso_start = output[last_index_previous_state][self.reward_var]
+        wso_finish = output[-1][self.reward_var]
         if wso_start is None: wso_start=0.0
         if wso_finish is None: wso_finish=0.0
         benefits = wso_finish - wso_start
@@ -245,7 +272,9 @@ class ReferenceEnv(gym.Env):
                  weather_features=get_default_weather_features(),
                  seed=0, costs_nitrogen=10.0, timestep=7, years=None, locations=None,
                  action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
-                 action_multiplier=1.0):
+                 action_multiplier=1.0,
+                 *args, **kwargs
+                 ):
         self.crop_features = crop_features
         self.action_features = action_features
         self.weather_features = weather_features
@@ -255,6 +284,7 @@ class ReferenceEnv(gym.Env):
         self.action_multiplier = action_multiplier
         self.action_space = action_space
         self._timestep = timestep
+        self.reward_var = kwargs.get('reward_var', "TWSO")
 
         self._env_baseline = StableBaselinesWrapper(crop_features=crop_features,
                                                     action_features=action_features,
@@ -263,7 +293,8 @@ class ReferenceEnv(gym.Env):
                                                     timestep=timestep,
                                                     years=self.years[0], location=self.locations[0],
                                                     action_space=action_space,
-                                                    action_multiplier=action_multiplier)
+                                                    action_multiplier=action_multiplier,
+                                                    *args, **kwargs)
         self._env = StableBaselinesWrapper(crop_features=crop_features,
                                            action_features=action_features,
                                            weather_features=weather_features,
@@ -271,7 +302,8 @@ class ReferenceEnv(gym.Env):
                                            timestep=timestep,
                                            years=self.years[0], location=self.locations[0],
                                            action_space=action_space,
-                                           action_multiplier=action_multiplier)
+                                           action_multiplier=action_multiplier,
+                                           *args, **kwargs)
         self.observation_space = self._get_observation_space()
         self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
 
@@ -293,8 +325,8 @@ class ReferenceEnv(gym.Env):
         output = self._env._model.get_output()
         last_index_previous_state = (np.ceil(len(output) / self._timestep) - 1).astype('int') * self._timestep - 1
 
-        wso_finish = output[-1]['WSO']
-        wso_start = output[last_index_previous_state]['WSO']
+        wso_finish = output[-1][self.reward_var]
+        wso_start = output[last_index_previous_state][self.reward_var]
         if wso_start is None: wso_start=0.0
         if wso_finish is None: wso_finish=0.0
         growth = wso_finish - wso_start
@@ -302,8 +334,8 @@ class ReferenceEnv(gym.Env):
         previous_date = output[last_index_previous_state]['day']
 
         zero_nitrogen_results = self.zero_nitrogen_env_storage.get_episode_output(self._env_baseline)
-        wso_current = zero_nitrogen_results['WSO'][current_date]
-        wso_previous = zero_nitrogen_results['WSO'][previous_date]
+        wso_current = zero_nitrogen_results[self.reward_var][current_date]
+        wso_previous = zero_nitrogen_results[self.reward_var][previous_date]
         if wso_current is None: wso_current=0.0
         if wso_previous is None: wso_previous=0.0
         growth_baseline = wso_current - wso_previous

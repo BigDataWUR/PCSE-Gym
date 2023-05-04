@@ -180,6 +180,7 @@ def get_ylim_dict():
 
     ylim = defaultdict(def_value)
     ylim['WSO'] = [0, 1000]
+    ylim['TWSO'] = [0, 10000]
     return ylim
 
 
@@ -204,6 +205,7 @@ def get_titles():
     return_dict["WLVG"] = ("Weight green leaves", "g/m2")
     return_dict["WRT"] = ("Weight roots", "g/m2")
     return_dict["WSO"] = ("Weight storage organs", "g/m2")
+    return_dict["TWSO"] = ("Weight storage organs", "kg/ha")
     return_dict["WST"] = ("Weight stems", "g/m2")
     return_dict["TGROWTHr"] = ("Growth rate", "g/m2/day")
     return_dict["NRF"] = ("Nitrogen reduction factor", "-")

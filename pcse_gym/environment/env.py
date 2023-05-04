@@ -110,6 +110,7 @@ class PCSEEnv(gym.Env):
                  location=None,
                  seed: int = None,
                  timestep: int = 1,
+                 **kwargs
                  ):
 
         assert timestep > 0
