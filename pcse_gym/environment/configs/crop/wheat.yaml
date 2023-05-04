@@ -86,18 +86,73 @@ CropParameters:
     EcoTypes:
         winterwheat: &winterwheat
             <<: *GenericC3
-            #
-            # Hack
-            #
             LINTUL:
             - True
             - Use lintul
+            - ['NA']
+            KN:
+            - 0.4
+            - Blabla
+            - ['NA']
+            AMAX_LNB:
+            - 2.0
+            - BlaBla
+            - ['NA']
+            AMAX_REF:
+            - 48.7
+            - BlaBla
+            - ['NA']
+            AMAX_SLP:
+            - 3.24
+            - BlaBla
+            - ['NA']
+            DVS_N_TRANSL: 
+            - 0.8
+            - BlaBla
+            - ['NA']
+            REALLOC_DVS:
+            - 1.5
+            - BlaBla
+            - ['NA']
+            REALLOC_STEM_FRACTION:
+            - 0.2
+            - BlaBla
+            - ['NA']
+            REALLOC_LEAF_FRACTION:
+            - 0.0
+            - BlaBla
+            - ['NA']
+            REALLOC_STEM_RATE:
+            - 0.1
+            - BlaBla
+            - ['NA']
+            REALLOC_LEAF_RATE:
+            - 0.0
+            - BlaBla
+            - ['NA']
+            REALLOC_EFFICIENCY:
+            - 0.95
+            - BlaBla
+            - ['NA']
+            NSLLV_TB:
+            - [ 0.0, 0.0,
+               1.1, 1.0,
+               1.5, 1.4,
+               2.0, 1.5,
+               2.5, 1.5]
+            RGRLAI:
+            - 0.007
+            - Blabla
+            - ['NA']
+            RGRLAI_MIN:
+            - 0.004
+            - Blabla
             - ['NA']
             #
             # EMERGENCE
             #
             TBASEM:
-            -  0.0
+            - 0.0
             - Lower threshold temperature for emergence
             - ['C']
             TEFFMX:
@@ -196,7 +251,7 @@ CropParameters:
             - specific stem area as function of DVS
             - ['-', 'ha.kg-1']
             SPAN:
-            - 31.3
+            - 25.0
             - life span of leaves growing at 35 Celsius
             - ['d']
             TBASE:
@@ -207,8 +262,8 @@ CropParameters:
             # CO2 ASSIMILATION
             #
             KDIFTB:
-            - [0.00, 0.600,
-               2.00, 0.600]
+            - [0.00, 0.800,
+               2.00, 0.800]
             - extinction coefficient for diffuse visible light as function of DVS
             - ['-', '-']
             EFFTB:
@@ -267,19 +322,19 @@ CropParameters:
             - relative increase in respiration rate per 10 degrees Celsius temperature increase
             - ['-']
             RML:
-            - 0.0000
+            - 0.03
             - relative maintenance respiration rate of leaves
             - ['d-1']
             RMO:
-            - 0.0000
+            - 0.01
             - relative maintenance respiration rate of storage organs
             - ['d-1']
             RMR:
-            - 0.0000
+            - 0.015
             - relative maintenance respiration rate of roots
             - ['d-1']
             RMS:
-            - 0.0000
+            - 0.015
             - relative maintenance respiration rate of stems
             - ['d-1']
             RFSETB:
@@ -309,6 +364,7 @@ CropParameters:
                0.250, 0.700,
                0.500, 0.500,
                0.646, 0.300,
+               0.686, 0.000,
                0.950, 0.000,
                2.000, 0.000]
             - fraction of total dry matter to leaves as a function of DVS
@@ -319,6 +375,7 @@ CropParameters:
                0.250, 0.300,
                0.500, 0.500,
                0.646, 0.700,
+               0.686, 1.000,
                0.950, 1.000,
                1.000, 0.000,
                2.000, 0.000]
@@ -390,12 +447,31 @@ CropParameters:
             # MAXIMUM, CRITICAL AND RESIDUAL NITROGEN CONCENTRATION IN DIFFERENT ORGANS
             #
             NMAXLV_TB:
-            - [0.00, 0.0600,
-               0.40, 0.0400,
-               0.70, 0.0300,
-               1.00, 0.0200,
-               2.00, 0.0140,
-               2.10, 0.0140]
+            - [0.0, 0.06632361239320932, 
+              0.1, 0.06441369801761274, 
+              0.2, 0.06250378364201616, 
+              0.3, 0.06059386926641957, 
+              0.4, 0.05868395489082299, 
+              0.4429491668132632, 0.05786366257965751,
+              0.5, 0.0567740405152264, 
+              0.6, 0.05486412613962983, 
+              0.6802941167754797, 0.053330577260576634, 
+              0.7, 0.05295421176403324, 
+              0.8, 0.05104429738843666, 
+              0.9, 0.04913438301284007, 
+              1.0, 0.04722446863724349, 
+              1.0186446374059763, 0.04686837202714889, 
+              1.0408603614619218, 0.046444070719761525, 
+              1.1, 0.045314554261646905, 
+              1.2, 0.04340463988605033, 
+              1.3, 0.041494725510453745, 
+              1.4, 0.039584811134857165, 
+              1.5, 0.037674896759260584, 
+              1.6, 0.035764982383664, 
+              1.7, 0.03385506800806742, 
+              1.8, 0.03194515363247084, 
+              1.9, 0.030035239256874256, 
+              2.0, 0.02812532488127767]
             - maximum N concentration in leaves as function of development stage in kg N kg-1 dry biomass
             - ['-', 'mass.mass-1']
             NMAXRT_FR:
