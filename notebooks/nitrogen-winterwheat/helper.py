@@ -160,6 +160,7 @@ class FindOptimum():
                 total_reward = total_reward + reward
                 infos_this_episode.append(info_this_episode)
             self.current_rewards[self.env.get_attr("date")[0].year] = total_reward
+        print(f'{x}: {total_reward}')
         returnvalue = 0
         # We use minimize_scalar(); invert reward
         for year, reward in self.current_rewards.items():
