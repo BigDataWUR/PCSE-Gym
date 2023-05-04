@@ -92,11 +92,13 @@ def get_config_dir():
     from pathlib import Path
     config_dir=os.path.join(Path(os.path.realpath(__file__)).parents[2], 'pcse_gym', 'environment', 'configs')
     return config_dir
+
+
 def get_wofost_kwargs(config_dir=get_config_dir()):
     wofost_kwargs = dict(
         model_config='Wofost81_NWLP_FD.conf',
         agro_config=os.path.join(config_dir, 'agro', 'wheat_cropcalendar.yaml'),
-        crop_parameters=pcse.fileinput.YAMLCropDataProvider(force_reload=True),
+        crop_parameters=pcse.fileinput.YAMLCropDataProvider(fpath=config_dir, force_reload=True),
         site_parameters=pcse.util.WOFOST80SiteDataProvider(WAV=10, NAVAILI=10, PAVAILI=50, KAVAILI=100),
         soil_parameters=pcse.fileinput.CABOFileReader(os.path.join(config_dir, 'soil', 'ec3.CAB'))
     )
