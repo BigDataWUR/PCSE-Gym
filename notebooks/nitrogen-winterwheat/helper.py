@@ -166,8 +166,8 @@ class FindOptimum():
             returnvalue = returnvalue - reward
         return returnvalue
 
-    def optimize_start_dump(self):
-        res = minimize_scalar(self.start_dump, bounds=(0, 100.0), method='bounded')
+    def optimize_start_dump(self, bounds=(0, 100.0)):
+        res = minimize_scalar(self.start_dump, bounds=bounds, method='bounded', options={'maxiter': 10})
         print(f'optimum found for {self.train_years} at {res.x} {-1.0 * res.fun}')
         for year, reward in self.current_rewards.items():
             print(f'- {year} {reward}')

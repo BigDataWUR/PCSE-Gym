@@ -96,7 +96,7 @@ def get_config_dir():
 
 def get_wofost_kwargs(config_dir=get_config_dir()):
     wofost_kwargs = dict(
-        model_config='Wofost81_NWLP_FD.conf',
+        model_config=os.path.join(config_dir, 'Wofost81_NWLP_FD.conf'),
         agro_config=os.path.join(config_dir, 'agro', 'wheat_cropcalendar.yaml'),
         crop_parameters=pcse.fileinput.YAMLCropDataProvider(fpath=os.path.join(config_dir, 'crop'), force_reload=True),
         site_parameters=pcse.util.WOFOST80SiteDataProvider(WAV=10, NAVAILI=10, PAVAILI=50, KAVAILI=100),
@@ -110,7 +110,7 @@ def get_lintul_kwargs(config_dir=get_config_dir()):
         model_config=os.path.join(config_dir, 'Lintul3.conf'),
         agro_config=os.path.join(config_dir, 'agro', 'agromanagement_fertilization.yaml'),
         crop_parameters=os.path.join(config_dir, 'crop', 'lintul3_winterwheat.crop'),
-        site_parameters=os.path.join(config_dir, 'site', 'lintul3_springwheat'),
+        site_parameters=os.path.join(config_dir, 'site', 'lintul3_springwheat.site'),
         soil_parameters=os.path.join(config_dir, 'soil', 'lintul3_springwheat.soil'),
         reward_var='WSO'
     )
@@ -144,7 +144,8 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
 
     def _apply_action(self, action):
         amount = action * self.action_multiplier
-        self._model._send_signal(signal=pcse.signals.apply_n, amount=amount, recovery=0.7)
+        self._model._send_signal(signal=pcse.signals.apply_n, N_amount=amount, N_recovery=0.7,
+                                 amount=amount, recovery=0.7)
 
     def _get_reward(self):
         return super()._get_reward(var=self.reward_var)
@@ -164,6 +165,9 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
         if wso_start is None: wso_start=0.0
         if wso_finish is None: wso_finish=0.0
         benefits = wso_finish - wso_start
+
+        if self.reward_var == "TWSO": # hack to deal with different units
+            benefits = benefits / 10.0
         amount = action * self.action_multiplier
         costs = self.costs_nitrogen * amount
         reward = benefits - costs
@@ -332,6 +336,8 @@ class ReferenceEnv(gym.Env):
         if wso_start is None: wso_start=0.0
         if wso_finish is None: wso_finish=0.0
         growth = wso_finish - wso_start
+        if self.reward_var == "TWSO":  # hack to deal with different units
+            growth = growth / 10.0
         current_date = output[-1]['day']
         previous_date = output[last_index_previous_state]['day']
 
@@ -341,6 +347,8 @@ class ReferenceEnv(gym.Env):
         if wso_current is None: wso_current=0.0
         if wso_previous is None: wso_previous=0.0
         growth_baseline = wso_current - wso_previous
+        if self.reward_var == "TWSO":  # hack to deal with different units
+            growth_baseline = growth_baseline / 10.0
 
         benefits = growth - growth_baseline
         amount = action * self.action_multiplier
