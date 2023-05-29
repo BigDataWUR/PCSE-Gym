@@ -3,7 +3,7 @@ import os
 import datetime
 import numpy as np
 import pandas as pd
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv, VecNormalize, sync_envs_normalization
 from stable_baselines3.common import base_class
 from stable_baselines3.common.callbacks import BaseCallback
