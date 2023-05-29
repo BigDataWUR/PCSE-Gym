@@ -3,7 +3,7 @@ import os
 import datetime
 import numpy as np
 import pandas as pd
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv, VecNormalize, sync_envs_normalization
 from stable_baselines3.common import base_class
 from stable_baselines3.common.callbacks import BaseCallback
@@ -84,12 +84,15 @@ def evaluate_policy(
             if policy == 'start-dump' and (episode_length == 0):
                 action = [amount * 1]
             if isinstance(policy, base_class.BaseAlgorithm):
-                action, state = policy.predict(obs, state=state, deterministic=deterministic)
-                sb_actions, sb_values, sb_log_probs = policy.policy(torch.from_numpy(obs), deterministic=deterministic)
-                sb_prob = np.exp(sb_log_probs.detach().numpy()).item()
-                sb_val = sb_values.detach().item()
-                prob = sb_prob
-                val = sb_val
+                if isinstance(policy, PPO):
+                    action, state = policy.predict(obs, state=state, deterministic=deterministic)
+                    sb_actions, sb_values, sb_log_probs = policy.policy(torch.from_numpy(obs), deterministic=deterministic)
+                    sb_prob = np.exp(sb_log_probs.detach().numpy()).item()
+                    sb_val = sb_values.detach().item()
+                    prob = sb_prob
+                    val = sb_val
+                if isinstance(policy, DQN):
+                    action = policy.predict(obs, deterministic=deterministic)
 
             obs, rew , done, info = env.step(action)
             reward = env.get_original_reward()
