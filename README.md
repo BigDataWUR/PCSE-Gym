@@ -16,4 +16,4 @@ The code has been tested using python 3.8.10.
 - [Advanced example](tutorials/customization.md)
 
 ## Use case
-A use case is built for nitrogen fertilization in winter wheat. A Jupiter notebook (readily usable in [Google Colab](https://colab.research.google.com/)) showing a trained RL agent in action can be found [here](notebooks/nitrogen-winterwheat/results_paper.ipynb).
+A use case is built for nitrogen fertilization in winter wheat. A Jupiter notebook, showing a trained RL agent in action can be found [here](https://colab.research.google.com/github/BigDataWUR/PCSE-Gym/blob/master/notebooks/nitrogen-winterwheat/results_paper.ipynb).
