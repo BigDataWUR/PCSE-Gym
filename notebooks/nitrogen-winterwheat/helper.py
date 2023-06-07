@@ -1,12 +1,10 @@
-import gymnasium as gym
+import gym
 import os
 import datetime
 import numpy as np
 import pandas as pd
-from typing import Union
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv, VecNormalize, sync_envs_normalization
-
 from stable_baselines3.common import base_class
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.logger import Figure
@@ -15,6 +13,7 @@ from torch import nn as nn
 import torch
 import matplotlib.pyplot as plt
 from torch.utils.tensorboard import SummaryWriter
+from typing import Union
 from collections import defaultdict
 from scipy.optimize import minimize_scalar
 from bisect import bisect_left
@@ -72,7 +71,7 @@ def evaluate_policy(
             sync_envs_normalization(policy.get_env(), env)
         if not isinstance(env, VecEnv) or i == 0:
             obs = env.reset()
-        terminated, truncated, state = False, False, None
+        done, state = False, None
         episode_reward = 0.0
         episode_length = 0
         year = env.get_attr("date")[0].year
@@ -81,7 +80,7 @@ def evaluate_policy(
         infos_this_episode = []
         prob, val = None, None
 
-        while not terminated or truncated:
+        while not done:
             if policy == 'start-dump' and (episode_length == 0):
                 action = [amount * 1]
             if isinstance(policy, base_class.BaseAlgorithm):
@@ -95,11 +94,7 @@ def evaluate_policy(
                 if isinstance(policy, DQN):
                     action = policy.predict(obs, deterministic=deterministic)
 
-            # SB3 VecEnvs don't follow the gymnasium step API, this is quick fix.
-            # see: https://github.com/DLR-RM/stable-baselines3/blob/master/docs/guide/vec_envs.rst
-            obs, rew, terminated, info = env.step(action)
-            truncated = info[0].pop("TimeLimit.truncated")
-
+            obs, rew , done, info = env.step(action)
             reward = env.get_original_reward()
 
             if prob:
@@ -156,14 +151,14 @@ class FindOptimum():
         for train_year in self.train_years:
             self.env.env_method('overwrite_year', train_year)
             self.env.reset()
-            dones = False
+            done = False
             infos_this_episode = []
             total_reward = 0.0
-            while not dones:
+            while not done:
                 action = [0.0]
                 if len(infos_this_episode) == 0:
                     action = [x * 1.0]
-                info_this_episode, rew, terminated, _ = self.env.step(action)
+                info_this_episode, rew, done, _ = self.env.step(action)
                 reward = self.env.get_original_reward()
                 total_reward = total_reward + reward
                 infos_this_episode.append(info_this_episode)
@@ -658,7 +653,7 @@ def train(log_dir, n_steps,
     hyperparams['policy_kwargs'] = {}
     hyperparams['policy_kwargs'] = get_policy_kwargs(crop_features=crop_features, weather_features=weather_features,
                                                      action_features=action_features)
-    hyperparams['policy_kwargs']['net_arch'] = dict(pi=[128,128], vf=[128,128])
+    hyperparams['policy_kwargs']['net_arch'] = [dict(pi=[128,128], vf=[128,128])]
     hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
     hyperparams['policy_kwargs']['ortho_init'] = False
 
