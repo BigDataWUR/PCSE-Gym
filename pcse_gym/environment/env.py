@@ -4,7 +4,7 @@ import os
 import numpy as np
 import yaml
 
-import gym
+import gymnasium as gym
 
 import pcse
 
@@ -308,9 +308,10 @@ class PCSEEnv(gym.Env):
             info['output_history'] = self._model.get_output()
             info['summary_output'] = self._model.get_summary_output()
             info['terminal_output'] = self._model.get_terminal_output()
-
+        truncated = False
+        terminated = done
         # Return all values
-        return o, r, done, info
+        return o, r, terminated, truncated, info
 
     def _apply_action(self, action):
 

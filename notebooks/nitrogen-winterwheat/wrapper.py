@@ -1,4 +1,4 @@
-import gym
+import gymnasium as gym
 import datetime
 import numpy as np
 import pandas as pd
@@ -7,6 +7,8 @@ from collections import defaultdict
 import torch as th
 import torch.nn as nn
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
+import sys
+sys.path.append('C:/PycharmProjects/reorder_cropgym/PCSE-Gym')
 import pcse_gym.environment.env
 
 """
@@ -100,7 +102,7 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
     def __init__(self, crop_features=get_default_crop_features(), weather_features=get_default_weather_features(),
                  action_features=get_default_action_features(), costs_nitrogen=10.0, timestep=7,
                  years=None, location=None, action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
-                 action_multiplier=1.0):
+                 action_multiplier=1.0, seed=0):
         self.costs_nitrogen = costs_nitrogen
         self.crop_features = crop_features
         self.weather_features = weather_features
@@ -108,6 +110,7 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
         super().__init__(timestep=timestep, years=years, location=location)
         self.action_space = action_space
         self.action_multiplier = action_multiplier
+        self.seed(seed)
 
     def _get_observation_space(self):
         nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self._timestep
@@ -127,7 +130,7 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
 
         if isinstance(action, np.ndarray):
             action = action.item()
-        obs, _, done, info = super().step(action)
+        obs, _, terminated, truncated, info = super().step(action)
         output = self._model.get_output()
         last_index_previous_state = (np.ceil(len(output) / self._timestep).astype('int') - 1) * self._timestep - 1
         wso_start = output[last_index_previous_state]['WSO']
@@ -166,10 +169,11 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
             info['reward'] = {}
         info['reward'][self.date] = reward
         obs['actions'] = {'cumulative_nitrogen': sum(info['fertilizer'].values())}
-        return self._observation(obs), reward, done, info
 
-    def reset(self):
-        obs = super().reset()
+        return self._observation(obs), reward, terminated, truncated, info
+
+    def reset(self, seed=None):
+        obs = super().reset(seed=seed)
         if isinstance(obs, tuple):
             obs = obs[0]
         obs['actions'] = {'cumulative_nitrogen': 0.0}
@@ -195,6 +199,13 @@ class StableBaselinesWrapper(pcse_gym.environment.env.PCSEEnv):
                 obs[j] = observation['weather'][feature][d]
         return obs
 
+    def seed(self, seed=None):
+        """
+        fix the random seed
+        """
+        _, seed = gym.utils.seeding.np_random(seed)
+        return [seed]
+
 
 class ZeroNitrogenEnvStorage():
     """
@@ -205,10 +216,10 @@ class ZeroNitrogenEnvStorage():
 
     def run_episode(self, env):
         env.reset()
-        done = False
+        terminated, truncated = False, False
         infos_this_episode = []
-        while not done:
-            _, _, done, info = env.step(0)
+        while not terminated or truncated:
+            _, _, terminated, truncated, info = env.step(0)
             infos_this_episode.append(info)
         variables = infos_this_episode[0].keys()
         episode_info = {}
@@ -263,7 +274,8 @@ class ReferenceEnv(gym.Env):
                                                     timestep=timestep,
                                                     years=self.years[0], location=self.locations[0],
                                                     action_space=action_space,
-                                                    action_multiplier=action_multiplier)
+                                                    action_multiplier=action_multiplier,
+                                                    seed=seed)
         self._env = StableBaselinesWrapper(crop_features=crop_features,
                                            action_features=action_features,
                                            weather_features=weather_features,
@@ -288,7 +300,7 @@ class ReferenceEnv(gym.Env):
 
         if isinstance(action, np.ndarray):
             action = action.item()
-        obs, _, done, info = self._env.step(action)
+        obs, _, terminated, truncated, info = self._env.step(action)
 
         output = self._env._model.get_output()
         last_index_previous_state = (np.ceil(len(output) / self._timestep) - 1).astype('int') * self._timestep - 1
@@ -317,7 +329,7 @@ class ReferenceEnv(gym.Env):
         if 'growth' not in info.keys(): info['growth'] = {}
         info['growth'][self.date] = growth
 
-        return obs, reward, done, info
+        return obs, reward, terminated, truncated, info
 
     def seed(self, seed=None):
         """
@@ -338,7 +350,7 @@ class ReferenceEnv(gym.Env):
         self._env._location = location
         self._env._weather_data_provider = pcse_gym.environment.env.get_weather_data_provider(location)
 
-    def reset(self):
+    def reset(self, seed=None):
         if isinstance(self.years, list):
             year = self.np_random.choice(self.years)
             self._env_baseline._agro_management = pcse_gym.environment.env.replace_years(
@@ -349,10 +361,13 @@ class ReferenceEnv(gym.Env):
             location = self.locations[self.np_random.choice(len(self.locations), 1)[0]]
             self.set_location(location)
 
-        self._env_baseline.reset()
-        obs = self._env.reset()
+        self._env_baseline.reset(seed=seed)
+        obs = self._env.reset(seed=seed)
 
-        return obs
+        # TODO check later
+        info = {}
+
+        return obs, info
 
     def render(self, mode="human"):
         pass
