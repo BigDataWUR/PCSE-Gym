@@ -10,7 +10,7 @@ To install a minimalistic version, do the following:
 1. Clone [PCSE](https://github.com/ajwdewit/pcse.git)
 2. Clone [CropGym](https://github.com/BigDataWUR/PCSE-Gym)
 
-The code has been tested using python 3.8.10.
+The code has been tested using python 3.11. Installed with gymnasium 0.28.1 and stable-baselines3 2.0.0a9. 
 ## Example
 - [Basic example](tutorials/basic.md)
 - [Advanced example](tutorials/customization.md)
