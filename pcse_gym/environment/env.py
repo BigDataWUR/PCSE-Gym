@@ -4,13 +4,13 @@ import os
 import numpy as np
 import yaml
 
-import gym
+import gymnasium as gym
 
 import pcse
 
 """
-    OpenAI Gym Environment built around the PCSE library for crop simulation
-    Gym:  https://github.com/openai/gym
+    Gymnasium Environment built around the PCSE library for crop simulation
+    Gym:  https://github.com/Farama-Foundation/Gymnasium
     PCSE: https://github.com/ajwdewit/pcse
     
     Based on the PCSE-Gym environment built by Hiske Overweg (https://github.com/BigDataWUR/crop-gym)
@@ -22,10 +22,11 @@ def replace_years(agro_management, years):
     if not isinstance(years, list):
         years = [years]
 
-    updated_agro_management = [{k.replace(year=year): v for k, v in agro.items()} for agro, year in zip(agro_management, years)]
+    updated_agro_management = [{k.replace(year=year): v for k, v in agro.items()} for agro, year in
+                               zip(agro_management, years)]
 
     def replace_year_value(d, year):
-        for k,v in d.items():
+        for k, v in d.items():
             if isinstance(v, dict):
                 replace_year_value(v, year)
             else:
@@ -115,6 +116,9 @@ class PCSEEnv(gym.Env):
 
         assert timestep > 0
 
+        # Optionally set the seed
+        super().reset(seed=seed)
+
         # If any parameter files are specified as path, convert them to a suitable object for pcse
         if isinstance(crop_parameters, str):
             crop_parameters = pcse.fileinput.PCSEFileReader(crop_parameters)
@@ -122,10 +126,6 @@ class PCSEEnv(gym.Env):
             site_parameters = pcse.fileinput.PCSEFileReader(site_parameters)
         if isinstance(soil_parameters, str):
             soil_parameters = pcse.fileinput.PCSEFileReader(soil_parameters)
-
-        # Optionally set the seed
-        if seed is not None:
-            self.seed(seed)
 
         # Set location
         if location is None:
@@ -309,9 +309,10 @@ class PCSEEnv(gym.Env):
             info['output_history'] = self._model.get_output()
             info['summary_output'] = self._model.get_summary_output()
             info['terminal_output'] = self._model.get_terminal_output()
-
+        truncated = False
+        terminated = done
         # Return all values
-        return o, r, done, info
+        return o, r, terminated, truncated, info
 
     def _apply_action(self, action):
 
@@ -352,7 +353,8 @@ class PCSEEnv(gym.Env):
         # Get the weather data of the passed days
         weather_data = [self._weather_data_provider(day) for day in days]
         # Cast the weather data into a dict
-        weather_observation = {var: [getattr(weather_data[d], var) for d in range(len(days))] for var in self._weather_variables}
+        weather_observation = {var: [getattr(weather_data[d], var) for d in range(len(days))] for var in
+                               self._weather_variables}
 
         o = {
             'crop_model': crop_model_observation,
@@ -397,12 +399,11 @@ class PCSEEnv(gym.Env):
                  observation and the info dict
         """
 
+        # Optionally set the seed
+        super().reset(seed=seed)
+
         # Create an info dict
         info = dict()
-
-        # Optionally set the seed
-        if seed is not None:
-            self.seed(seed)
 
         # Create a PCSE engine / crop growth model
         self._model = self._init_pcse_model()
@@ -414,4 +415,3 @@ class PCSEEnv(gym.Env):
 
     def render(self, mode="human"):
         pass  # Nothing to see here
-
