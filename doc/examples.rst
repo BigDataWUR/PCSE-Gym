@@ -103,7 +103,7 @@ gym supports irrigation and fertilization
    }
 
    # Apply it to our environment, to see how the PCSE model progresses in 1 day without interference
-   o, r, done, info = env.step(a)
+   o, r, done, truncated, info = env.step(a)
 
    # By choosing different action values we can evaluate the effects of different agro-management policies. Which actions are supported by default depends on the PCSE model, which can be extended manually.
 
@@ -124,7 +124,7 @@ develop completely without interference:
 
    r_sum = 0
    while not done:
-       o, r, done, info = env.step(a)
+       o, r, done, truncated, info = env.step(a)
        r_sum += r
 
 The main objective of reinforcement learning is to build a policy that
@@ -208,7 +208,7 @@ PCSEEnvironment class, but has a modified reward function.
        'N': 10,
    }
 
-   o, r, done, info = env.step(a)
+   o, r, done, truncated, info = env.step(a)
 
    print(r)
 

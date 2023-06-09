@@ -18,7 +18,7 @@ from collections import defaultdict
 from scipy.optimize import minimize_scalar
 from bisect import bisect_left
 from wrapper import ReferenceEnv, get_default_crop_features, get_default_weather_features, get_default_train_years, \
-    get_default_test_years, get_policy_kwargs, get_default_action_features, get_default_location
+    get_default_test_years, get_policy_kwargs, get_default_action_features, get_default_location, get_lintul_kwargs
 
 
 def evaluate_policy(
@@ -480,6 +480,7 @@ class EvalCallback(BaseCallback):
             crop_features = self.model.get_env().get_attr('crop_features')[0]
             action_features = self.model.get_env().get_attr('action_features')[0]
             weather_features = self.model.get_env().get_attr('weather_features')[0]
+            reward_var = self.model.get_env().get_attr('reward_var')[0]
 
             reward, fertilizer, result_model = {}, {}, {}
             log_training = self.get_do_log_training()
@@ -492,7 +493,8 @@ class EvalCallback(BaseCallback):
                                                         costs_nitrogen=costs_nitrogen,
                                                         years=year, locations=test_location,
                                                         action_space=action_space,
-                                                        action_multiplier=action_multiplier)
+                                                        action_multiplier=action_multiplier,
+                                                        reward_var=reward_var)
                     env_pcse_evaluation = VecNormalize(DummyVecEnv([lambda: env_pcse_evaluation]),
                                                         norm_obs=True, norm_reward=True,
                                                         clip_obs=10., clip_reward=50., gamma=1)
@@ -668,7 +670,7 @@ def train(log_dir, n_steps,
     env_pcse_train = ReferenceEnv(crop_features=crop_features, action_features=action_features,
                                   weather_features=weather_features,
                                   costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
-                                  action_space=gym.spaces.Discrete(3), action_multiplier=2.0)
+                                  action_space=gym.spaces.Discrete(3), action_multiplier=2.0, **get_lintul_kwargs())
     env_pcse_train = Monitor(env_pcse_train)
     env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
                                   clip_obs=10., clip_reward=50., gamma=1)
