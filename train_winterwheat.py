@@ -71,17 +71,7 @@ def train(log_dir, n_steps,
     hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
     hyperparams['policy_kwargs']['ortho_init'] = False
 
-    comet_log = Experiment(
-        api_key="hQNssiP36NvxnPGa8bbzR9KMt",
-        project_name="experimental_cropgym",
-        workspace="pcse-gym",
-        log_graph=True,
-        auto_metric_logging=True,
-        auto_histogram_tensorboard_logging=True
-    )
 
-    comet_log.log_parameters(hyperparams)
-    comet_log.log_code(folder="/pcse_gym")
 
     env_pcse_train = WinterWheat(crop_features=crop_features, action_features=action_features,
                                  weather_features=weather_features,
