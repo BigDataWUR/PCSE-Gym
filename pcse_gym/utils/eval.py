@@ -18,6 +18,8 @@ from .defaults import *
 from pcse_gym.envs.winterwheat import WinterWheat
 from pcse_gym.envs.sb3 import get_pcse_model
 
+import comet_ml
+
 
 def compute_median(results_dict: dict, filter_list=None):
     if filter_list is None:
@@ -66,6 +68,23 @@ def get_titles():
     return_dict["TGROWTHr"] = ("Growth rate", "g/m2/day")
     return_dict["NRF"] = ("Nitrogen reduction factor", "-")
     return_dict["GRF"] = ("Growth reduction factor", "-")
+
+    return_dict["DVS"] = ("Development stage", "-")
+    return_dict["TAGP"] = ("Total above-ground Production", "kg/ha")
+    return_dict["LAI"] = ("Leaf area Index", "-")
+    return_dict["RNuptake"] = ("Total nitrogen uptake", "kgN/ha")
+    return_dict["TRA"] = ("Transpiration", "cm/day")
+    return_dict["NAVAIL"] = ("Total soil inorganic nitrogen", "kgN/ha")
+    return_dict["SM"] = ("Volumatric soul moisture content", "-")
+    return_dict["RFTRA"] = ("Transpiration reduction factor", "-")
+    return_dict["TRUNOF"] = ("Total runoff", "mm")
+    return_dict["TAGBM"] = ("Total aboveground biomass", "kg/ha")
+    return_dict["TTRAN"] = ("Total transpiration", "mm")
+    return_dict["WC"] = ("Soil water content", "m3/m3")
+    return_dict["Ndemand"] = ("Total N demand of crop", "kgN/ha")
+    return_dict["NuptakeTotal"] = ("Total N uptake of crop", "kgN/ha/d")
+    return_dict["FERT_N_SUPPLY"] = ("Total N supplied by actions", "kgN/ha")
+
     return_dict["fertilizer"] = ("Nitrogen application", "g/m2")
     return_dict["Fertilizer"] = ("Nitrogen application", "kg/ha")
     return_dict["TMIN"] = ("Minimum temperature", "°C")
@@ -355,7 +374,7 @@ class EvalCallback(BaseCallback):
     :param eval_freq: (int) Evaluate the agent every eval_freq call of the callback.
     """
 
-    def __init__(self, train_years=get_default_train_years(), test_years=get_default_test_years(),
+    def __init__(self, env_eval=None, train_years=get_default_train_years(), test_years=get_default_test_years(),
                  train_locations=get_default_location(), test_locations=get_default_location(),
                  n_eval_episodes=1, eval_freq=1000, pcse_model=1, seed=0):
         super(EvalCallback, self).__init__()
@@ -367,6 +386,7 @@ class EvalCallback(BaseCallback):
         self.eval_freq = eval_freq
         self.pcse_model = pcse_model
         self.seed = seed
+        self.env_eval = env_eval
 
         def def_value(): return 0
 
@@ -445,33 +465,29 @@ class EvalCallback(BaseCallback):
             ax.set_xticklabels(list(self.histogram_training_locations.keys()), fontdict=None, minor=False)
             self.logger.record(f'figures/training-locations', Figure(fig, close=True))
 
-            costs_nitrogen = list(self.model.get_env().get_attr('costs_nitrogen'))[0]
-            action_multiplier = list(self.model.get_env().get_attr('action_multiplier'))[0]
-            action_space = self.model.get_env().get_attr('action_space')
-            crop_features = self.model.get_env().get_attr('crop_features')[0]
-            action_features = self.model.get_env().get_attr('action_features')[0]
-            weather_features = self.model.get_env().get_attr('weather_features')[0]
-            reward_var = self.model.get_env().get_attr('reward_var')[0]
+            # TODO: Eval_env find way to replace year
+            # costs_nitrogen = list(self.model.get_env().get_attr('costs_nitrogen'))[0]
+            # action_multiplier = list(self.model.get_env().get_attr('action_multiplier'))[0]
+            # action_space = self.model.get_env().get_attr('action_space')
+            # crop_features = self.model.get_env().get_attr('crop_features')[0]
+            # action_features = self.model.get_env().get_attr('action_features')[0]
+            # weather_features = self.model.get_env().get_attr('weather_features')[0]
+            # reward_var = self.model.get_env().get_attr('reward_var')[0]
 
             reward, fertilizer, result_model = {}, {}, {}
             log_training = self.get_do_log_training()
 
+            env_pcse_evaluation = self.env_eval
+            env_pcse_evaluation = VecNormalize(DummyVecEnv([lambda: env_pcse_evaluation]),
+                                               norm_obs=True, norm_reward=True,
+                                               clip_obs=10., clip_reward=50., gamma=1)
+            env_pcse_evaluation.training = False
+
             for year in self.get_years(log_training):
                 for test_location in self.get_locations(log_training):
-                    env_pcse_evaluation = WinterWheat(crop_features=crop_features,
-                                                      action_features=action_features,
-                                                      weather_features=weather_features,
-                                                      costs_nitrogen=costs_nitrogen,
-                                                      years=year, locations=test_location,
-                                                      action_space=action_space,
-                                                      action_multiplier=action_multiplier,
-                                                      reward_var=reward_var,
-                                                      seed=self.seed,
-                                                      **get_pcse_model(self.pcse_model))
-                    env_pcse_evaluation = VecNormalize(DummyVecEnv([lambda: env_pcse_evaluation]),
-                                                       norm_obs=True, norm_reward=True,
-                                                       clip_obs=10., clip_reward=50., gamma=1)
-                    env_pcse_evaluation.training = False
+                    env_pcse_evaluation.env_method('overwrite_year', year)
+                    env_pcse_evaluation.env_method('set_location', test_location)
+                    env_pcse_evaluation.reset()
                     sync_envs_normalization(self.model.get_env(), env_pcse_evaluation)
                     episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=env_pcse_evaluation)
                     my_key = (year, test_location)
@@ -480,7 +496,6 @@ class EvalCallback(BaseCallback):
                     self.logger.record(f'eval/reward-{my_key}', reward[my_key])
                     self.logger.record(f'eval/nitrogen-{my_key}', fertilizer[my_key])
                     result_model[my_key] = episode_infos
-                    del env_pcse_evaluation
 
             for test_location in list(set(self.test_locations)):
                 test_keys = [(a, test_location) for a in self.test_years]
@@ -498,7 +513,8 @@ class EvalCallback(BaseCallback):
                 self.logger.record(f'eval/nitrogen-median-train', compute_median(fertilizer, train_keys))
 
             if self.pcse_model:
-                variables = 'action', 'TWSO', 'reward', 'RNuptake', 'NAVAIL', 'val'
+                variables = 'action', 'TWSO', 'reward', 'RNuptake', 'NAVAIL',\
+                            'Ndemand', 'NuptakeTotal', 'FERT_N_SUPPLY', 'val'
             else:
                 variables = 'action', 'WSO', 'reward', 'TNSOIL', 'val'
 

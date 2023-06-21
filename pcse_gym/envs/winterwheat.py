@@ -32,6 +32,7 @@ class WinterWheat(gym.Env):
         self.action_space = action_space
         self._timestep = timestep
         self.reward_var = kwargs.get('reward_var', "TWSO")
+        self.counter = 0
 
         self._env_baseline = StableBaselinesWrapper(crop_features=crop_features,
                                                     action_features=action_features,
@@ -71,6 +72,12 @@ class WinterWheat(gym.Env):
             action = action.item()
         print(f"the action is {action}")
         obs, _, terminated, truncated, info = self._env.step(action)
+
+        # TODO: Take care of this
+        # print(f"counter is {self.counter}")
+        # if action != 0:
+        #     self.counter += 1
+
         output = self._env._model.get_output()
         benefits, growth = default_winterwheat_reward(output, self._env_baseline, self.zero_nitrogen_env_storage,
                                                       self._timestep, self.reward_var)
@@ -88,7 +95,6 @@ class WinterWheat(gym.Env):
 
         return obs, reward, terminated, truncated, info
 
-
     def overwrite_year(self, year):
         self.years = year
         self._env_baseline._agro_management = pcse_gym.envs.common_env.replace_years(
@@ -101,7 +107,7 @@ class WinterWheat(gym.Env):
         self._env._location = location
         self._env._weather_data_provider = pcse_gym.envs.common_env.get_weather_data_provider(location)
 
-    def reset(self, seed=None):
+    def reset(self, seed=None, options=()):
         if isinstance(self.years, list):
             year = self.np_random.choice(self.years)
             self._env_baseline._agro_management = pcse_gym.envs.common_env.replace_years(
@@ -112,6 +118,8 @@ class WinterWheat(gym.Env):
             location = self.locations[self.np_random.choice(len(self.locations), 1)[0]]
             self.set_location(location)
 
+        self.counter = 0
+
         self._env_baseline.reset(seed=seed)
         obs = self._env.reset(seed=seed)
 
@@ -119,6 +127,15 @@ class WinterWheat(gym.Env):
         info = {}
 
         return obs, info
+
+    def valid_action_mask(self):
+        # TODO: does this work
+        action_masks = np.zeros((self.action_space.n,), dtype=int)
+
+        if self.counter > 3:
+            action_masks[0] = 1
+
+        return action_masks
 
     def render(self, mode="human"):
         pass

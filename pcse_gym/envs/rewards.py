@@ -2,6 +2,7 @@ import numpy as np
 
 
 def sb3_winterwheat_reward(output, timestep, reward_var):
+
     last_index_previous_state = (np.ceil(len(output) / timestep).astype('int') - 1) * timestep - 1
     wso_start = output[last_index_previous_state][reward_var]
     wso_finish = output[-1][reward_var]
@@ -13,6 +14,8 @@ def sb3_winterwheat_reward(output, timestep, reward_var):
 
 
 def default_winterwheat_reward(output, env_baseline, zero_nitrogen_env_storage, timestep, reward_var):
+    assert reward_var == 'TWSO' or 'WSO'
+
     last_index_previous_state = (np.ceil(len(output) / timestep) - 1).astype('int') * timestep - 1
 
     wso_finish = output[-1][reward_var]
@@ -35,7 +38,30 @@ def default_winterwheat_reward(output, env_baseline, zero_nitrogen_env_storage, 
         growth_baseline = growth_baseline / 10.0
 
     benefits = growth - growth_baseline
-    print(f"the RL growth is {growth}, and the zero growth is {growth_baseline}")
+
+    return benefits, growth
+
+
+def n_demand_yield_reward(output, timestep, reward_var):
+    assert 'TWSO' and 'Ndemand' in reward_var, f"reward_var does not contain TWSO and Ndemand"
+
+    last_index_previous_state = (np.ceil(len(output) / timestep) - 1).astype('int') * timestep - 1
+    n_demand_finish = output[-1][reward_var]['Ndemand']
+    n_demand_start = output[last_index_previous_state][reward_var]['Ndemand']
+    if n_demand_start is None: n_demand_start = 0.0
+    if n_demand_finish is None: n_demand_finish = 0.0
+    n_demand = n_demand_start - n_demand_finish
+
+    wso_finish = output[-1][reward_var]['TWSO']
+    wso_start = output[last_index_previous_state][reward_var]['TWSO']
+    if wso_start is None: wso_start = 0.0
+    if wso_finish is None: wso_finish = 0.0
+    growth = wso_finish - wso_start
+    if reward_var == "TWSO":  # hack to deal with different units
+        growth = growth / 10.0
+
+    benefits = growth - n_demand
+    print(f"the N demand is {n_demand}")
     print(f"the benefits are {benefits}")
 
     return benefits, growth
