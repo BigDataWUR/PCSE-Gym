@@ -178,7 +178,7 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
 
     def reset(self, seed=None):
         #print(f"Reset is called {self.counter} times with seed {seed}")
-        self.counter = self.counter + 1
+        # self.counter = self.counter + 1
         obs = super().reset(seed=seed)
         if isinstance(obs, tuple):
             obs = obs[0]

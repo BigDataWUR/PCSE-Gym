@@ -85,8 +85,7 @@ def get_titles():
     return_dict["NuptakeTotal"] = ("Total N uptake of crop", "kgN/ha/d")
     return_dict["FERT_N_SUPPLY"] = ("Total N supplied by actions", "kgN/ha")
 
-    return_dict["fertilizer"] = ("Nitrogen application", "g/m2")
-    return_dict["Fertilizer"] = ("Nitrogen application", "kg/ha")
+    return_dict["fertilizer"] = ("Nitrogen application", "kg/ha")
     return_dict["TMIN"] = ("Minimum temperature", "°C")
     return_dict["TMAX"] = ("Maximum temperature", "°C")
     return_dict["IRRAD"] = ("Incoming global radiation", "J/m2/day")
@@ -465,15 +464,6 @@ class EvalCallback(BaseCallback):
             ax.set_xticklabels(list(self.histogram_training_locations.keys()), fontdict=None, minor=False)
             self.logger.record(f'figures/training-locations', Figure(fig, close=True))
 
-            # TODO: Eval_env find way to replace year
-            # costs_nitrogen = list(self.model.get_env().get_attr('costs_nitrogen'))[0]
-            # action_multiplier = list(self.model.get_env().get_attr('action_multiplier'))[0]
-            # action_space = self.model.get_env().get_attr('action_space')
-            # crop_features = self.model.get_env().get_attr('crop_features')[0]
-            # action_features = self.model.get_env().get_attr('action_features')[0]
-            # weather_features = self.model.get_env().get_attr('weather_features')[0]
-            # reward_var = self.model.get_env().get_attr('reward_var')[0]
-
             reward, fertilizer, result_model = {}, {}, {}
             log_training = self.get_do_log_training()
 
@@ -514,7 +504,7 @@ class EvalCallback(BaseCallback):
 
             if self.pcse_model:
                 variables = 'action', 'TWSO', 'reward', 'RNuptake', 'NAVAIL',\
-                            'Ndemand', 'NuptakeTotal', 'FERT_N_SUPPLY', 'val'
+                            'Ndemand', 'NuptakeTotal', 'fertilizer', 'val'
             else:
                 variables = 'action', 'WSO', 'reward', 'TNSOIL', 'val'
 

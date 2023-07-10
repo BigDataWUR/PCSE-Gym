@@ -19,7 +19,7 @@ if __name__ == "__main__":
     parser.add_argument("-c", "--costs_nitrogen", type=float, default=10.0, help="Costs for nitrogen")
     args = parser.parse_args()
 
-    log_dir = os.path.join(rootdir, 'notebooks', 'nitrogen-winterwheat', 'tensorboard_logs', 'Experiments-Paper')
+    log_dir = os.path.join(rootdir, '_notebooks_old', 'nitrogen-winterwheat', 'tensorboard_logs', 'Experiments-Paper')
     print(f'train for {args.nsteps} steps with costs_nitrogen={args.costs_nitrogen} (seed={args.seed})')
     all_years = [*range(1990, 2022)]
     train_years = [year for year in all_years if year % 2 == 1]

@@ -1,3 +1,5 @@
+import os.path
+
 from stable_baselines3 import PPO  # , DQN
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
@@ -10,6 +12,7 @@ from sb3_contrib.common.wrappers import ActionMasker
 
 from comet_ml import Experiment
 from comet_ml.integration.gymnasium import CometLogger
+from comet_ml.integration.pytorch import log_model
 
 import argparse
 import lib_programname
@@ -19,7 +22,7 @@ from pcse_gym.utils.defaults import *
 from pcse_gym.envs.winterwheat import WinterWheat
 from pcse_gym.envs.sb3 import *
 from pcse_gym.utils.eval import EvalCallback, determine_and_log_optimum
-from pcse_gym.envs.constraints import mask_fertilization_actions
+from pcse_gym.envs.constraints import ActionLimiter
 
 path_to_program = lib_programname.get_path_executed_script()
 rootdir = path_to_program.parents[0]
@@ -40,7 +43,7 @@ def train(log_dir, n_steps,
           test_years=get_default_test_years(),
           train_locations=get_default_location(),
           test_locations=get_default_location(),
-          pcse_model=0, agent=PPO,
+          pcse_model=0, agent=PPO, reward=None,
           seed=0, tag="Exp", costs_nitrogen=10.0):
     """
     Train a PPO agent (Stable Baselines3).
@@ -61,6 +64,7 @@ def train(log_dir, n_steps,
     costs_nitrogen: float, penalty for fertilization application
 
     """
+
     pcse_model_name = lambda x: "WOFOST" if x == 1 else "LINTUL"
     print(f'Train model {pcse_model_name(pcse_model)} with seed {seed}. Logdir: {log_dir}')
     hyperparams = {'batch_size': 64, 'n_steps': 2048, 'learning_rate': 0.0003, 'ent_coef': 0.0, 'clip_range': 0.3,
@@ -71,13 +75,32 @@ def train(log_dir, n_steps,
     hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
     hyperparams['policy_kwargs']['ortho_init'] = False
 
+    #For comet use
+    use_comet = True
+
+    if use_comet:
+        with open(os.path.join(rootdir, 'comet', 'hbja_api_key'), 'r') as f:
+            api_key = f.readline()
+        comet_log = Experiment(
+            api_key=api_key,
+            project_name="experimental_cropgym",
+            workspace="pcse-gym",
+            log_graph=True,
+            auto_metric_logging=True,
+            auto_histogram_tensorboard_logging=True
+        )
+
+        comet_log.log_parameters(hyperparams)
+        comet_log.log_code(folder="/pcse_gym")
 
 
     env_pcse_train = WinterWheat(crop_features=crop_features, action_features=action_features,
                                  weather_features=weather_features,
                                  costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
-                                 action_space=gym.spaces.Discrete(3), action_multiplier=2.0, seed=seed,
+                                 action_space=gym.spaces.Discrete(7), action_multiplier=1.0, seed=seed,
+                                 reward=reward,
                                  **get_pcse_model(pcse_model))
+    # env_pcse_train = ActionLimiter(env_pcse_train, action_limit=4)
 
     # env_pcse_train = ActionMasker(env_pcse_train, mask_fertilization_actions)
     # if comet_log:
@@ -91,7 +114,8 @@ def train(log_dir, n_steps,
 
     model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams, tensorboard_log=log_dir)
 
-    # model = MaskablePPO(MaskableActorCriticPolicy, env_pcse_train, verbose=1, tensorboard_log=log_dir)
+    # model = MaskablePPO(MaskableActorCriticPolicy, env_pcse_train, gamma=1, seed=seed, **hyperparams, verbose=1,
+    #                     tensorboard_log=log_dir)
 
     debug = False
     if debug:
@@ -103,8 +127,9 @@ def train(log_dir, n_steps,
     env_pcse_eval = WinterWheat(crop_features=crop_features, action_features=action_features,
                                 weather_features=weather_features,
                                 costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
-                                action_space=gym.spaces.Discrete(3), action_multiplier=2.0,
+                                action_space=gym.spaces.Discrete(7), action_multiplier=1.0, reward=reward,
                                 **get_pcse_model(pcse_model), seed=seed)
+    # env_pcse_eval = ActionLimiter(env_pcse_eval, action_limit=4)
 
     tb_log_name = f'{tag}-{pcse_model_name(pcse_model)}-Ncosts-{costs_nitrogen}-run'
 
@@ -124,11 +149,14 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--environment", type=int, default=1,
                         help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
     parser.add_argument("-a", "--agent", type=str, default="DQN", help="RL agent. PPO or DQN.")
+    parser.add_argument("-r", "--reward", type=str, default="ANE", help="Reward function. DEF or ANE")
     args = parser.parse_args()
 
     print(rootdir)
     log_dir = os.path.join(rootdir, 'tensorboard_logs', 'WOFOST_experiments')
     print(f'train for {args.nsteps} steps with costs_nitrogen={args.costs_nitrogen} (seed={args.seed})')
+
+    #TODO CHANGE BACK
     all_years = [*range(1990, 2022)]
     train_years = [year for year in all_years if year % 2 == 1]
     test_years = [year for year in all_years if year % 2 == 0]
@@ -162,5 +190,6 @@ if __name__ == '__main__':
           crop_features=crop_features,
           weather_features=weather_features,
           action_features=action_features,
-          pcse_model=args.environment, agent=args.agent
+          pcse_model=args.environment, agent=args.agent,
+          reward=args.reward
           )

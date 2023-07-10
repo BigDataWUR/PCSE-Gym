@@ -8,6 +8,8 @@ from pcse_gym.utils.defaults import *
 
 class WinterWheat(gym.Env):
     """
+    @Code by Michiel Kallenberg 2022
+
     Environment with two sub-environments:
         (1) environment for applying actions of RL agent
         (2) a baseline environment (e.g. with zero nitrogen policy) for computing relative reward
@@ -19,20 +21,24 @@ class WinterWheat(gym.Env):
                  weather_features=get_default_weather_features(),
                  seed=0, costs_nitrogen=None, timestep=7, years=None, locations=None,
                  action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
-                 action_multiplier=1.0,
+                 action_multiplier=1.0, reward=None,
                  *args, **kwargs
                  ):
         self.crop_features = crop_features
         self.action_features = action_features
         self.weather_features = weather_features
-        self.costs_nitrogen = costs_nitrogen
+        if 'ANE' in reward:
+            self.costs_nitrogen = 5.0
+        else:
+            self.costs_nitrogen = costs_nitrogen
         self.years = [years] if isinstance(years, int) else years
         self.locations = [locations] if isinstance(locations, tuple) else locations
         self.action_multiplier = action_multiplier
         self.action_space = action_space
         self._timestep = timestep
-        self.reward_var = kwargs.get('reward_var', "TWSO")
-        self.counter = 0
+        self.reward_var = kwargs.get('reward_var', "TWSO" )
+        #self.reward_var = kwargs.get('reward_var', "NuptakeTotal")
+        self.reward_function = reward
 
         self._env_baseline = StableBaselinesWrapper(crop_features=crop_features,
                                                     action_features=action_features,
@@ -70,24 +76,23 @@ class WinterWheat(gym.Env):
 
         if isinstance(action, np.ndarray):
             action = action.item()
-        print(f"the action is {action}")
+
         obs, _, terminated, truncated, info = self._env.step(action)
 
-        # TODO: Take care of this
-        # print(f"counter is {self.counter}")
-        # if action != 0:
-        #     self.counter += 1
-
         output = self._env._model.get_output()
-        benefits, growth = default_winterwheat_reward(output, self._env_baseline, self.zero_nitrogen_env_storage,
-                                                      self._timestep, self.reward_var)
-
         amount = action * self.action_multiplier
-        if self.costs_nitrogen:
-            costs = self.costs_nitrogen * amount
-            reward = benefits - costs
-        else:
-            reward = benefits
+
+        match self.reward_function: #Needs python 3.10+
+            case 'ANE':
+                reward, growth = ane_reward(output, self._env_baseline, self.zero_nitrogen_env_storage, self._timestep,
+                                  self.reward_var, self.costs_nitrogen, amount)
+            case 'DEF':
+                reward, growth = default_winterwheat_reward(output, self._env_baseline, self.zero_nitrogen_env_storage,
+                                                  self._timestep, self.reward_var, self.costs_nitrogen, amount)
+            case _:
+                reward, growth =  default_winterwheat_reward(output, self._env_baseline, self.zero_nitrogen_env_storage,
+                                                  self._timestep, self.reward_var, self.costs_nitrogen, amount)
+
         if 'reward' not in info.keys(): info['reward'] = {}
         info['reward'][self.date] = reward
         if 'growth' not in info.keys(): info['growth'] = {}

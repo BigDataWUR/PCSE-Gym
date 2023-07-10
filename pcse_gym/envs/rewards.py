@@ -13,7 +13,8 @@ def sb3_winterwheat_reward(output, timestep, reward_var):
     return benefits
 
 
-def default_winterwheat_reward(output, env_baseline, zero_nitrogen_env_storage, timestep, reward_var):
+def default_winterwheat_reward(output, env_baseline, zero_nitrogen_env_storage, timestep, reward_var,
+                               costs_nitrogen, amount):
     assert reward_var == 'TWSO' or 'WSO'
 
     last_index_previous_state = (np.ceil(len(output) / timestep) - 1).astype('int') * timestep - 1
@@ -39,10 +40,77 @@ def default_winterwheat_reward(output, env_baseline, zero_nitrogen_env_storage, 
 
     benefits = growth - growth_baseline
 
-    return benefits, growth
+    costs = costs_nitrogen * amount
+    reward = benefits - costs
 
 
-def n_demand_yield_reward(output, timestep, reward_var):
+    return reward, growth
+
+
+# TODO agronomic nitrogen use efficiency still needs to be tested (See Vanlauwe et al, 2011)
+def ane_reward(output, env_baseline, zero_nitrogen_env_storage, timestep, reward_var, costs_nitrogen,
+               amount):
+    #agronomic nitrogen use efficiency
+    assert 'TWSO' in reward_var, f"reward_var does not contain TWSO"
+
+    last_index_previous_state = (np.ceil(len(output) / timestep) - 1).astype('int') * timestep - 1
+
+    wso_finish = output[-1][reward_var]
+    wso_start = output[last_index_previous_state][reward_var]
+    if wso_start is None: wso_start = 0.0
+    if wso_finish is None: wso_finish = 0.0
+    growth = wso_finish - wso_start
+    if reward_var == "TWSO":  # hack to deal with different units
+        growth = growth / 10.0
+    current_date = output[-1]['day']
+    previous_date = output[last_index_previous_state]['day']
+
+    zero_nitrogen_results = zero_nitrogen_env_storage.get_episode_output(env_baseline)
+    wso_current = zero_nitrogen_results[reward_var][current_date]
+    wso_previous = zero_nitrogen_results[reward_var][previous_date]
+    if wso_current is None: wso_current = 0.0
+    if wso_previous is None: wso_previous = 0.0
+    growth_baseline = wso_current - wso_previous
+    if reward_var == "TWSO":  # hack to deal with different units
+        growth_baseline = growth_baseline / 10.0
+
+    benefits = growth - growth_baseline
+
+    costs = amount * costs_nitrogen
+
+    if amount == 0.0: #avoid zero division
+        amount = 1.0
+
+    reward = benefits / amount - costs
+
+    return reward, growth
+
+
+# TODO nitrogen use efficiency reward
+def nue_reward(output, timestep, reward_var, amount, costs_nitrogen):
+    assert 'NuptakeTotal' and 'NLossesTotal' and 'NfixTotal' in \
+        reward_var, f"reward_var does not contain NuptakeTotal, NLossesTotal or NfixTotal"
+
+    last_index_previous_state = (np.ceil(len(output) / timestep) - 1).astype('int') * timestep - 1
+
+    n_upt = output[-1][reward_var]['NuptakeTotal']
+    if n_upt is None: n_upt = 0.0
+    n_loss = output[-1][reward_var]['NLossesTotal']
+    n_fix = output[-1][reward_var]['NfixTotal']
+
+    fert = amount #*costs_nitrogen
+
+    crop_output = n_upt + n_loss
+
+    crop_input = n_fix + fert
+
+    nue = crop_output / crop_input
+
+    return nue
+
+
+# TODO create reward surrounding crop N demand
+def n_demand_yield_reward(output, timestep, reward_var, amount, cost):
     assert 'TWSO' and 'Ndemand' in reward_var, f"reward_var does not contain TWSO and Ndemand"
 
     last_index_previous_state = (np.ceil(len(output) / timestep) - 1).astype('int') * timestep - 1
@@ -65,6 +133,8 @@ def n_demand_yield_reward(output, timestep, reward_var):
     print(f"the benefits are {benefits}")
 
     return benefits, growth
+
+
 
 
 def compute_economic_reward(wso, fertilizer, price_yield_ton=400.0, price_fertilizer_ton=300.0):
