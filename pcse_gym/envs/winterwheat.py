@@ -36,8 +36,8 @@ class WinterWheat(gym.Env):
         self.action_multiplier = action_multiplier
         self.action_space = action_space
         self._timestep = timestep
-        self.reward_var = kwargs.get('reward_var', "TWSO" )
-        #self.reward_var = kwargs.get('reward_var', "NuptakeTotal")
+        self.reward_var = kwargs.get('reward_var', "TWSO")
+        # self.reward_var = kwargs.get('reward_var', "NuptakeTotal")
         self.reward_function = reward
 
         self._env_baseline = StableBaselinesWrapper(crop_features=crop_features,
@@ -82,16 +82,7 @@ class WinterWheat(gym.Env):
         output = self._env._model.get_output()
         amount = action * self.action_multiplier
 
-        match self.reward_function: #Needs python 3.10+
-            case 'ANE':
-                reward, growth = ane_reward(output, self._env_baseline, self.zero_nitrogen_env_storage, self._timestep,
-                                  self.reward_var, self.costs_nitrogen, amount)
-            case 'DEF':
-                reward, growth = default_winterwheat_reward(output, self._env_baseline, self.zero_nitrogen_env_storage,
-                                                  self._timestep, self.reward_var, self.costs_nitrogen, amount)
-            case _:
-                reward, growth =  default_winterwheat_reward(output, self._env_baseline, self.zero_nitrogen_env_storage,
-                                                  self._timestep, self.reward_var, self.costs_nitrogen, amount)
+        reward, growth = self._get_reward(output, amount)
 
         if 'reward' not in info.keys(): info['reward'] = {}
         info['reward'][self.date] = reward
@@ -99,6 +90,21 @@ class WinterWheat(gym.Env):
         info['growth'][self.date] = growth
 
         return obs, reward, terminated, truncated, info
+
+    def _get_reward(self, output, amount):
+        match self.reward_function:  # Needs python 3.10+
+            case 'ANE':
+                print("I am called")
+                return ane_reward(output, self._env_baseline, self.zero_nitrogen_env_storage, self._timestep,
+                                  self.reward_var, self.costs_nitrogen, amount)
+            case 'DEF':
+                return default_winterwheat_reward(output, self._env_baseline, self.zero_nitrogen_env_storage,
+                                                  self._timestep, self.reward_var, self.costs_nitrogen,
+                                                  amount)
+            case _:
+                return default_winterwheat_reward(output, self._env_baseline, self.zero_nitrogen_env_storage,
+                                                  self._timestep, self.reward_var, self.costs_nitrogen,
+                                                  amount)
 
     def overwrite_year(self, year):
         self.years = year
