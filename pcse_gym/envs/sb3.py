@@ -1,5 +1,8 @@
 import os
+
+import gymnasium
 import gymnasium as gym
+import numpy as np
 import pandas as pd
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
@@ -17,7 +20,7 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
     Processes input features: average pool timeseries (weather) and concat with scalars (crop features)
     """
 
-    def __init__(self, observation_space: gym.spaces.Box, n_timeseries, n_scalars, n_timesteps = 7):
+    def __init__(self, observation_space: gym.spaces.Box, n_timeseries, n_scalars, n_timesteps=7):
         self.n_timeseries = n_timeseries
         self.n_scalars = n_scalars
         self.n_timesteps = n_timesteps
@@ -33,9 +36,9 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
         batch_size = observations.shape[0]
         scalars, timeseries = observations[:, 0:self.n_scalars], \
                               observations[:, self.n_scalars:]
-        reshaped = timeseries.reshape(batch_size, self.n_timesteps, self.n_timeseries).permute(0,2,1)
+        reshaped = timeseries.reshape(batch_size, self.n_timesteps, self.n_timeseries).permute(0, 2, 1)
         x1 = self.avg_timeseries(reshaped)
-        x1 = th.squeeze(x1,2)
+        x1 = th.squeeze(x1, 2)
         x = th.cat((x1, scalars), dim=1)
         return x
 
@@ -56,7 +59,7 @@ def get_policy_kwargs(crop_features=get_wofost_default_crop_features(),
 
 def get_config_dir():
     from pathlib import Path
-    config_dir=os.path.join(Path(os.path.realpath(__file__)).parents[1], 'envs', 'configs')
+    config_dir = os.path.join(Path(os.path.realpath(__file__)).parents[1], 'envs', 'configs')
     return config_dir
 
 
@@ -101,12 +104,14 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         action_space=gym.spaces.Box(0, np.inf, shape=(1,), action_multiplier=1.0 gives 1.0*x
     """
 
-    def __init__(self, crop_features=get_wofost_default_crop_features(), weather_features=get_default_weather_features(),
+    def __init__(self, crop_features=get_wofost_default_crop_features(),
+                 weather_features=get_default_weather_features(),
                  action_features=get_default_action_features(), costs_nitrogen=10.0, timestep=7,
                  years=None, location=None, seed=0, action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
                  action_multiplier=1.0, *args, **kwargs):
         self.costs_nitrogen = costs_nitrogen
         self.crop_features = crop_features
+        self.po_features = kwargs.get('po_features')
         self.weather_features = weather_features
         self.action_features = action_features
         super().__init__(timestep=timestep, years=years, location=location, *args, **kwargs)
@@ -114,7 +119,9 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         self.action_multiplier = action_multiplier
         self.reward_var = kwargs.get('reward_var', "TWSO")
 
-        self.counter = 1
+        self.feature_cost = []
+        self.feature_ind = []
+        self.get_feature_cost_ind()
         super().reset(seed=seed)
 
     def _get_observation_space(self):
@@ -123,7 +130,7 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
 
     def _apply_action(self, action):
         amount = action * self.action_multiplier
-        self._model._send_signal(signal=pcse.signals.apply_n, N_amount=amount*10, N_recovery=0.7,
+        self._model._send_signal(signal=pcse.signals.apply_n, N_amount=amount * 10, N_recovery=0.7,
                                  amount=amount, recovery=0.7)
 
     def _get_reward(self):
@@ -134,17 +141,22 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         Computes customized reward and populates info
         """
         if isinstance(action, np.ndarray):
-            action = action.item()
+            action = action[0]
+            measure = action[1:]
+
         obs, _, terminated, truncated, info = super().step(action)
         output = self._model.get_output()
 
         benefits = sb3_winterwheat_reward(output, self._timestep, self.reward_var)
 
-        if self.reward_var == "TWSO": # hack to deal with different units
+        if self.reward_var == "TWSO":  # hack to deal with different units
             benefits = benefits / 10.0
         amount = action * self.action_multiplier
         costs = self.costs_nitrogen * amount
         reward = benefits - costs
+
+        observation = self._observation(obs)
+
 
         crop_info = pd.DataFrame(output).set_index("day").fillna(value=np.nan)
         days = [day['day'] for day in output]
@@ -174,11 +186,10 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         info['reward'][self.date] = reward
         obs['actions'] = {'cumulative_nitrogen': sum(info['fertilizer'].values())}
 
-        return self._observation(obs), reward, terminated, truncated, info
+        return observation, reward, terminated, truncated, info
 
     def reset(self, seed=None):
-        #print(f"Reset is called {self.counter} times with seed {seed}")
-        # self.counter = self.counter + 1
+
         obs = super().reset(seed=seed)
         if isinstance(obs, tuple):
             obs = obs[0]
@@ -205,11 +216,58 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
                 obs[j] = observation['weather'][feature][d]
         return obs
 
+    def get_feature_cost_ind(self):
+        for feature in self.po_features:
+            if feature in self.crop_features:
+                self.feature_ind.append(self.crop_features.index(feature))
+        self.feature_ind = [x + 1 for x in self.feature_ind]
+
+    def measure_act(self, obs, measurement):
+        costs = self.get_observation_cost()
+        measuring_cost = np.zeros(len(measurement))
+        for i, i_obs in enumerate(self.feature_ind):
+            if not measurement[i]:
+                obs[i_obs] = -np.inf
+            else:
+                measuring_cost[i] = costs[i]
+        assert len(measurement) == len(measuring_cost), "Action space and partially observable features are not the" \
+                                                        "same length"
+
+        return obs, measuring_cost
+
+    def get_observation_cost(self):
+        if not self.feature_cost:
+            table = self.list_of_costs()
+            # chosen = np.intersect1d(self.po_features, list(table.keys()), assume_unique=True)
+            for observed_feature in self.po_features:
+                cost = table[observed_feature]
+                self.feature_cost.append(cost)
+            return self.feature_cost
+        else:
+            return self.feature_cost
+            # TODO: if a variable is not in list_of_costs, define default value
+            # if self.po_features not in list(table.keys()):
+            #     diff = np.setdiff1d(self.po_features, list(self.list_of_costs().keys()), assume_unique=True)
+            #     for val in diff:
+            #         self.feature_cost[val] = 1
+
+    @staticmethod
+    def list_of_costs():
+        lookup = dict(
+            LAI=5,
+            TAGP=20,
+            NAVAIL=20,
+            NuptakeTotal=30,
+            SM=10
+        )
+        return lookup
+
 
 class ZeroNitrogenEnvStorage():
     """
     Container to store results from zero nitrogen policy (for re-use)
     """
+
     def __init__(self):
         self.results = {}
 

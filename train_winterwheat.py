@@ -44,7 +44,8 @@ def train(log_dir, n_steps,
           train_locations=get_default_location(),
           test_locations=get_default_location(),
           pcse_model=0, agent=PPO, reward=None,
-          seed=0, tag="Exp", costs_nitrogen=10.0):
+          seed=0, tag="Exp", costs_nitrogen=10.0,
+          **kwargs):
     """
     Train a PPO agent (Stable Baselines3).
 
@@ -93,13 +94,12 @@ def train(log_dir, n_steps,
         comet_log.log_parameters(hyperparams)
         comet_log.log_code(folder="/pcse_gym")
 
-
     env_pcse_train = WinterWheat(crop_features=crop_features, action_features=action_features,
                                  weather_features=weather_features,
                                  costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
                                  action_space=gym.spaces.Discrete(7), action_multiplier=1.0, seed=seed,
                                  reward=reward,
-                                 **get_pcse_model(pcse_model))
+                                 **get_pcse_model(pcse_model), **kwargs)
     # env_pcse_train = ActionLimiter(env_pcse_train, action_limit=4)
 
     # env_pcse_train = ActionMasker(env_pcse_train, mask_fertilization_actions)
@@ -128,7 +128,7 @@ def train(log_dir, n_steps,
                                 weather_features=weather_features,
                                 costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
                                 action_space=gym.spaces.Discrete(7), action_multiplier=1.0, reward=reward,
-                                **get_pcse_model(pcse_model), seed=seed)
+                                **get_pcse_model(pcse_model), **kwargs, seed=seed)
     # env_pcse_eval = ActionLimiter(env_pcse_eval, action_limit=4)
 
     tb_log_name = f'{tag}-{pcse_model_name(pcse_model)}-Ncosts-{costs_nitrogen}-run'
@@ -181,6 +181,10 @@ if __name__ == '__main__':
     action_features = []  # alternative: "cumulative_nitrogen"
     tag = f'Seed-{args.seed}'
 
+    po_features = ['TAGP', 'LAI', 'NAVAIL', 'SM', 'NuptakeTotal']
+
+    po_dicts = dict(po_features=po_features)
+
     train(log_dir, train_years=train_years, test_years=test_years,
           train_locations=train_locations,
           test_locations=test_locations,
@@ -191,5 +195,5 @@ if __name__ == '__main__':
           weather_features=weather_features,
           action_features=action_features,
           pcse_model=args.environment, agent=args.agent,
-          reward=args.reward
-          )
+          reward=args.reward,
+          **po_dicts)

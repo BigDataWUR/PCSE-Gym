@@ -4,6 +4,7 @@ import pcse_gym.envs.common_env
 from .sb3 import *
 from .rewards import default_winterwheat_reward
 from pcse_gym.utils.defaults import *
+from pcse_gym.envs.constraints import MeasureOrNot
 
 
 class WinterWheat(gym.Env):
@@ -34,7 +35,8 @@ class WinterWheat(gym.Env):
         self.years = [years] if isinstance(years, int) else years
         self.locations = [locations] if isinstance(locations, tuple) else locations
         self.action_multiplier = action_multiplier
-        self.action_space = action_space
+        self.po_features = kwargs.get('po_features')
+        self.action_space = get_multi_discrete_action_space(action_space, self.po_features)
         self._timestep = timestep
         self.reward_var = kwargs.get('reward_var', "TWSO")
         # self.reward_var = kwargs.get('reward_var', "NuptakeTotal")
@@ -63,6 +65,8 @@ class WinterWheat(gym.Env):
         self.observation_space = self._get_observation_space()
         self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
 
+        self._env = MeasureOrNot(self._env)
+
         super().reset(seed=seed)
 
     def _get_observation_space(self):
@@ -74,8 +78,8 @@ class WinterWheat(gym.Env):
         Computes customized reward and populates info
         """
 
-        if isinstance(action, np.ndarray):
-            action = action.item()
+        # if isinstance(action, np.ndarray):
+        #     action = action.item()
 
         obs, _, terminated, truncated, info = self._env.step(action)
 
@@ -94,7 +98,6 @@ class WinterWheat(gym.Env):
     def _get_reward(self, output, amount):
         match self.reward_function:  # Needs python 3.10+
             case 'ANE':
-                print("I am called")
                 return ane_reward(output, self._env_baseline, self.zero_nitrogen_env_storage, self._timestep,
                                   self.reward_var, self.costs_nitrogen, amount)
             case 'DEF':
@@ -158,3 +161,7 @@ class WinterWheat(gym.Env):
     @property
     def loc(self) -> datetime.date:
         return self._env._location
+
+    @property
+    def features(self):
+        return [self.crop_features, self.po_features]

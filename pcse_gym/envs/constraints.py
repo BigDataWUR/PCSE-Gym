@@ -34,6 +34,11 @@ class ActionLimiter(ActionWrapper):
 
 
 class MeasureOrNot(ObservationWrapper):
-    pass
+    def __init__(self, env):
+        super().__init__(env)
+
+    def observation(self, observation):
+        pass
+
 
 
