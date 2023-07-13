@@ -1,5 +1,6 @@
 import os.path
 
+import gymnasium.spaces
 from stable_baselines3 import PPO  # , DQN
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
@@ -43,6 +44,7 @@ def train(log_dir, n_steps,
           test_years=get_default_test_years(),
           train_locations=get_default_location(),
           test_locations=get_default_location(),
+          action_space=get_default_action_space(),
           pcse_model=0, agent=PPO, reward=None,
           seed=0, tag="Exp", costs_nitrogen=10.0,
           **kwargs):
@@ -76,7 +78,7 @@ def train(log_dir, n_steps,
     hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
     hyperparams['policy_kwargs']['ortho_init'] = False
 
-    #For comet use
+    # For comet use
     use_comet = True
 
     if use_comet:
@@ -97,15 +99,13 @@ def train(log_dir, n_steps,
     env_pcse_train = WinterWheat(crop_features=crop_features, action_features=action_features,
                                  weather_features=weather_features,
                                  costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
-                                 action_space=gym.spaces.Discrete(7), action_multiplier=1.0, seed=seed,
-                                 reward=reward,
-                                 **get_pcse_model(pcse_model), **kwargs)
+                                 action_space=action_space, action_multiplier=1.0, seed=seed,
+                                 reward=reward, **get_pcse_model(pcse_model), **kwargs)
     # env_pcse_train = ActionLimiter(env_pcse_train, action_limit=4)
 
     # env_pcse_train = ActionMasker(env_pcse_train, mask_fertilization_actions)
     # if comet_log:
     #     env_pcse_train = CometLogger(env_pcse_train, comet_log)
-
 
     env_pcse_train = Monitor(env_pcse_train)
 
@@ -127,7 +127,7 @@ def train(log_dir, n_steps,
     env_pcse_eval = WinterWheat(crop_features=crop_features, action_features=action_features,
                                 weather_features=weather_features,
                                 costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
-                                action_space=gym.spaces.Discrete(7), action_multiplier=1.0, reward=reward,
+                                action_space=action_space, action_multiplier=1.0, reward=reward,
                                 **get_pcse_model(pcse_model), **kwargs, seed=seed)
     # env_pcse_eval = ActionLimiter(env_pcse_eval, action_limit=4)
 
@@ -149,14 +149,14 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--environment", type=int, default=1,
                         help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
     parser.add_argument("-a", "--agent", type=str, default="DQN", help="RL agent. PPO or DQN.")
-    parser.add_argument("-r", "--reward", type=str, default="ANE", help="Reward function. DEF or ANE")
+    parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF or ANE")
     args = parser.parse_args()
 
     print(rootdir)
     log_dir = os.path.join(rootdir, 'tensorboard_logs', 'WOFOST_experiments')
     print(f'train for {args.nsteps} steps with costs_nitrogen={args.costs_nitrogen} (seed={args.seed})')
 
-    #TODO CHANGE BACK
+    # TODO CHANGE BACK
     all_years = [*range(1990, 2022)]
     train_years = [year for year in all_years if year % 2 == 1]
     test_years = [year for year in all_years if year % 2 == 0]
@@ -185,6 +185,8 @@ if __name__ == '__main__':
 
     po_dicts = dict(po_features=po_features)
 
+    action_spaces = gymnasium.spaces.Discrete(7)
+
     train(log_dir, train_years=train_years, test_years=test_years,
           train_locations=train_locations,
           test_locations=test_locations,
@@ -193,7 +195,7 @@ if __name__ == '__main__':
           costs_nitrogen=args.costs_nitrogen,
           crop_features=crop_features,
           weather_features=weather_features,
-          action_features=action_features,
+          action_features=action_features, action_space=action_spaces,
           pcse_model=args.environment, agent=args.agent,
           reward=args.reward,
           **po_dicts)

@@ -119,9 +119,6 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         self.action_multiplier = action_multiplier
         self.reward_var = kwargs.get('reward_var', "TWSO")
 
-        self.feature_cost = []
-        self.feature_ind = []
-        self.get_feature_cost_ind()
         super().reset(seed=seed)
 
     def _get_observation_space(self):
@@ -156,7 +153,6 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         reward = benefits - costs
 
         observation = self._observation(obs)
-
 
         crop_info = pd.DataFrame(output).set_index("day").fillna(value=np.nan)
         days = [day['day'] for day in output]
@@ -215,52 +211,6 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
                 j = d * len(self.weather_features) + len(self.crop_features) + len(self.action_features) + i
                 obs[j] = observation['weather'][feature][d]
         return obs
-
-    def get_feature_cost_ind(self):
-        for feature in self.po_features:
-            if feature in self.crop_features:
-                self.feature_ind.append(self.crop_features.index(feature))
-        self.feature_ind = [x + 1 for x in self.feature_ind]
-
-    def measure_act(self, obs, measurement):
-        costs = self.get_observation_cost()
-        measuring_cost = np.zeros(len(measurement))
-        for i, i_obs in enumerate(self.feature_ind):
-            if not measurement[i]:
-                obs[i_obs] = -np.inf
-            else:
-                measuring_cost[i] = costs[i]
-        assert len(measurement) == len(measuring_cost), "Action space and partially observable features are not the" \
-                                                        "same length"
-
-        return obs, measuring_cost
-
-    def get_observation_cost(self):
-        if not self.feature_cost:
-            table = self.list_of_costs()
-            # chosen = np.intersect1d(self.po_features, list(table.keys()), assume_unique=True)
-            for observed_feature in self.po_features:
-                cost = table[observed_feature]
-                self.feature_cost.append(cost)
-            return self.feature_cost
-        else:
-            return self.feature_cost
-            # TODO: if a variable is not in list_of_costs, define default value
-            # if self.po_features not in list(table.keys()):
-            #     diff = np.setdiff1d(self.po_features, list(self.list_of_costs().keys()), assume_unique=True)
-            #     for val in diff:
-            #         self.feature_cost[val] = 1
-
-    @staticmethod
-    def list_of_costs():
-        lookup = dict(
-            LAI=5,
-            TAGP=20,
-            NAVAIL=20,
-            NuptakeTotal=30,
-            SM=10
-        )
-        return lookup
 
 
 class ZeroNitrogenEnvStorage():

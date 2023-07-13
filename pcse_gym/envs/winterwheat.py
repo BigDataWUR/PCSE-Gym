@@ -3,8 +3,8 @@ import datetime
 import pcse_gym.envs.common_env
 from .sb3 import *
 from .rewards import default_winterwheat_reward
+from .constraints import MeasureOrNot
 from pcse_gym.utils.defaults import *
-from pcse_gym.envs.constraints import MeasureOrNot
 
 
 class WinterWheat(gym.Env):
@@ -65,7 +65,10 @@ class WinterWheat(gym.Env):
         self.observation_space = self._get_observation_space()
         self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
 
-        self._env = MeasureOrNot(self._env)
+        self.feature_cost = []
+        self.feature_ind = []
+        self.get_feature_cost_ind()
+        # self._env = MeasureOrNot(self._env)
 
         super().reset(seed=seed)
 
@@ -78,15 +81,17 @@ class WinterWheat(gym.Env):
         Computes customized reward and populates info
         """
 
-        # if isinstance(action, np.ndarray):
-        #     action = action.item()
+        if isinstance(action, np.ndarray):
+            action, measure = action[0], action[1:]
 
         obs, _, terminated, truncated, info = self._env.step(action)
 
         output = self._env._model.get_output()
         amount = action * self.action_multiplier
 
-        reward, growth = self._get_reward(output, amount)
+        reward, growth = self._get_reward_func(output, amount)
+
+        obs, cost = self.measure_act(obs, measure)
 
         if 'reward' not in info.keys(): info['reward'] = {}
         info['reward'][self.date] = reward
@@ -95,7 +100,7 @@ class WinterWheat(gym.Env):
 
         return obs, reward, terminated, truncated, info
 
-    def _get_reward(self, output, amount):
+    def _get_reward_func(self, output, amount):
         match self.reward_function:  # Needs python 3.10+
             case 'ANE':
                 return ane_reward(output, self._env_baseline, self.zero_nitrogen_env_storage, self._timestep,
@@ -132,8 +137,6 @@ class WinterWheat(gym.Env):
             location = self.locations[self.np_random.choice(len(self.locations), 1)[0]]
             self.set_location(location)
 
-        self.counter = 0
-
         self._env_baseline.reset(seed=seed)
         obs = self._env.reset(seed=seed)
 
@@ -141,6 +144,52 @@ class WinterWheat(gym.Env):
         info = {}
 
         return obs, info
+
+    def get_feature_cost_ind(self):
+        for feature in self.po_features:
+            if feature in self.crop_features:
+                self.feature_ind.append(self.crop_features.index(feature))
+        # self.feature_ind = [x + 1 for x in self.feature_ind]
+
+    def measure_act(self, obs, measurement):
+        costs = self.get_observation_cost()
+        measuring_cost = np.zeros(len(measurement))
+        for i, i_obs in enumerate(self.feature_ind):
+            if not measurement[i]:
+                pass
+            else:
+                measuring_cost[i] = costs[i]
+        assert len(measurement) == len(measuring_cost), "Action space and partially observable features are not the" \
+                                                        "same length"
+
+        return obs, measuring_cost
+
+    def get_observation_cost(self):
+        if not self.feature_cost:
+            table = self.list_of_costs()
+            # chosen = np.intersect1d(self.po_features, list(table.keys()), assume_unique=True)
+            for observed_feature in self.po_features:
+                cost = table[observed_feature]
+                self.feature_cost.append(cost)
+            return self.feature_cost
+        else:
+            return self.feature_cost
+            # TODO: if a variable is not in list_of_costs, define default value
+            # if self.po_features not in list(table.keys()):
+            #     diff = np.setdiff1d(self.po_features, list(self.list_of_costs().keys()), assume_unique=True)
+            #     for val in diff:
+            #         self.feature_cost[val] = 1
+
+    @staticmethod
+    def list_of_costs():
+        lookup = dict(
+            LAI=5,
+            TAGP=20,
+            NAVAIL=20,
+            NuptakeTotal=30,
+            SM=10
+        )
+        return lookup
 
     def valid_action_mask(self):
         # TODO: does this work

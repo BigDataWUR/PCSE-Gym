@@ -37,6 +37,11 @@ def get_default_test_years():
     return test_years
 
 
+def get_default_action_space():
+    action_spaces = gym.spaces.Discrete(7)
+    return action_spaces
+
+
 def get_test_tensor(crop_features=get_wofost_default_crop_features(), action_features=get_default_action_features(),
                     weather_features=get_default_weather_features(), n_days=7):
     test_tensor = torch.zeros(2, n_days * len(weather_features) + len(crop_features) + len(action_features))

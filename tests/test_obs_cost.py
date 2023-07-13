@@ -24,13 +24,13 @@ class TestCosts(unittest.TestCase):
     def test_oc(self):
         env = initialize_env()
 
-        cost = env._env.get_observation_cost()
+        cost = env.get_observation_cost()
 
         obs = np.zeros(30)
 
         measure = [1, 1, 1, 1, 1]
 
-        test = env._env.measure_act(obs, measure)
+        test = env.measure_act(obs, measure)
 
         self.assertListEqual(cost, list(test[1]))
 
