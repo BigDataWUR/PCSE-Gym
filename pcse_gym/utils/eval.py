@@ -415,12 +415,39 @@ class EvalCallback(BaseCallback):
             log_training = True
         return log_training
 
+    def get_measure_graphs(self, episode_infos, variables, cumulative=None):
+        if 'measure' not in variables:
+            return episode_infos, variables
+        else:
+            measure_graph = {}
+            variables.remove('measure')
+
+            feature_order = episode_infos[0]['indexes'].keys()
+
+            for variable in episode_infos[0]:
+                if variable in self.env_eval.po_features:
+                    variable = 'measure_' + variable
+                    variables += [variable]
+                    cumulative += [variable]
+
+            for measurement in episode_infos[0]['measure'].values():
+                for feature, measure in zip(feature_order, measurement):
+                    feature = 'measure_' + feature
+                    if feature not in measure_graph.keys():
+                        measure_graph[feature] = []
+                    measure_graph[feature].append(measure)
+
+            episode_infos[0] = episode_infos[0] | measure_graph  # Python 3.9.0
+            # TODO possibly make cumulative signature optional for function reuse
+            return episode_infos, variables, cumulative  # if cumulative else episode_infos, variables
+
     def _on_step(self):
         train_year = self.model.get_env().get_attr("date")[0].year
         self.histogram_training_years[train_year] = self.histogram_training_years[train_year] + 1
         train_location = self.model.get_env().get_attr("loc")[0]
         self.histogram_training_locations[train_location] = self.histogram_training_locations[train_location] + 1
 
+        '''Evaluate episodes with learned policy and log it in tensorboard'''
         if self.n_calls % self.eval_freq == 0 or self.n_calls == 1:
             if len(set(list(self.histogram_training_years.keys())).symmetric_difference(
                     set(self.train_years))) != 0:
@@ -432,18 +459,25 @@ class EvalCallback(BaseCallback):
             self.model.get_env().save(stats_path)
             episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=self.model.get_env())
             if self.pcse_model:
-                variables = 'action', 'TWSO', 'reward'
-                cumulative = ['action', 'reward', 'RNuptake']
+                variables = ['action', 'TWSO', 'reward', 'measure']
+                cumulative = ['action', 'reward']
             else:
                 variables = 'action', 'WSO', 'reward'
                 cumulative = ['action', 'reward']
+
+            '''logic for measure graph'''
+            episode_infos, variables, cumulative = self.get_measure_graphs(episode_infos, variables, cumulative)
+
             for i, variable in enumerate(variables):
                 n_timepoints = len(episode_infos[0][variable])
                 n_episodes = len(episode_infos)
                 episode_results = np.empty((n_episodes, n_timepoints))
                 episode_summary = np.empty(n_episodes)
                 for e in range(n_episodes):
-                    _, y = zip(*episode_infos[e][variable].items())
+                    if isinstance(episode_infos[e][variable], dict):
+                        _, y = zip(*episode_infos[e][variable].items())
+                    else:
+                        y = episode_infos[e][variable]
                     if variable in cumulative: y = np.cumsum(y)
                     episode_results[e, :] = y
                     episode_summary[e] = y[-1]
@@ -503,10 +537,12 @@ class EvalCallback(BaseCallback):
                 self.logger.record(f'eval/nitrogen-median-train', compute_median(fertilizer, train_keys))
 
             if self.pcse_model:
-                variables = 'action', 'TWSO', 'reward', 'RNuptake', 'NAVAIL',\
+                variables = 'action', 'TWSO', 'reward', 'RNuptake', 'NAVAIL', \
                             'Ndemand', 'NuptakeTotal', 'fertilizer', 'val'
             else:
                 variables = 'action', 'WSO', 'reward', 'TNSOIL', 'val'
+
+
 
             keys_figure = [(a, b) for a in self.test_years for b in self.test_locations]
             results_figure = {filter_key: result_model[filter_key] for filter_key in keys_figure}

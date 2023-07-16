@@ -1,5 +1,7 @@
 import datetime
 
+from collections import OrderedDict
+
 import pcse_gym.envs.common_env
 from .sb3 import *
 from .rewards import default_winterwheat_reward
@@ -36,7 +38,7 @@ class WinterWheat(gym.Env):
         self.locations = [locations] if isinstance(locations, tuple) else locations
         self.action_multiplier = action_multiplier
         self.po_features = kwargs.get('po_features')
-        self.action_space = get_multi_discrete_action_space(action_space, self.po_features)
+        self.action_space = action_space
         self._timestep = timestep
         self.reward_var = kwargs.get('reward_var', "TWSO")
         # self.reward_var = kwargs.get('reward_var', "NuptakeTotal")
@@ -67,6 +69,7 @@ class WinterWheat(gym.Env):
 
         self.feature_cost = []
         self.feature_ind = []
+        self.feature_ind_dict = OrderedDict()
         self.get_feature_cost_ind()
         # self._env = MeasureOrNot(self._env)
 
@@ -81,17 +84,21 @@ class WinterWheat(gym.Env):
         Computes customized reward and populates info
         """
 
-        if isinstance(action, np.ndarray):
-            action, measure = action[0], action[1:]
-
         obs, _, terminated, truncated, info = self._env.step(action)
 
+        if isinstance(action, np.ndarray):
+            act, measure = action[0], action[1:]
+
         output = self._env._model.get_output()
-        amount = action * self.action_multiplier
+        amount = act * self.action_multiplier
 
         reward, growth = self._get_reward_func(output, amount)
 
         obs, cost = self.measure_act(obs, measure)
+
+        measurement_cost = sum(cost)
+
+        reward -= measurement_cost
 
         if 'reward' not in info.keys(): info['reward'] = {}
         info['reward'][self.date] = reward
@@ -149,16 +156,27 @@ class WinterWheat(gym.Env):
         for feature in self.po_features:
             if feature in self.crop_features:
                 self.feature_ind.append(self.crop_features.index(feature))
+        self.feature_ind = tuple(self.feature_ind)
+
+        for feature in self.crop_features:
+            if feature in self.po_features:
+                if feature not in self.feature_ind_dict.keys():
+                    self.feature_ind_dict[feature] = self.crop_features.index(feature)
         # self.feature_ind = [x + 1 for x in self.feature_ind]
 
+    '''PROTOTYPE
+        iterate through feature index from sb3 observation.
+        if a measurement action is 0, observation is 0
+        otherwise, add cost to getting the measurement'''
     def measure_act(self, obs, measurement):
         costs = self.get_observation_cost()
         measuring_cost = np.zeros(len(measurement))
         for i, i_obs in enumerate(self.feature_ind):
             if not measurement[i]:
-                pass
+                obs[i_obs] = 0
             else:
                 measuring_cost[i] = costs[i]
+        # TODO: implement a better check for length of measurements
         assert len(measurement) == len(measuring_cost), "Action space and partially observable features are not the" \
                                                         "same length"
 
@@ -214,3 +232,8 @@ class WinterWheat(gym.Env):
     @property
     def features(self):
         return [self.crop_features, self.po_features]
+
+    @property
+    def index_feature(self):
+        return self._env.index_feature
+

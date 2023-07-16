@@ -1,5 +1,7 @@
 import os
 
+from collections import OrderedDict
+
 import gymnasium
 import gymnasium as gym
 import numpy as np
@@ -119,6 +121,8 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         self.action_multiplier = action_multiplier
         self.reward_var = kwargs.get('reward_var', "TWSO")
 
+        self.index_feature = OrderedDict()
+
         super().reset(seed=seed)
 
     def _get_observation_space(self):
@@ -138,8 +142,7 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         Computes customized reward and populates info
         """
         if isinstance(action, np.ndarray):
-            action = action[0]
-            measure = action[1:]
+            act, measure = action[0], action[1:]
 
         obs, _, terminated, truncated, info = super().step(action)
         output = self._model.get_output()
@@ -173,14 +176,27 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
 
         if 'action' not in info.keys():
             info['action'] = {}
-        info['action'][output[-1 - self._timestep]['day']] = action
+        if 'measure' not in info.keys():
+            info['measure'] = {}
+        if isinstance(action, np.ndarray):
+            info['action'][output[-1 - self._timestep]['day']] = action[0]
+            info['measure'][output[-1 - self._timestep]['day']] = measure
+        else:
+            info['action'][output[-1 - self._timestep]['day']] = action
         if 'fertilizer' not in info.keys():
             info['fertilizer'] = {}
-        info['fertilizer'][output[-1 - self._timestep]['day']] = amount
+        if isinstance(action, np.ndarray):
+            info['fertilizer'][output[-1 - self._timestep]['day']] = amount[0]
+        else:
+            info['fertilizer'][output[-1 - self._timestep]['day']] = amount
         if 'reward' not in info.keys():
             info['reward'] = {}
         info['reward'][self.date] = reward
         obs['actions'] = {'cumulative_nitrogen': sum(info['fertilizer'].values())}
+        if 'indexes' not in info.keys():
+            info['indexes'] = {}
+            if self.index_feature:
+                info['indexes'] = self.index_feature
 
         return observation, reward, terminated, truncated, info
 
@@ -190,9 +206,9 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         if isinstance(obs, tuple):
             obs = obs[0]
         obs['actions'] = {'cumulative_nitrogen': 0.0}
-        return self._observation(obs)
+        return self._observation(obs, flag=True)
 
-    def _observation(self, observation):
+    def _observation(self, observation, flag=False):
         """
         Converts observation into np array to facilitate integration with Stable Baseline3
         """
@@ -200,9 +216,14 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
 
         if isinstance(observation, tuple):
             observation = observation[0]
-
+        index_feature = OrderedDict()
         for i, feature in enumerate(self.crop_features):
             obs[i] = observation['crop_model'][feature][-1]
+            if feature not in index_feature and not flag:
+                if feature in self.po_features:
+                    index_feature[feature] = i
+                    if len(index_feature.keys()) == len(self.po_features):
+                        self.index_feature = index_feature
         for i, feature in enumerate(self.action_features):
             j = len(self.crop_features) + i
             obs[j] = observation['actions'][feature]

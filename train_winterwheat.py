@@ -156,7 +156,6 @@ if __name__ == '__main__':
     log_dir = os.path.join(rootdir, 'tensorboard_logs', 'WOFOST_experiments')
     print(f'train for {args.nsteps} steps with costs_nitrogen={args.costs_nitrogen} (seed={args.seed})')
 
-    # TODO CHANGE BACK
     all_years = [*range(1990, 2022)]
     train_years = [year for year in all_years if year % 2 == 1]
     test_years = [year for year in all_years if year % 2 == 0]
@@ -182,10 +181,9 @@ if __name__ == '__main__':
     tag = f'Seed-{args.seed}'
 
     po_features = ['TAGP', 'LAI', 'NAVAIL', 'SM', 'NuptakeTotal']
-
     po_dicts = dict(po_features=po_features)
-
-    action_spaces = gymnasium.spaces.Discrete(7)
+    a_shape = [7] + [2]*len(po_features)
+    action_spaces = gymnasium.spaces.MultiDiscrete(a_shape)
 
     train(log_dir, train_years=train_years, test_years=test_years,
           train_locations=train_locations,

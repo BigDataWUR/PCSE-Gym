@@ -30,9 +30,9 @@ class TestCosts(unittest.TestCase):
 
         measure = [1, 1, 1, 1, 1]
 
-        test = env.measure_act(obs, measure)
+        _, measurement_cost = env.measure_act(obs, measure)
 
-        self.assertListEqual(cost, list(test[1]))
+        self.assertListEqual(cost, list(measurement_cost))
 
 
 if __name__ == '__main__':

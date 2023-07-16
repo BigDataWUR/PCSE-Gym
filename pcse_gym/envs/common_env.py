@@ -292,6 +292,8 @@ class PCSEEnv(gym.Env):
         info = dict()
 
         # Apply action
+        if isinstance(action, np.ndarray):
+            action = action[0]
         self._apply_action(action)
 
         # Run the crop growth model
