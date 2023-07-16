@@ -415,31 +415,27 @@ class EvalCallback(BaseCallback):
             log_training = True
         return log_training
 
-    def get_measure_graphs(self, episode_infos, variables, cumulative=None):
-        if 'measure' not in variables:
-            return episode_infos, variables
-        else:
-            measure_graph = {}
-            variables.remove('measure')
+    def replace_measure_variable(self, variables, cumulative=None):
+        variables.remove('measure')
+        for variable in self.env_eval.po_features:
+            variable = 'measure_' + variable
+            variables += [variable]
+            if cumulative:
+                cumulative += [variable]
+        return (variables, cumulative) if cumulative else variables
 
-            feature_order = episode_infos[0]['indexes'].keys()
-
-            for variable in episode_infos[0]:
-                if variable in self.env_eval.po_features:
-                    variable = 'measure_' + variable
-                    variables += [variable]
-                    cumulative += [variable]
-
-            for measurement in episode_infos[0]['measure'].values():
-                for feature, measure in zip(feature_order, measurement):
-                    feature = 'measure_' + feature
-                    if feature not in measure_graph.keys():
-                        measure_graph[feature] = []
-                    measure_graph[feature].append(measure)
-
-            episode_infos[0] = episode_infos[0] | measure_graph  # Python 3.9.0
-            # TODO possibly make cumulative signature optional for function reuse
-            return episode_infos, variables, cumulative  # if cumulative else episode_infos, variables
+    def get_measure_graphs(self, episode_infos):
+        measure_graph = {}
+        feature_order = episode_infos[0]['indexes'].keys()
+        for date, measurement in episode_infos[0]['measure'].items():
+            for feature, measure in zip(feature_order, measurement):
+                feature = 'measure_' + feature
+                if feature not in measure_graph.keys():
+                    measure_graph[feature] = {}
+                if date not in measure_graph[feature].keys():
+                    measure_graph[feature][date] = measure
+        episode_infos[0] = episode_infos[0] | measure_graph  # Python 3.9.0
+        return episode_infos
 
     def _on_step(self):
         train_year = self.model.get_env().get_attr("date")[0].year
@@ -466,7 +462,9 @@ class EvalCallback(BaseCallback):
                 cumulative = ['action', 'reward']
 
             '''logic for measure graph'''
-            episode_infos, variables, cumulative = self.get_measure_graphs(episode_infos, variables, cumulative)
+            if 'measure' in variables:
+                variables, cumulative = self.replace_measure_variable(variables, cumulative)
+                episode_infos = self.get_measure_graphs(episode_infos)
 
             for i, variable in enumerate(variables):
                 n_timepoints = len(episode_infos[0][variable])
@@ -516,6 +514,9 @@ class EvalCallback(BaseCallback):
                     episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=env_pcse_evaluation)
                     my_key = (year, test_location)
                     reward[my_key] = episode_rewards[0].item()
+                    # start measure figure logic
+                    episode_infos = self.get_measure_graphs(episode_infos)
+                    # end measure figure logic
                     fertilizer[my_key] = sum(episode_infos[0]['fertilizer'].values())
                     self.logger.record(f'eval/reward-{my_key}', reward[my_key])
                     self.logger.record(f'eval/nitrogen-{my_key}', fertilizer[my_key])
@@ -537,12 +538,13 @@ class EvalCallback(BaseCallback):
                 self.logger.record(f'eval/nitrogen-median-train', compute_median(fertilizer, train_keys))
 
             if self.pcse_model:
-                variables = 'action', 'TWSO', 'reward', 'RNuptake', 'NAVAIL', \
-                            'Ndemand', 'NuptakeTotal', 'fertilizer', 'val'
+                variables = ['action', 'TWSO', 'reward', 'NAVAIL',
+                             'NuptakeTotal', 'fertilizer', 'val', 'measure']
             else:
-                variables = 'action', 'WSO', 'reward', 'TNSOIL', 'val'
+                variables = ['action', 'WSO', 'reward', 'TNSOIL', 'val']
 
-
+            if 'measure' in variables:
+                variables = self.replace_measure_variable(variables)
 
             keys_figure = [(a, b) for a in self.test_years for b in self.test_locations]
             results_figure = {filter_key: result_model[filter_key] for filter_key in keys_figure}
