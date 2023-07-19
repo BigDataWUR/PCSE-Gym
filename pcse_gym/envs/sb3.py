@@ -1,10 +1,7 @@
 import os
-
+from tqdm import tqdm
 from collections import OrderedDict
 
-import gymnasium
-import gymnasium as gym
-import numpy as np
 import pandas as pd
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
@@ -121,12 +118,13 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         self.action_multiplier = action_multiplier
         self.reward_var = kwargs.get('reward_var', "TWSO")
 
-        self.index_feature = OrderedDict()
+        self.rewards = Rewards(self.reward_var, self.timestep)
 
+        self.index_feature = OrderedDict()
         super().reset(seed=seed)
 
     def _get_observation_space(self):
-        nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self._timestep
+        nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
         return gym.spaces.Box(0, np.inf, shape=(nvars,))
 
     def _apply_action(self, action):
@@ -145,12 +143,10 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
             act, measure = action[0], action[1:]
 
         obs, _, terminated, truncated, info = super().step(action)
-        output = self._model.get_output()
+        output = self.model.get_output()
 
-        benefits = sb3_winterwheat_reward(output, self._timestep, self.reward_var)
+        benefits = self.rewards.storage_organ_growth(output)
 
-        if self.reward_var == "TWSO":  # hack to deal with different units
-            benefits = benefits / 10.0
         amount = action * self.action_multiplier
         costs = self.costs_nitrogen * amount
         reward = benefits - costs
@@ -179,20 +175,18 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         if 'measure' not in info.keys():
             info['measure'] = {}
         if isinstance(action, np.ndarray):
-            info['action'][output[-1 - self._timestep]['day']] = action[0]
-            info['measure'][output[-1 - self._timestep]['day']] = measure
+            info['action'][output[-1 - self.timestep]['day']] = action[0]
+            info['measure'][output[-1 - self.timestep]['day']] = measure
         else:
-            info['action'][output[-1 - self._timestep]['day']] = action
+            info['action'][output[-1 - self.timestep]['day']] = action
         if 'fertilizer' not in info.keys():
             info['fertilizer'] = {}
         if isinstance(action, np.ndarray):
-            info['fertilizer'][output[-1 - self._timestep]['day']] = amount[0]
+            info['fertilizer'][output[-1 - self.timestep]['day']] = amount[0]
         else:
-            info['fertilizer'][output[-1 - self._timestep]['day']] = amount
-        if 'reward' not in info.keys():
-            info['reward'] = {}
-        info['reward'][self.date] = reward
+            info['fertilizer'][output[-1 - self.timestep]['day']] = amount
         obs['actions'] = {'cumulative_nitrogen': sum(info['fertilizer'].values())}
+        obs['actions'] = {'cumulative_measurement': sum(info['measure'].values())}
         if 'indexes' not in info.keys():
             info['indexes'] = {}
             if self.index_feature:
@@ -200,7 +194,7 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
 
         return observation, reward, terminated, truncated, info
 
-    def reset(self, seed=None):
+    def reset(self, seed=None, return_info=False, options=None):
 
         obs = super().reset(seed=seed)
         if isinstance(obs, tuple):
@@ -227,20 +221,33 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         for i, feature in enumerate(self.action_features):
             j = len(self.crop_features) + i
             obs[j] = observation['actions'][feature]
-        for d in range(self._timestep):
+        for d in range(self.timestep):
             for i, feature in enumerate(self.weather_features):
                 j = d * len(self.weather_features) + len(self.crop_features) + len(self.action_features) + i
                 obs[j] = observation['weather'][feature][d]
         return obs
 
+    @property
+    def model(self):
+        return self._model
 
-class ZeroNitrogenEnvStorage():
+    @property
+    def location(self):
+        return self._location
+
+    @property
+    def timestep(self):
+        return self._timestep
+
+
+class ZeroNitrogenEnvStorage:
     """
     Container to store results from zero nitrogen policy (for re-use)
     """
 
-    def __init__(self):
+    def __init__(self, env_baseline, years, locations):
         self.results = {}
+        self.run_through(env_baseline, years, locations)
 
     def run_episode(self, env):
         env.reset()
@@ -258,14 +265,18 @@ class ZeroNitrogenEnvStorage():
                 episode_info[v].update(info_dict[v])
         return episode_info
 
-    def get_key(self, env):
-        year = env.date.year
-        location = env._location
-        return f'{year}-{location}'
-
-    def get_episode_output(self, env):
-        key = self.get_key(env)
+    def get_episode_output(self, env, key):
         if key not in self.results.keys():
             results = self.run_episode(env)
             self.results[key] = results
-        return self.results[key]
+
+    def run_through(self, env, years, locations):
+        print('creating zero nitrogen results...')
+        for year in tqdm(years):
+            for location in locations:
+                key = f'{year}-{location}'
+                self.get_episode_output(env, key)
+
+    @property
+    def get_result(self):
+        return self.results

@@ -1,140 +1,109 @@
 import numpy as np
 
 
-def sb3_winterwheat_reward(output, timestep, reward_var):
+class Rewards:
+    def __init__(self, reward_var, timestep, costs_nitrogen=10.0, zero_container=None):
+        self.reward_var = reward_var
+        self.timestep = timestep
+        self.zero_container = zero_container
+        self.costs_nitrogen = costs_nitrogen
 
-    last_index_previous_state = (np.ceil(len(output) / timestep).astype('int') - 1) * timestep - 1
-    wso_start = output[last_index_previous_state][reward_var]
-    wso_finish = output[-1][reward_var]
-    if wso_start is None: wso_start = 0.0
-    if wso_finish is None: wso_finish = 0.0
-    benefits = wso_finish - wso_start
+    def last_index(self, output):
+        return (np.ceil(len(output) / self.timestep).astype('int') - 1) * self.timestep - 1
 
-    return benefits
+    def zero_nitrogen_growth(self, output):
+        current_date = output[-1]['day']
+        previous_date = output[self.last_index(output)]['day']
 
+        zero_nitrogen_results = self.zero_container.get_result
+        wso_current = zero_nitrogen_results[self.reward_var][current_date]
+        wso_previous = zero_nitrogen_results[self.reward_var][previous_date]
+        if wso_current is None: wso_current = 0.0
+        if wso_previous is None: wso_previous = 0.0
+        growth_baseline = wso_current - wso_previous
+        if self.reward_var == "TWSO":  # hack to deal with different units
+            growth_baseline = growth_baseline / 10.0
+        return growth_baseline
 
-def default_winterwheat_reward(output, env_baseline, zero_nitrogen_env_storage, timestep, reward_var,
-                               costs_nitrogen, amount):
-    assert reward_var == 'TWSO' or 'WSO'
+    def storage_organ_growth(self, output):
 
-    last_index_previous_state = (np.ceil(len(output) / timestep) - 1).astype('int') * timestep - 1
+        wso_start = output[self.last_index(output)][self.reward_var]
+        wso_finish = output[-1][self.reward_var]
+        if wso_start is None: wso_start = 0.0
+        if wso_finish is None: wso_finish = 0.0
+        growth = wso_finish - wso_start
+        if self.reward_var == "TWSO":  # hack to deal with different units
+            growth = growth / 10.0
+        return growth
 
-    wso_finish = output[-1][reward_var]
-    wso_start = output[last_index_previous_state][reward_var]
-    if wso_start is None: wso_start = 0.0
-    if wso_finish is None: wso_finish = 0.0
-    growth = wso_finish - wso_start
-    if reward_var == "TWSO":  # hack to deal with different units
-        growth = growth / 10.0
-    current_date = output[-1]['day']
-    previous_date = output[last_index_previous_state]['day']
+    def default_winterwheat_reward(self, output, amount):
 
-    zero_nitrogen_results = zero_nitrogen_env_storage.get_episode_output(env_baseline)
-    wso_current = zero_nitrogen_results[reward_var][current_date]
-    wso_previous = zero_nitrogen_results[reward_var][previous_date]
-    if wso_current is None: wso_current = 0.0
-    if wso_previous is None: wso_previous = 0.0
-    growth_baseline = wso_current - wso_previous
-    if reward_var == "TWSO":  # hack to deal with different units
-        growth_baseline = growth_baseline / 10.0
+        growth = self.storage_organ_growth(output)
 
-    benefits = growth - growth_baseline
+        growth_baseline = self.storage_organ_growth(output)
 
-    costs = costs_nitrogen * amount
-    reward = benefits - costs
+        benefits = growth - growth_baseline
 
+        costs = self.costs_nitrogen * amount
+        reward = benefits - costs
 
-    return reward, growth
+        return reward, growth
 
+    # TODO agronomic nitrogen use efficiency still needs to be tested (See Vanlauwe et al, 2011)
+    def ane_reward(self, output, amount):
+        # agronomic nitrogen use efficiency
+        growth = self.storage_organ_growth(output)
 
-# TODO agronomic nitrogen use efficiency still needs to be tested (See Vanlauwe et al, 2011)
-def ane_reward(output, env_baseline, zero_nitrogen_env_storage, timestep, reward_var, costs_nitrogen,
-               amount):
-    #agronomic nitrogen use efficiency
-    assert 'TWSO' in reward_var, f"reward_var does not contain TWSO"
+        growth_baseline = self.storage_organ_growth(output)
 
-    last_index_previous_state = (np.ceil(len(output) / timestep) - 1).astype('int') * timestep - 1
+        benefits = growth - growth_baseline
 
-    wso_finish = output[-1][reward_var]
-    wso_start = output[last_index_previous_state][reward_var]
-    if wso_start is None: wso_start = 0.0
-    if wso_finish is None: wso_finish = 0.0
-    growth = wso_finish - wso_start
-    if reward_var == "TWSO":  # hack to deal with different units
-        growth = growth / 10.0
-    current_date = output[-1]['day']
-    previous_date = output[last_index_previous_state]['day']
+        costs = amount * self.costs_nitrogen
 
-    zero_nitrogen_results = zero_nitrogen_env_storage.get_episode_output(env_baseline)
-    wso_current = zero_nitrogen_results[reward_var][current_date]
-    wso_previous = zero_nitrogen_results[reward_var][previous_date]
-    if wso_current is None: wso_current = 0.0
-    if wso_previous is None: wso_previous = 0.0
-    growth_baseline = wso_current - wso_previous
-    if reward_var == "TWSO":  # hack to deal with different units
-        growth_baseline = growth_baseline / 10.0
+        if amount == 0.0:  # avoid zero division
+            amount = 1.0
 
-    benefits = growth - growth_baseline
+        reward = benefits / amount - costs
 
-    costs = amount * costs_nitrogen
+        return reward, growth
 
-    if amount == 0.0: #avoid zero division
-        amount = 1.0
+    # TODO nitrogen use efficiency reward; WIP
+    def nue_reward(self, output, amount):
+        assert 'NuptakeTotal' and 'NLossesTotal' and 'NfixTotal' in \
+               self.reward_var, f"reward_var does not contain NuptakeTotal, NLossesTotal or NfixTotal"
 
-    reward = benefits / amount - costs
+        n_upt = output[-1][self.reward_var]
+        if n_upt is None: n_upt = 0.0
+        n_loss = output[-1][self.reward_var]
+        n_fix = output[-1][self.reward_var]
 
-    return reward, growth
+        fert = amount  # *costs_nitrogen
 
+        crop_output = n_upt + n_loss
 
-# TODO nitrogen use efficiency reward
-def nue_reward(output, timestep, reward_var, amount, costs_nitrogen):
-    assert 'NuptakeTotal' and 'NLossesTotal' and 'NfixTotal' in \
-        reward_var, f"reward_var does not contain NuptakeTotal, NLossesTotal or NfixTotal"
+        crop_input = n_fix + fert
 
-    last_index_previous_state = (np.ceil(len(output) / timestep) - 1).astype('int') * timestep - 1
+        nue = crop_output / crop_input
 
-    n_upt = output[-1][reward_var]['NuptakeTotal']
-    if n_upt is None: n_upt = 0.0
-    n_loss = output[-1][reward_var]['NLossesTotal']
-    n_fix = output[-1][reward_var]['NfixTotal']
+        return nue
 
-    fert = amount #*costs_nitrogen
+    # TODO create reward surrounding crop N demand; WIP
+    def n_demand_yield_reward(self, output, amount):
+        assert 'TWSO' and 'Ndemand' in self.reward_var, f"reward_var does not contain TWSO and Ndemand"
 
-    crop_output = n_upt + n_loss
+        n_demand_finish = output[-1][self.reward_var]['Ndemand']
+        n_demand_start = output[self.last_index(output)][self.reward_var]['Ndemand']
+        if n_demand_start is None: n_demand_start = 0.0
+        if n_demand_finish is None: n_demand_finish = 0.0
+        n_demand = n_demand_start - n_demand_finish
 
-    crop_input = n_fix + fert
+        growth = self.storage_organ_growth(output)
 
-    nue = crop_output / crop_input
+        benefits = growth - n_demand
+        print(f"the N demand is {n_demand}")
+        print(f"the benefits are {benefits}")
 
-    return nue
-
-
-# TODO create reward surrounding crop N demand
-def n_demand_yield_reward(output, timestep, reward_var, amount, cost):
-    assert 'TWSO' and 'Ndemand' in reward_var, f"reward_var does not contain TWSO and Ndemand"
-
-    last_index_previous_state = (np.ceil(len(output) / timestep) - 1).astype('int') * timestep - 1
-    n_demand_finish = output[-1][reward_var]['Ndemand']
-    n_demand_start = output[last_index_previous_state][reward_var]['Ndemand']
-    if n_demand_start is None: n_demand_start = 0.0
-    if n_demand_finish is None: n_demand_finish = 0.0
-    n_demand = n_demand_start - n_demand_finish
-
-    wso_finish = output[-1][reward_var]['TWSO']
-    wso_start = output[last_index_previous_state][reward_var]['TWSO']
-    if wso_start is None: wso_start = 0.0
-    if wso_finish is None: wso_finish = 0.0
-    growth = wso_finish - wso_start
-    if reward_var == "TWSO":  # hack to deal with different units
-        growth = growth / 10.0
-
-    benefits = growth - n_demand
-    print(f"the N demand is {n_demand}")
-    print(f"the benefits are {benefits}")
-
-    return benefits, growth
-
-
+        return benefits, growth
 
 
 def compute_economic_reward(wso, fertilizer, price_yield_ton=400.0, price_fertilizer_ton=300.0):
@@ -142,39 +111,3 @@ def compute_economic_reward(wso, fertilizer, price_yield_ton=400.0, price_fertil
     convert_wso = g_m2_to_ton_hectare * price_yield_ton
     convert_fert = g_m2_to_ton_hectare * price_fertilizer_ton
     return 0.001 * (convert_wso * wso - convert_fert * fertilizer)
-
-
-class ZeroNitrogenEnvStorage():
-    """
-    Container to store results from zero nitrogen policy (for re-use)
-    """
-    def __init__(self):
-        self.results = {}
-
-    def run_episode(self, env):
-        env.reset()
-        terminated, truncated = False, False
-        infos_this_episode = []
-        while not terminated or truncated:
-            _, _, terminated, truncated, info = env.step(0)
-            infos_this_episode.append(info)
-        variables = infos_this_episode[0].keys()
-        episode_info = {}
-        for v in variables:
-            episode_info[v] = {}
-        for v in variables:
-            for info_dict in infos_this_episode:
-                episode_info[v].update(info_dict[v])
-        return episode_info
-
-    def get_key(self, env):
-        year = env.date.year
-        location = env._location
-        return f'{year}-{location}'
-
-    def get_episode_output(self, env):
-        key = self.get_key(env)
-        if key not in self.results.keys():
-            results = self.run_episode(env)
-            self.results[key] = results
-        return self.results[key]

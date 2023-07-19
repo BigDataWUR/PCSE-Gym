@@ -1,29 +1,27 @@
+from comet_ml import Experiment
+from comet_ml.integration.gymnasium import CometLogger
+
 import os.path
 
 import gymnasium.spaces
-from stable_baselines3 import PPO  # , DQN
+from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
 
-from sb3_contrib import MaskablePPO
-from sb3_contrib.common.envs import InvalidActionEnvDiscrete
-from sb3_contrib.common.maskable.utils import get_action_masks
-from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
-from sb3_contrib.common.wrappers import ActionMasker
-
-from comet_ml import Experiment
-from comet_ml.integration.gymnasium import CometLogger
-from comet_ml.integration.pytorch import log_model
+from sb3_contrib import RecurrentPPO # MaskablePPO
+# from sb3_contrib.common.envs import InvalidActionEnvDiscrete
+# from sb3_contrib.common.maskable.utils import get_action_masks
+# from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
+# from sb3_contrib.common.wrappers import ActionMasker
 
 import argparse
 import lib_programname
 import sys
 
-from pcse_gym.utils.defaults import *
 from pcse_gym.envs.winterwheat import WinterWheat
 from pcse_gym.envs.sb3 import *
 from pcse_gym.utils.eval import EvalCallback, determine_and_log_optimum
-from pcse_gym.envs.constraints import ActionLimiter
+# from pcse_gym.envs.constraints import ActionLimiter
 
 path_to_program = lib_programname.get_path_executed_script()
 rootdir = path_to_program.parents[0]
@@ -69,14 +67,24 @@ def train(log_dir, n_steps,
     """
 
     pcse_model_name = lambda x: "WOFOST" if x == 1 else "LINTUL"
-    print(f'Train model {pcse_model_name(pcse_model)} with seed {seed}. Logdir: {log_dir}')
-    hyperparams = {'batch_size': 64, 'n_steps': 2048, 'learning_rate': 0.0003, 'ent_coef': 0.0, 'clip_range': 0.3,
-                   'n_epochs': 10, 'gae_lambda': 0.95, 'max_grad_norm': 0.5, 'vf_coef': 0.5,
-                   'policy_kwargs': get_policy_kwargs(crop_features=crop_features, weather_features=weather_features,
-                                                      action_features=action_features)}
-    hyperparams['policy_kwargs']['net_arch'] = dict(pi=[256, 256], vf=[256, 256])
-    hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
-    hyperparams['policy_kwargs']['ortho_init'] = False
+    print(f'Train model {pcse_model_name(pcse_model)} with {agent} algorithm and seed {seed}. Logdir: {log_dir}')
+    if agent == 'PPO' or 'RPPO':
+        hyperparams = {'batch_size': 64, 'n_steps': 2048, 'learning_rate': 0.0003, 'ent_coef': 0.0, 'clip_range': 0.3,
+                       'n_epochs': 10, 'gae_lambda': 0.95, 'max_grad_norm': 0.5, 'vf_coef': 0.5,
+                       'policy_kwargs': get_policy_kwargs(crop_features=crop_features, weather_features=weather_features,
+                                                          action_features=action_features)}
+        hyperparams['policy_kwargs']['net_arch'] = dict(pi=[256, 256], vf=[256, 256])
+        hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
+        hyperparams['policy_kwargs']['ortho_init'] = False
+    if agent == 'DQN':
+        hyperparams = {'exploration_fraction': 0.1, 'exploration_initial_eps': 1.0, 'exploration_final_eps': 0.01,
+                       'policy_kwargs': get_policy_kwargs(crop_features=crop_features,
+                                                          weather_features=weather_features,
+                                                          action_features=action_features)
+                       }
+        hyperparams['policy_kwargs']['net_arch'] = [256, 256]
+        hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
+
 
     # For comet use
     use_comet = True
@@ -94,7 +102,8 @@ def train(log_dir, n_steps,
         )
 
         comet_log.log_parameters(hyperparams)
-        comet_log.log_code(folder="/pcse_gym")
+        comet_log.log_asset_folder(os.path.join(rootdir, 'pcse_gym', 'envs'), log_file_name=True, recursive=True)
+        comet_log.log_asset(os.path.join(rootdir, 'pcse_gym', 'utils', 'eval'), file_name='eval.py')
 
     env_pcse_train = WinterWheat(crop_features=crop_features, action_features=action_features,
                                  weather_features=weather_features,
@@ -104,18 +113,26 @@ def train(log_dir, n_steps,
     # env_pcse_train = ActionLimiter(env_pcse_train, action_limit=4)
 
     # env_pcse_train = ActionMasker(env_pcse_train, mask_fertilization_actions)
-    # if comet_log:
-    #     env_pcse_train = CometLogger(env_pcse_train, comet_log)
 
     env_pcse_train = Monitor(env_pcse_train)
 
-    env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
-                                  clip_obs=10., clip_reward=50., gamma=1)
+    if comet_log:
+        env_pcse_train = CometLogger(env_pcse_train, comet_log)
 
-    model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams, tensorboard_log=log_dir)
-
-    # model = MaskablePPO(MaskableActorCriticPolicy, env_pcse_train, gamma=1, seed=seed, **hyperparams, verbose=1,
-    #                     tensorboard_log=log_dir)
+    if agent == 'PPO':
+        env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
+                                      clip_obs=10., clip_reward=50., gamma=1)
+        model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams, tensorboard_log=log_dir)
+    if agent == 'DQN':
+        env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
+                                      clip_obs=10000., clip_reward=5000., gamma=1)
+        model = DQN('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
+                    tensorboard_log=log_dir)
+    if agent == 'RPPO':
+        env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
+                                      clip_obs=10000., clip_reward=5000., gamma=1)
+        model = RecurrentPPO('MlpLstmPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
+                             tensorboard_log=log_dir)
 
     debug = False
     if debug:
@@ -126,7 +143,7 @@ def train(log_dir, n_steps,
 
     env_pcse_eval = WinterWheat(crop_features=crop_features, action_features=action_features,
                                 weather_features=weather_features,
-                                costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
+                                costs_nitrogen=costs_nitrogen, years=test_years, locations=test_locations,
                                 action_space=action_space, action_multiplier=1.0, reward=reward,
                                 **get_pcse_model(pcse_model), **kwargs, seed=seed)
     # env_pcse_eval = ActionLimiter(env_pcse_eval, action_limit=4)
@@ -143,13 +160,16 @@ def train(log_dir, n_steps,
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-s", "--seed", type=int, default=0, help="Set seed")
-    parser.add_argument("-n", "--nsteps", type=int, default=400000, help="Number of steps")
+    parser.add_argument("-s", "--seed", type=int, default=98, help="Set seed")
+    parser.add_argument("-n", "--nsteps", type=int, default=600000, help="Number of steps")
     parser.add_argument("-c", "--costs_nitrogen", type=float, default=10.0, help="Costs for nitrogen")
     parser.add_argument("-e", "--environment", type=int, default=1,
                         help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
-    parser.add_argument("-a", "--agent", type=str, default="DQN", help="RL agent. PPO or DQN.")
+    parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, or DQN.")
     parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF or ANE")
+    parser.add_argument("-m", "--measure", type=bool, default=True, help="Train an agent in a partially observable"
+                                                                         "environment that decides when to measure"
+                                                                         "certain crop features")
     args = parser.parse_args()
 
     print(rootdir)
@@ -171,8 +191,7 @@ if __name__ == '__main__':
                                   n_steps=args.nsteps)
     if args.environment:
         # see https://github.com/ajwdewit/pcse/tree/develop_WOFOST_v8_1/pcse
-        crop_features = ["DVS", "TAGP", "LAI", "RNuptake", "Ndemand", "NuptakeTotal",
-                         "TRA", "NAVAIL", "SM", "RFTRA", "TWSO"]
+        crop_features = ["DVS", "TAGP", "LAI", "NuptakeTotal", "NAVAIL", "SM"]
     else:
         # see https://github.com/ajwdewit/pcse/blob/master/pcse/crop/lintul3.py
         crop_features = ["DVS", "TGROWTH", "LAI", "NUPTT", "TRAN", "TNSOIL", "TRAIN", "TRANRF", "WSO"]
@@ -180,10 +199,13 @@ if __name__ == '__main__':
     action_features = []  # alternative: "cumulative_nitrogen"
     tag = f'Seed-{args.seed}'
 
-    po_features = ['TAGP', 'LAI', 'NAVAIL', 'SM', 'NuptakeTotal']
-    po_dicts = dict(po_features=po_features)
-    a_shape = [7] + [2]*len(po_features)
-    action_spaces = gymnasium.spaces.MultiDiscrete(a_shape)
+    if not args.measure:
+        action_spaces = gymnasium.spaces.Discrete(7)
+    else:
+        po_features = ['TAGP', 'LAI', 'NAVAIL', 'NuptakeTotal', 'SM']
+        po_dicts = dict(po_features=po_features, args_measure=True)
+        a_shape = [7] + [2]*len(po_features)
+        action_spaces = gymnasium.spaces.MultiDiscrete(a_shape)
 
     train(log_dir, train_years=train_years, test_years=test_years,
           train_locations=train_locations,
@@ -195,5 +217,4 @@ if __name__ == '__main__':
           weather_features=weather_features,
           action_features=action_features, action_space=action_spaces,
           pcse_model=args.environment, agent=args.agent,
-          reward=args.reward,
-          **po_dicts)
+          reward=args.reward, **po_dicts)

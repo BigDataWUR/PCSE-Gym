@@ -1,10 +1,7 @@
 import datetime
 
-from collections import OrderedDict
-
 import pcse_gym.envs.common_env
 from .sb3 import *
-from .rewards import default_winterwheat_reward
 from .constraints import MeasureOrNot
 from pcse_gym.utils.defaults import *
 
@@ -40,8 +37,6 @@ class WinterWheat(gym.Env):
         self.po_features = kwargs.get('po_features')
         self.action_space = action_space
         self._timestep = timestep
-        self.reward_var = kwargs.get('reward_var', "TWSO")
-        # self.reward_var = kwargs.get('reward_var', "NuptakeTotal")
         self.reward_function = reward
 
         self._env_baseline = StableBaselinesWrapper(crop_features=crop_features,
@@ -65,18 +60,17 @@ class WinterWheat(gym.Env):
                                            seed=seed,
                                            *args, **kwargs)
         self.observation_space = self._get_observation_space()
-        self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
 
-        self.feature_cost = []
-        self.feature_ind = []
-        self.feature_ind_dict = OrderedDict()
-        self.get_feature_cost_ind()
-        # self._env = MeasureOrNot(self._env)
+        self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage(self._env_baseline, self.years, self.locations)
+        self.rewards = Rewards(kwargs.get('reward_var', "TWSO"), self.timestep,
+                               zero_container=self.zero_nitrogen_env_storage)
+
+        self.__measure = MeasureOrNot(self.sb3_env)
 
         super().reset(seed=seed)
 
     def _get_observation_space(self):
-        nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self._timestep
+        nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
         return gym.spaces.Box(0, np.inf, shape=(nvars,))
 
     def step(self, action):
@@ -89,15 +83,11 @@ class WinterWheat(gym.Env):
         if isinstance(action, np.ndarray):
             act, measure = action[0], action[1:]
 
-        output = self._env._model.get_output()
+        output = self.sb3_env.model.get_output()
         amount = act * self.action_multiplier
-
-        reward, growth = self._get_reward_func(output, amount)
-
-        obs, cost = self.measure_act(obs, measure)
-
+        reward, growth = self.get_reward_func(output, amount)
+        obs, cost = self.measure_features.measure_act(obs, measure)
         measurement_cost = sum(cost)
-
         reward -= measurement_cost
 
         if 'reward' not in info.keys(): info['reward'] = {}
@@ -107,19 +97,14 @@ class WinterWheat(gym.Env):
 
         return obs, reward, terminated, truncated, info
 
-    def _get_reward_func(self, output, amount):
+    def get_reward_func(self, output, amount):
         match self.reward_function:  # Needs python 3.10+
             case 'ANE':
-                return ane_reward(output, self._env_baseline, self.zero_nitrogen_env_storage, self._timestep,
-                                  self.reward_var, self.costs_nitrogen, amount)
+                return self.rewards.ane_reward(output, amount)
             case 'DEF':
-                return default_winterwheat_reward(output, self._env_baseline, self.zero_nitrogen_env_storage,
-                                                  self._timestep, self.reward_var, self.costs_nitrogen,
-                                                  amount)
+                return self.rewards.default_winterwheat_reward(output, amount)
             case _:
-                return default_winterwheat_reward(output, self._env_baseline, self.zero_nitrogen_env_storage,
-                                                  self._timestep, self.reward_var, self.costs_nitrogen,
-                                                  amount)
+                return self.rewards.default_winterwheat_reward(output, amount)
 
     def overwrite_year(self, year):
         self.years = year
@@ -152,88 +137,31 @@ class WinterWheat(gym.Env):
 
         return obs, info
 
-    def get_feature_cost_ind(self):
-        for feature in self.po_features:
-            if feature in self.crop_features:
-                self.feature_ind.append(self.crop_features.index(feature))
-        self.feature_ind = tuple(self.feature_ind)
-
-        for feature in self.crop_features:
-            if feature in self.po_features:
-                if feature not in self.feature_ind_dict.keys():
-                    self.feature_ind_dict[feature] = self.crop_features.index(feature)
-        # self.feature_ind = [x + 1 for x in self.feature_ind]
-
-    '''PROTOTYPE
-        iterate through feature index from sb3 observation.
-        if a measurement action is 0, observation is 0
-        otherwise, add cost to getting the measurement'''
-    def measure_act(self, obs, measurement):
-        costs = self.get_observation_cost()
-        measuring_cost = np.zeros(len(measurement))
-        for i, i_obs in enumerate(self.feature_ind):
-            if not measurement[i]:
-                obs[i_obs] = 0
-            else:
-                measuring_cost[i] = costs[i]
-        # TODO: implement a better check for length of measurements
-        assert len(measurement) == len(measuring_cost), "Action space and partially observable features are not the" \
-                                                        "same length"
-
-        return obs, measuring_cost
-
-    def get_observation_cost(self):
-        if not self.feature_cost:
-            table = self.list_of_costs()
-            # chosen = np.intersect1d(self.po_features, list(table.keys()), assume_unique=True)
-            for observed_feature in self.po_features:
-                cost = table[observed_feature]
-                self.feature_cost.append(cost)
-            return self.feature_cost
-        else:
-            return self.feature_cost
-            # TODO: if a variable is not in list_of_costs, define default value
-            # if self.po_features not in list(table.keys()):
-            #     diff = np.setdiff1d(self.po_features, list(self.list_of_costs().keys()), assume_unique=True)
-            #     for val in diff:
-            #         self.feature_cost[val] = 1
-
-    @staticmethod
-    def list_of_costs():
-        lookup = dict(
-            LAI=5,
-            TAGP=20,
-            NAVAIL=20,
-            NuptakeTotal=30,
-            SM=10
-        )
-        return lookup
-
-    def valid_action_mask(self):
-        # TODO: does this work
-        action_masks = np.zeros((self.action_space.n,), dtype=int)
-
-        if self.counter > 3:
-            action_masks[0] = 1
-
-        return action_masks
-
     def render(self, mode="human"):
         pass
 
     @property
+    def measure_features(self):
+        return self.__measure
+
+    @property
+    def sb3_env(self):
+        return self._env
+
+    @property
+    def baseline_env(self):
+        return self._env_baseline
+
+    @property
     def date(self) -> datetime.date:
-        return self._env._model.day
+        return self.sb3_env.model.day
 
     @property
     def loc(self) -> datetime.date:
-        return self._env._location
+        return self.sb3_env.location
 
     @property
-    def features(self):
-        return [self.crop_features, self.po_features]
+    def timestep(self):
+        return self._timestep
 
-    @property
-    def index_feature(self):
-        return self._env.index_feature
 

@@ -1,10 +1,9 @@
-import gymnasium as gym
 import os
 import datetime
-import numpy as np
 import pandas as pd
 from typing import Union
 from stable_baselines3 import PPO, DQN
+from sb3_contrib import RecurrentPPO
 from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv, VecNormalize, sync_envs_normalization
 from stable_baselines3.common import base_class
 from stable_baselines3.common.callbacks import BaseCallback
@@ -16,7 +15,6 @@ from scipy.optimize import minimize_scalar
 from bisect import bisect_left
 from .defaults import *
 from pcse_gym.envs.winterwheat import WinterWheat
-from pcse_gym.envs.sb3 import get_pcse_model
 
 import comet_ml
 
@@ -243,7 +241,7 @@ def evaluate_policy(
             sync_envs_normalization(policy.get_env(), env)
         if not isinstance(env, VecEnv) or i == 0:
             obs = env.reset()
-        terminated, truncated, state = False, False, None
+        terminated, truncated, state, lstm_state = False, False, None, None
         episode_reward = 0.0
         episode_length = 0
         year = env.get_attr("date")[0].year
@@ -264,6 +262,8 @@ def evaluate_policy(
                     sb_val = sb_values.detach().item()
                     prob = sb_prob
                     val = sb_val
+                if isinstance(policy, RecurrentPPO):
+                    action, lstm_state = policy.predict(obs, state=lstm_state, deterministic=deterministic)
                 if isinstance(policy, DQN):
                     action = policy.predict(obs, deterministic=deterministic)
 
@@ -448,6 +448,7 @@ class EvalCallback(BaseCallback):
             if len(set(list(self.histogram_training_years.keys())).symmetric_difference(
                     set(self.train_years))) != 0:
                 print(f'{self.n_calls} {list(self.histogram_training_years.keys())} {self.train_years}')
+            print(f'{self.n_calls}')
             tensorboard_logdir = self.logger.dir
             model_path = os.path.join(tensorboard_logdir, f'model-{self.n_calls}')
             self.model.save(model_path)
