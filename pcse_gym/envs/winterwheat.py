@@ -33,6 +33,8 @@ class WinterWheat(gym.Env):
             self.costs_nitrogen = costs_nitrogen
         self.years = [years] if isinstance(years, int) else years
         self.locations = [locations] if isinstance(locations, tuple) else locations
+        self.all_years = kwargs.get('all_years')
+        self.all_locations = kwargs.get('all_locations')
         self.action_multiplier = action_multiplier
         self.po_features = kwargs.get('po_features')
         self.action_space = action_space
@@ -64,7 +66,8 @@ class WinterWheat(gym.Env):
         self.observation_space = self._get_observation_space()
 
         if self.reward_function != 'GRO':
-            self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage(self._env_baseline, self.years, self.locations)
+            self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage(self._env_baseline, self.all_years,
+                                                                    self.all_locations)
             self.rewards = Rewards(self.reward_var, self.timestep,
                                    zero_container=self.zero_nitrogen_env_storage)
         else:
@@ -105,13 +108,13 @@ class WinterWheat(gym.Env):
     def get_reward_func(self, output, amount):
         match self.reward_function:  # Needs python 3.10+
             case 'ANE':
-                return self.rewards.ane_reward(output, amount)
+                return self.rewards.ane_reward(output, amount, self.now)
             case 'DEF':
-                return self.rewards.default_winterwheat_reward(output, amount)
+                return self.rewards.default_winterwheat_reward(output, amount, self.now)
             case 'GRO':
                 return self.rewards.growth_reward(output, amount)
             case _:
-                return self.rewards.default_winterwheat_reward(output, amount)
+                return self.rewards.default_winterwheat_reward(output, amount, self.now)
 
     def overwrite_year(self, year):
         self.years = year
@@ -173,5 +176,9 @@ class WinterWheat(gym.Env):
     @property
     def timestep(self):
         return self._timestep
+
+    @property
+    def now(self):
+        return f'{self.date.year}-{self.loc}'
 
 

@@ -182,6 +182,8 @@ if __name__ == '__main__':
 
     train_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
     test_locations = [(52, 5.5), (48, 0)]
+    all_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0), (48, 0)]
+    kwargs = dict(all_years=all_years, all_locations=all_locations)
 
     compute_baselines = False
     if compute_baselines:
@@ -203,7 +205,8 @@ if __name__ == '__main__':
         action_spaces = gymnasium.spaces.Discrete(7)
     else:
         po_features = ['TAGP', 'LAI', 'NAVAIL', 'NuptakeTotal', 'SM']
-        po_dicts = dict(po_features=po_features, args_measure=True)
+        kwargs['po_features'] = po_features
+        kwargs['args_measure'] = True
         a_shape = [7] + [2]*len(po_features)
         action_spaces = gymnasium.spaces.MultiDiscrete(a_shape)
 
@@ -217,4 +220,4 @@ if __name__ == '__main__':
           weather_features=weather_features,
           action_features=action_features, action_space=action_spaces,
           pcse_model=args.environment, agent=args.agent,
-          reward=args.reward, **po_dicts)
+          reward=args.reward, **kwargs)

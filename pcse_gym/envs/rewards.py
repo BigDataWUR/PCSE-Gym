@@ -11,13 +11,13 @@ class Rewards:
     def last_index(self, output):
         return (np.ceil(len(output) / self.timestep).astype('int') - 1) * self.timestep - 1
 
-    def zero_nitrogen_growth(self, output):
+    def zero_nitrogen_growth(self, output, now):
         current_date = output[-1]['day']
         previous_date = output[self.last_index(output)]['day']
 
         zero_nitrogen_results = self.zero_container.get_result
-        wso_current = zero_nitrogen_results[self.reward_var][current_date]
-        wso_previous = zero_nitrogen_results[self.reward_var][previous_date]
+        wso_current = zero_nitrogen_results[now][self.reward_var][current_date]
+        wso_previous = zero_nitrogen_results[now][self.reward_var][previous_date]
         if wso_current is None: wso_current = 0.0
         if wso_previous is None: wso_previous = 0.0
         growth_baseline = wso_current - wso_previous
@@ -44,11 +44,11 @@ class Rewards:
 
         return reward, growth
 
-    def default_winterwheat_reward(self, output, amount):
+    def default_winterwheat_reward(self, output, amount, now):
 
         growth = self.storage_organ_growth(output)
 
-        growth_baseline = self.zero_nitrogen_growth(output)
+        growth_baseline = self.zero_nitrogen_growth(output, now)
 
         benefits = growth - growth_baseline
 
@@ -58,11 +58,11 @@ class Rewards:
         return reward, growth
 
     # TODO agronomic nitrogen use efficiency still needs to be tested (See Vanlauwe et al, 2011)
-    def ane_reward(self, output, amount):
+    def ane_reward(self, output, amount, now):
         # agronomic nitrogen use efficiency
         growth = self.storage_organ_growth(output)
 
-        growth_baseline = self.storage_organ_growth(output)
+        growth_baseline = self.zero_nitrogen_growth(output, now)
 
         benefits = growth - growth_baseline
 
