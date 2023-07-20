@@ -252,7 +252,10 @@ class ZeroNitrogenEnvStorage:
         self.results = {}
         self.run_through(env_baseline, years, locations)
 
-    def run_episode(self, env):
+    def run_episode(self, env, year, location):
+        env._agro_management = pcse_gym.envs.common_env.replace_years(env._agro_management, year)
+        env._location = location
+        env._weather_data_provider = pcse_gym.envs.common_env.get_weather_data_provider(location)
         env.reset()
         terminated, truncated = False, False
         infos_this_episode = []
@@ -268,9 +271,9 @@ class ZeroNitrogenEnvStorage:
                 episode_info[v].update(info_dict[v])
         return episode_info
 
-    def get_episode_output(self, env, key):
+    def get_episode_output(self, env, key, year, location):
         if key not in self.results.keys():
-            results = self.run_episode(env)
+            results = self.run_episode(env, year, location)
             self.results[key] = results
 
     def run_through(self, env, years, locations):
@@ -278,7 +281,7 @@ class ZeroNitrogenEnvStorage:
         for year in tqdm(years):
             for location in locations:
                 key = f'{year}-{location}'
-                self.get_episode_output(env, key)
+                self.get_episode_output(env, key, year, location)
 
     @property
     def get_result(self):
