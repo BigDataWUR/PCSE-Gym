@@ -166,7 +166,7 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--environment", type=int, default=1,
                         help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
     parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, or DQN.")
-    parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF or ANE")
+    parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, GRO, or ANE")
     parser.add_argument("-m", "--measure", type=bool, default=True, help="Train an agent in a partially observable"
                                                                          "environment that decides when to measure"
                                                                          "certain crop features")

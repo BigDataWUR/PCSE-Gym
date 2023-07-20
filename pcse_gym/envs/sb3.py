@@ -185,6 +185,9 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
             info['fertilizer'][output[-1 - self.timestep]['day']] = amount[0]
         else:
             info['fertilizer'][output[-1 - self.timestep]['day']] = amount
+        if 'reward' not in info.keys():
+            info['reward'] = {}
+        info['reward'][self.date] = reward
         obs['actions'] = {'cumulative_nitrogen': sum(info['fertilizer'].values())}
         obs['actions'] = {'cumulative_measurement': sum(info['measure'].values())}
         if 'indexes' not in info.keys():

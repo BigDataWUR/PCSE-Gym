@@ -36,11 +36,19 @@ class Rewards:
             growth = growth / 10.0
         return growth
 
+    def growth_reward(self, output, amount):
+        growth = self.storage_organ_growth(output)
+
+        costs = self.costs_nitrogen * amount
+        reward = growth - costs
+
+        return reward, growth
+
     def default_winterwheat_reward(self, output, amount):
 
         growth = self.storage_organ_growth(output)
 
-        growth_baseline = self.storage_organ_growth(output)
+        growth_baseline = self.zero_nitrogen_growth(output)
 
         benefits = growth - growth_baseline
 

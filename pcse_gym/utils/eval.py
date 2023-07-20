@@ -15,6 +15,7 @@ from scipy.optimize import minimize_scalar
 from bisect import bisect_left
 from .defaults import *
 from pcse_gym.envs.winterwheat import WinterWheat
+from tqdm import tqdm
 
 import comet_ml
 
@@ -448,7 +449,8 @@ class EvalCallback(BaseCallback):
             if len(set(list(self.histogram_training_years.keys())).symmetric_difference(
                     set(self.train_years))) != 0:
                 print(f'{self.n_calls} {list(self.histogram_training_years.keys())} {self.train_years}')
-            print(f'{self.n_calls}')
+            else:
+                print(f'[{self.n_calls}]')
             tensorboard_logdir = self.logger.dir
             model_path = os.path.join(tensorboard_logdir, f'model-{self.n_calls}')
             self.model.save(model_path)
@@ -506,7 +508,8 @@ class EvalCallback(BaseCallback):
                                                clip_obs=10., clip_reward=50., gamma=1)
             env_pcse_evaluation.training = False
 
-            for year in self.get_years(log_training):
+            print("evaluating environment with learned policy...")
+            for year in tqdm(self.get_years(log_training)):
                 for test_location in self.get_locations(log_training):
                     env_pcse_evaluation.env_method('overwrite_year', year)
                     env_pcse_evaluation.env_method('set_location', test_location)
@@ -515,9 +518,7 @@ class EvalCallback(BaseCallback):
                     episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=env_pcse_evaluation)
                     my_key = (year, test_location)
                     reward[my_key] = episode_rewards[0].item()
-                    # start measure figure logic
                     episode_infos = self.get_measure_graphs(episode_infos)
-                    # end measure figure logic
                     fertilizer[my_key] = sum(episode_infos[0]['fertilizer'].values())
                     self.logger.record(f'eval/reward-{my_key}', reward[my_key])
                     self.logger.record(f'eval/nitrogen-{my_key}', fertilizer[my_key])
