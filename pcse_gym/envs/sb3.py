@@ -203,6 +203,7 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         if isinstance(obs, tuple):
             obs = obs[0]
         obs['actions'] = {'cumulative_nitrogen': 0.0}
+        obs['actions'] = {'cumulative_measurement': 0.0}
         return self._observation(obs, flag=True)
 
     def _observation(self, observation, flag=False):
@@ -216,7 +217,7 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         index_feature = OrderedDict()
         for i, feature in enumerate(self.crop_features):
             obs[i] = observation['crop_model'][feature][-1]
-            if feature not in index_feature and not flag:
+            if feature not in index_feature and not flag and self.po_features:
                 if feature in self.po_features:
                     index_feature[feature] = i
                     if len(index_feature.keys()) == len(self.po_features):
@@ -235,12 +236,32 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         return self._model
 
     @property
-    def location(self):
+    def loc(self):
         return self._location
+
+    @loc.setter
+    def loc(self, location):
+        self._location = location
 
     @property
     def timestep(self):
         return self._timestep
+
+    @property
+    def agro_management(self):
+        return self._agro_management
+
+    @agro_management.setter
+    def agro_management(self, agro):
+        self._agro_management = agro
+
+    @property
+    def weather_data_provider(self):
+        return self._weather_data_provider
+
+    @weather_data_provider.setter
+    def weather_data_provider(self, weather):
+        self._weather_data_provider = weather
 
 
 class ZeroNitrogenEnvStorage:
@@ -253,9 +274,9 @@ class ZeroNitrogenEnvStorage:
         self.run_through(env_baseline, years, locations)
 
     def run_episode(self, env, year, location):
-        env._agro_management = pcse_gym.envs.common_env.replace_years(env._agro_management, year)
-        env._location = location
-        env._weather_data_provider = pcse_gym.envs.common_env.get_weather_data_provider(location)
+        env.agro_management = pcse_gym.envs.common_env.replace_years(env.agro_management, year)
+        env.loc = location
+        env.weather_data_provider = pcse_gym.envs.common_env.get_weather_data_provider(location)
         env.reset()
         terminated, truncated = False, False
         infos_this_episode = []
@@ -279,9 +300,13 @@ class ZeroNitrogenEnvStorage:
     def run_through(self, env, years, locations):
         print('creating zero nitrogen results...')
         for year in tqdm(years):
-            for location in locations:
-                key = f'{year}-{location}'
-                self.get_episode_output(env, key, year, location)
+            if isinstance(locations, list):
+                for location in locations:
+                    key = f'{year}-{location}'
+                    self.get_episode_output(env, key, year, location)
+            else:
+                key = f'{year}-{locations}'
+                self.get_episode_output(env, key, year, locations)
 
     @property
     def get_result(self):

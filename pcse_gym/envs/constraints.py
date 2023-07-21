@@ -65,31 +65,31 @@ class MeasureOrNot:
         otherwise, add cost to getting the measurement"""
         costs = self.get_observation_cost()
         measuring_cost = np.zeros(len(measurement))
+        # for feature in set(self.feature_ind_dict) & set(self.list_of_costs()):
+
+        assert len(measurement) == len(costs), "Action space and partially observable features are not the" \
+                                                "same length"
         for i, i_obs in enumerate(self.feature_ind):
             if not measurement[i]:
-                obs[i_obs] = 0
+                obs[i_obs] = 0      # might want to change this
             else:
                 measuring_cost[i] = costs[i]
-        # TODO: implement a better check for length of measurements
-        assert len(measurement) == len(measuring_cost), "Action space and partially observable features are not the" \
-                                                        "same length"
-
         return obs, measuring_cost
 
     def get_observation_cost(self):
         if not self.feature_cost:
-            table = self.list_of_costs()
             for observed_feature in self.env.po_features:
-                cost = table[observed_feature]
-                self.feature_cost.append(cost)
+                if observed_feature not in self.list_of_costs():
+                    continue
+                self.feature_cost.append(self.list_of_costs()[observed_feature])
             return self.feature_cost
+        # TODO: if a variable is not in list_of_costs, define default value
+        # for feature in self.env.po_features:
+        #     if feature not in list(self.list_of_costs().keys()):
+        #         self.feature_cost[feature] = 1
         else:
             return self.feature_cost
-            # TODO: if a variable is not in list_of_costs, define default value
-            # if self.po_features not in list(table.keys()):
-            #     diff = np.setdiff1d(self.po_features, list(self.list_of_costs().keys()), assume_unique=True)
-            #     for val in diff:
-            #         self.feature_cost[val] = 1
+
 
     @staticmethod
     def list_of_costs():
@@ -98,6 +98,10 @@ class MeasureOrNot:
             TAGP=5,
             NAVAIL=5,
             NuptakeTotal=3,
-            SM=1
+            SM=1,
+            TGROWTH=5,
+            TNSOIL=5,
+            NUPTT=3,
+            TRAIN=1
         )
         return lookup

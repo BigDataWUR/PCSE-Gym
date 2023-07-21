@@ -349,7 +349,7 @@ class FindOptimum():
         return returnvalue
 
     def optimize_start_dump(self, bounds=(0, 100.0)):
-        res = minimize_scalar(self.start_dump, bounds=bounds, method='bounded', options={'maxiter': 10})
+        res = minimize_scalar(self.start_dump, bounds=bounds, method='bounded')
         print(f'optimum found for {self.train_years} at {res.x} {-1.0 * res.fun}')
         for year, reward in self.current_rewards.items():
             print(f'- {year} {reward}')
@@ -376,7 +376,7 @@ class EvalCallback(BaseCallback):
 
     def __init__(self, env_eval=None, train_years=get_default_train_years(), test_years=get_default_test_years(),
                  train_locations=get_default_location(), test_locations=get_default_location(),
-                 n_eval_episodes=1, eval_freq=1000, pcse_model=1, seed=0):
+                 n_eval_episodes=1, eval_freq=1000, pcse_model=1, seed=0, **kwargs):
         super(EvalCallback, self).__init__()
         self.test_years = test_years
         self.train_years = train_years
@@ -387,6 +387,7 @@ class EvalCallback(BaseCallback):
         self.pcse_model = pcse_model
         self.seed = seed
         self.env_eval = env_eval
+        self.po_features = kwargs.get('po_features')
 
         def def_value(): return 0
 
@@ -458,7 +459,8 @@ class EvalCallback(BaseCallback):
             self.model.get_env().save(stats_path)
             episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=self.model.get_env())
             if self.pcse_model:
-                variables = ['action', 'TWSO', 'reward', 'measure']
+                variables = ['action', 'TWSO', 'reward']
+                if self.po_features: variables.append('measure')
                 cumulative = ['action', 'reward']
             else:
                 variables = 'action', 'WSO', 'reward'
@@ -518,7 +520,8 @@ class EvalCallback(BaseCallback):
                     episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=env_pcse_evaluation)
                     my_key = (year, test_location)
                     reward[my_key] = episode_rewards[0].item()
-                    episode_infos = self.get_measure_graphs(episode_infos)
+                    if self.po_features:
+                        episode_infos = self.get_measure_graphs(episode_infos)
                     fertilizer[my_key] = sum(episode_infos[0]['fertilizer'].values())
                     self.logger.record(f'eval/reward-{my_key}', reward[my_key])
                     self.logger.record(f'eval/nitrogen-{my_key}', fertilizer[my_key])
@@ -541,7 +544,8 @@ class EvalCallback(BaseCallback):
 
             if self.pcse_model:
                 variables = ['action', 'TWSO', 'reward', 'NAVAIL',
-                             'NuptakeTotal', 'fertilizer', 'val', 'measure']
+                             'NuptakeTotal', 'fertilizer', 'val']
+                if self.po_features: variables.append('measure')
             else:
                 variables = ['action', 'WSO', 'reward', 'TNSOIL', 'val']
 
