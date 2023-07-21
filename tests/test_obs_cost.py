@@ -97,6 +97,7 @@ class TestNoMeasure(unittest.TestCase):
 
         self.assertEqual(reward, expected)
 
+# TODO add unit test CERES
 
 if __name__ == '__main__':
     unittest.main()
