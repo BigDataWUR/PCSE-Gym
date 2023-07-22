@@ -14,10 +14,7 @@ from collections import defaultdict
 from scipy.optimize import minimize_scalar
 from bisect import bisect_left
 from .defaults import *
-from pcse_gym.envs.winterwheat import WinterWheat
 from tqdm import tqdm
-
-import comet_ml
 
 
 def compute_median(results_dict: dict, filter_list=None):
@@ -463,7 +460,8 @@ class EvalCallback(BaseCallback):
                 if self.po_features: variables.append('measure')
                 cumulative = ['action', 'reward']
             else:
-                variables = 'action', 'WSO', 'reward'
+                variables = ['action', 'WSO', 'reward']
+                if self.po_features: variables.append('measure')
                 cumulative = ['action', 'reward']
 
             '''logic for measure graph'''
@@ -514,7 +512,7 @@ class EvalCallback(BaseCallback):
             for year in tqdm(self.get_years(log_training)):
                 for test_location in self.get_locations(log_training):
                     env_pcse_evaluation.env_method('overwrite_year', year)
-                    env_pcse_evaluation.env_method('set_location', test_location)
+                    env_pcse_evaluation.env_method('overwrite_location', test_location)
                     env_pcse_evaluation.reset()
                     sync_envs_normalization(self.model.get_env(), env_pcse_evaluation)
                     episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=env_pcse_evaluation)
@@ -548,6 +546,7 @@ class EvalCallback(BaseCallback):
                 if self.po_features: variables.append('measure')
             else:
                 variables = ['action', 'WSO', 'reward', 'TNSOIL', 'val']
+                if self.po_features: variables.append('measure')
 
             if 'measure' in variables:
                 variables = self.replace_measure_variable(variables)
@@ -575,7 +574,7 @@ class EvalCallback(BaseCallback):
         return True
 
 
-def determine_and_log_optimum(log_dir, costs_nitrogen=10.0,
+def determine_and_log_optimum(log_dir, env_train: Union[gym.Env, VecEnv],
                               train_years=get_default_train_years(),
                               test_years=get_default_test_years(),
                               train_locations=get_default_location(),
@@ -586,6 +585,7 @@ def determine_and_log_optimum(log_dir, costs_nitrogen=10.0,
     Wrapper around FindOptimum().
 
     :param log_dir: Tensorboard dir
+    :param env_train: Base environment to find optimum for
     :param train_years: Optimum is determined on these years
     :param test_years: Used for logging
     :param train_locations: Optimum is determined on these locations
@@ -596,10 +596,8 @@ def determine_and_log_optimum(log_dir, costs_nitrogen=10.0,
     print(f'find optimum for {train_years}')
     train_locations = [train_locations] if isinstance(train_locations, tuple) else train_locations
     test_locations = [test_locations] if isinstance(test_locations, tuple) else test_locations
+    costs_nitrogen = env_train.get_attr("costs_nitrogen")
 
-    env_train = WinterWheat(costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations)
-    env_train = VecNormalize(DummyVecEnv([lambda: env_train]), norm_obs=True, norm_reward=True, clip_obs=10.,
-                             clip_reward=50., gamma=1)
     optimizer_train = FindOptimum(env_train, train_years)
     optimum_train = optimizer_train.optimize_start_dump()
     optimum_train_path_tb = os.path.join(log_dir, f"Optimum-Ncosts-{costs_nitrogen}-train")
@@ -613,9 +611,10 @@ def determine_and_log_optimum(log_dir, costs_nitrogen=10.0,
     for year in list(set(test_years + train_years)):
         for location in list(set(test_locations + train_locations)):
             my_key = (year, location)
-            env_test = WinterWheat(costs_nitrogen=costs_nitrogen, years=year, locations=location)
-            env_test = VecNormalize(DummyVecEnv([lambda: env_test]), norm_obs=True, norm_reward=True, clip_obs=10.,
-                                    clip_reward=50., gamma=1)
+            env_test = env_train
+            env_test.env_method('overwrite_year', year)
+            env_test.env_method('overwrite_location', location)
+            env_test.reset()
             optimum_train_rewards, optimum_train_results = evaluate_policy('start-dump', env_test, amount=optimum_train)
             reward_train[my_key] = optimum_train_rewards[0].item()
             fertilizer_train[my_key] = sum(optimum_train_results[0]['action'].values())

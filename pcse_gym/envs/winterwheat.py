@@ -1,7 +1,5 @@
 import datetime
 
-import numpy as np
-
 import pcse_gym.envs.common_env
 from .sb3 import *
 from .constraints import MeasureOrNot
@@ -23,7 +21,7 @@ class WinterWheat(gym.Env):
                  weather_features=get_default_weather_features(),
                  seed=0, costs_nitrogen=None, timestep=7, years=None, locations=None,
                  action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
-                 action_multiplier=1.0, reward=None, all_years=None, all_locations=None,
+                 action_multiplier=1.0, reward=None,
                  *args, **kwargs
                  ):
         self.crop_features = crop_features
@@ -32,10 +30,8 @@ class WinterWheat(gym.Env):
         self.costs_nitrogen = costs_nitrogen
         self.years = [years] if isinstance(years, int) else years
         self.locations = [locations] if isinstance(locations, tuple) else locations
-        self.all_years = all_years
-        self.all_locations = all_locations
         self.action_multiplier = action_multiplier
-        self.po_features = kwargs.get('po_features')
+        self.po_features = kwargs.get('po_features', [])
         self.action_space = action_space
         self._timestep = timestep
         self.reward_function = reward
@@ -63,14 +59,8 @@ class WinterWheat(gym.Env):
                                            seed=seed,
                                            *args, **kwargs)
         self.observation_space = self._get_observation_space()
-
-        if self.reward_function != 'GRO':
-            self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage(self.baseline_env, self.all_years,
-                                                                    self.all_locations)
-            self.rewards = Rewards(self.reward_var, self.timestep,
-                                   zero_container=self.zero_nitrogen_env_storage)
-        else:
-            self.rewards = Rewards(self.reward_var, self.timestep)
+        self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
+        self.rewards = Rewards(self.reward_var, self.timestep)
 
         if self.po_features:
             self.__measure = MeasureOrNot(self.sb3_env)
@@ -86,7 +76,7 @@ class WinterWheat(gym.Env):
         Computes customized reward and populates info
         """
 
-        obs, _, terminated, truncated, info = self.sb3_env.step(action)
+        obs, _, terminated, truncated, info = self._env.step(action)
 
         output = self.sb3_env.model.get_output()
 
@@ -100,11 +90,12 @@ class WinterWheat(gym.Env):
         return obs, reward, terminated, truncated, info
 
     def process_output(self, action, output, obs):
-        if self.po_features:
+
+        if self.po_features and isinstance(action, np.ndarray) and action.dtype != np.float32:
             if isinstance(action, np.ndarray):
-                act, measure = action[0], action[1:]
-            amount = act * self.action_multiplier
-            reward, growth = self.get_reward_func(output, amount)
+                action, measure = action[0], action[1:]
+            amount = action * self.action_multiplier
+            reward, growth = self.get_baseline_env(output, amount)
             obs, cost = self.measure_features.measure_act(obs, measure)
             measurement_cost = sum(cost)
             reward -= measurement_cost
@@ -113,26 +104,42 @@ class WinterWheat(gym.Env):
             if isinstance(action, np.ndarray):
                 action = action.item()
             amount = action * self.action_multiplier
-            reward, growth = self.get_reward_func(output, amount)
+            reward, growth = self.get_baseline_env(output, amount)
             return obs, reward, growth
 
-    def get_reward_func(self, output, amount):
+    def get_baseline_env(self, output, amount):
+        if self.reward_function != 'GRO':
+            zero_nitrogen_results = self.zero_nitrogen_env_storage.get_episode_output(self.baseline_env)
+
+            # convert zero_nitrogen_results to pcse_output
+            output_baseline = []
+            for (k, v) in zero_nitrogen_results[self.reward_var].items():
+                if k <= output[-1]['day']:
+                    filtered_dict = {'day': k, self.reward_var: v}
+                    output_baseline.append(filtered_dict)
+
+            reward, growth = self.get_reward_func(output, amount, output_baseline)
+        else:
+            reward, growth = self.get_reward_func(output, amount)
+        return reward, growth
+
+    def get_reward_func(self, output, amount, output_baseline=None):
         match self.reward_function:  # Needs python 3.10+
             case 'ANE':
-                return self.rewards.ane_reward(output, amount, self.now)
+                return self.rewards.ane_reward(output, output_baseline, amount)
             case 'DEF':
-                return self.rewards.default_winterwheat_reward(output, amount, self.now)
+                return self.rewards.default_winterwheat_reward(output, output_baseline, amount)
             case 'GRO':
                 return self.rewards.growth_reward(output, amount)
             case _:
-                return self.rewards.default_winterwheat_reward(output, amount, self.now)
+                return self.rewards.default_winterwheat_reward(output, output_baseline, amount)
 
     def overwrite_year(self, year):
         self.years = year
         if self.reward_function != 'GRO':
             self.baseline_env.agro_management = pcse_gym.envs.common_env.replace_years(
                 self.baseline_env.agro_management, year)
-        self.sb3_env._agro_management = pcse_gym.envs.common_env.replace_years(self.sb3_env.agro_management, year)
+        self.sb3_env.agro_management = pcse_gym.envs.common_env.replace_years(self.sb3_env.agro_management, year)
 
     def set_location(self, location):
         if self.reward_function != 'GRO':
@@ -140,6 +147,10 @@ class WinterWheat(gym.Env):
             self.baseline_env.weather_data_provider = pcse_gym.envs.common_env.get_weather_data_provider(location)
         self.sb3_env.loc = location
         self.sb3_env.weather_data_provider = pcse_gym.envs.common_env.get_weather_data_provider(location)
+
+    def overwrite_location(self, location):
+        self.locations = location
+        self.set_location(location)
 
     def reset(self, seed=None, options=()):
         if isinstance(self.years, list):
@@ -187,9 +198,3 @@ class WinterWheat(gym.Env):
     @property
     def timestep(self):
         return self._timestep
-
-    @property
-    def now(self):
-        return f'{self.date.year}-{self.loc}'
-
-

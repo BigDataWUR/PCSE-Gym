@@ -9,7 +9,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
 def initialize_env():
-    pcse_env = 0
+    pcse_env = 1
     if pcse_env:
         po_features = ['TAGP', 'LAI', 'NAVAIL', 'SM', 'NuptakeTotal']
         crop_features = get_wofost_default_crop_features()
@@ -26,8 +26,7 @@ def initialize_env():
                                 action_features=get_default_action_features(),
                                 weather_features=get_default_weather_features(),
                                 costs_nitrogen=10, years=get_default_train_years(),
-                                locations=get_default_location(), all_years=get_default_years(),
-                                all_locations=get_default_location(),
+                                locations=get_default_location(),
                                 action_space=action_spaces, action_multiplier=1.0, reward='DEF',
                                 **get_pcse_model(pcse_env), **kwargs)
 
@@ -42,8 +41,7 @@ def initialize_no_baseline():
                                 action_features=get_default_action_features(),
                                 weather_features=get_default_weather_features(),
                                 costs_nitrogen=10, years=get_default_train_years(),
-                                locations=get_default_location(), all_years=get_default_years(),
-                                all_locations=get_default_location(),
+                                locations=get_default_location(),
                                 action_space=action_spaces, action_multiplier=2.0, reward='GRO',
                                 **get_pcse_model(1))
 
@@ -91,9 +89,11 @@ class TestNoMeasure(unittest.TestCase):
     def test_output(self):
         env2.reset()
         action = np.array([3])
+        _, _, _, _, _ = env2.step(action)
+        action = np.array([4])
         obs, reward, terminated, truncated, info = env2.step(action)
 
-        expected = -60
+        expected = -80
 
         self.assertEqual(reward, expected)
 

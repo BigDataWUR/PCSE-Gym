@@ -68,10 +68,10 @@ class MeasureOrNot:
         # for feature in set(self.feature_ind_dict) & set(self.list_of_costs()):
 
         assert len(measurement) == len(costs), "Action space and partially observable features are not the" \
-                                                "same length"
+                                               "same length"
         for i, i_obs in enumerate(self.feature_ind):
             if not measurement[i]:
-                obs[i_obs] = 0      # might want to change this
+                obs[i_obs] = 0  # might want to change this
             else:
                 measuring_cost[i] = costs[i]
         return obs, measuring_cost
@@ -89,7 +89,6 @@ class MeasureOrNot:
         #         self.feature_cost[feature] = 1
         else:
             return self.feature_cost
-
 
     @staticmethod
     def list_of_costs():

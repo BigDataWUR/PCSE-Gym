@@ -214,14 +214,18 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
 
         if isinstance(observation, tuple):
             observation = observation[0]
-        index_feature = OrderedDict()
         for i, feature in enumerate(self.crop_features):
             obs[i] = observation['crop_model'][feature][-1]
-            if feature not in index_feature and not flag and self.po_features:
-                if feature in self.po_features:
-                    index_feature[feature] = i
-                    if len(index_feature.keys()) == len(self.po_features):
-                        self.index_feature = index_feature
+
+        if self.po_features is not None:
+            index_feature = OrderedDict()
+            for i, feature in enumerate(self.crop_features):
+                if feature not in index_feature and not flag:
+                    if feature in self.po_features:
+                        index_feature[feature] = i
+                        if len(index_feature.keys()) == len(self.po_features):
+                            self.index_feature = index_feature
+
         for i, feature in enumerate(self.action_features):
             j = len(self.crop_features) + i
             obs[j] = observation['actions'][feature]
@@ -268,15 +272,10 @@ class ZeroNitrogenEnvStorage:
     """
     Container to store results from zero nitrogen policy (for re-use)
     """
-
-    def __init__(self, env_baseline, years, locations):
+    def __init__(self):
         self.results = {}
-        self.run_through(env_baseline, years, locations)
 
-    def run_episode(self, env, year, location):
-        env.agro_management = pcse_gym.envs.common_env.replace_years(env.agro_management, year)
-        env.loc = location
-        env.weather_data_provider = pcse_gym.envs.common_env.get_weather_data_provider(location)
+    def run_episode(self, env):
         env.reset()
         terminated, truncated = False, False
         infos_this_episode = []
@@ -292,21 +291,17 @@ class ZeroNitrogenEnvStorage:
                 episode_info[v].update(info_dict[v])
         return episode_info
 
-    def get_episode_output(self, env, key, year, location):
-        if key not in self.results.keys():
-            results = self.run_episode(env, year, location)
-            self.results[key] = results
+    def get_key(self, env):
+        year = env.date.year
+        location = env.loc
+        return f'{year}-{location}'
 
-    def run_through(self, env, years, locations):
-        print('creating zero nitrogen results...')
-        for year in tqdm(years):
-            if isinstance(locations, list):
-                for location in locations:
-                    key = f'{year}-{location}'
-                    self.get_episode_output(env, key, year, location)
-            else:
-                key = f'{year}-{locations}'
-                self.get_episode_output(env, key, year, locations)
+    def get_episode_output(self, env):
+        key = self.get_key(env)
+        if key not in self.results.keys():
+            results = self.run_episode(env)
+            self.results[key] = results
+        return self.results[key]
 
     @property
     def get_result(self):

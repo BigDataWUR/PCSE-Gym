@@ -70,11 +70,10 @@ def train(log_dir, n_steps,
     costs_nitrogen: float, penalty for fertilization application
 
     """
-
     if agent == 'DQN':
         assert not kwargs.get('args_measure'), f'cannot use {agent} with measure args'
 
-    pcse_model_name = "WOFOST" if not pcse_model else "LINTUL"
+    pcse_model_name = "LINTUL" if not pcse_model else "WOFOST"
 
     print(f'Train model {pcse_model_name} with {agent} algorithm and seed {seed}. Logdir: {log_dir}')
     if agent == 'PPO' or 'RPPO':
@@ -126,14 +125,15 @@ def train(log_dir, n_steps,
 
     env_pcse_train = Monitor(env_pcse_train)
 
-    if comet_log:
+    if use_comet and comet_log:
         env_pcse_train = CometLogger(env_pcse_train, comet_log)
 
     match agent:
         case 'PPO':
             env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
                                           clip_obs=10., clip_reward=50., gamma=1)
-            model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams, tensorboard_log=log_dir)
+            model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
+                        tensorboard_log=log_dir)
         case 'DQN':
             env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
                                           clip_obs=10000., clip_reward=5000., gamma=1)
@@ -147,7 +147,15 @@ def train(log_dir, n_steps,
         case _:
             env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
                                           clip_obs=10., clip_reward=50., gamma=1)
-            model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams, tensorboard_log=log_dir)
+            model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
+                        tensorboard_log=log_dir)
+
+    compute_baselines = False
+    if compute_baselines:
+        determine_and_log_optimum(log_dir, env_pcse_train,
+                                  train_years=train_years, test_years=test_years,
+                                  train_locations=train_locations, test_locations=test_locations,
+                                  n_steps=args.nsteps)
 
     debug = False
     if debug:
@@ -188,9 +196,9 @@ if __name__ == '__main__':
                                                                          "environment that decides when to measure"
                                                                          "certain crop features")
     args = parser.parse_args()
-
+    pcse_model_name = "LINTUL" if not args.environment else "WOFOST"
     print(rootdir)
-    log_dir = os.path.join(rootdir, 'tensorboard_logs', 'WOFOST_experiments')
+    log_dir = os.path.join(rootdir, 'tensorboard_logs', f'{pcse_model_name}_experiments')
     print(f'train for {args.nsteps} steps with costs_nitrogen={args.costs_nitrogen} (seed={args.seed})')
 
     all_years = [*range(1990, 2022)]
@@ -199,15 +207,8 @@ if __name__ == '__main__':
 
     train_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
     test_locations = [(52, 5.5), (48, 0)]
-    all_locations = list(set(train_locations + test_locations))
 
-    compute_baselines = False
-    if compute_baselines:
-        determine_and_log_optimum(log_dir, costs_nitrogen=args.costs_nitrogen,
-                                  train_years=train_years, test_years=test_years,
-                                  train_locations=train_locations, test_locations=test_locations,
-                                  n_steps=args.nsteps)
-    if args.environment:
+    if args.environment == 1:
         # see https://github.com/ajwdewit/pcse/tree/develop_WOFOST_v8_1/pcse
         crop_features = ["DVS", "TAGP", "LAI", "NuptakeTotal", "NAVAIL", "SM"]
     else:
@@ -215,8 +216,10 @@ if __name__ == '__main__':
         crop_features = ["DVS", "TGROWTH", "LAI", "NUPTT", "TRAN", "TNSOIL", "TRAIN", "TRANRF", "WSO"]
     weather_features = ["IRRAD", "TMIN", "RAIN"]
     action_features = []  # alternative: "cumulative_nitrogen"
+
     tag = f'Seed-{args.seed}'
 
+    kwargs = {}
     if not args.measure:
         action_spaces = gymnasium.spaces.Discrete(7)
     else:
@@ -224,16 +227,16 @@ if __name__ == '__main__':
             po_features = ['TAGP', 'LAI', 'NAVAIL', 'NuptakeTotal', 'SM']
         else:
             po_features = ['TGROWTH', 'LAI', 'TNSOIL', 'NUPTT', 'TRAIN']
-        kwargs = {'po_features': po_features, 'args_measure': True}
-        a_shape = [7] + [2] * len(po_features)
+        kwargs['po_features'] = po_features
+        kwargs['args_measure'] = True
+        a_shape = [7] + [2]*len(po_features)
         action_spaces = gymnasium.spaces.MultiDiscrete(a_shape)
 
     train(log_dir, train_years=train_years, test_years=test_years,
           train_locations=train_locations,
           test_locations=test_locations,
           n_steps=args.nsteps, seed=args.seed,
-          tag=tag, all_years=all_years, all_locations=all_locations,
-          costs_nitrogen=args.costs_nitrogen,
+          tag=tag, costs_nitrogen=args.costs_nitrogen,
           crop_features=crop_features,
           weather_features=weather_features,
           action_features=action_features, action_space=action_spaces,

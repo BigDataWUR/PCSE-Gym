@@ -2,31 +2,15 @@ import numpy as np
 
 
 class Rewards:
-    def __init__(self, reward_var, timestep, costs_nitrogen=10.0, zero_container=None):
+    def __init__(self, reward_var, timestep, costs_nitrogen=10.0):
         self.reward_var = reward_var
         self.timestep = timestep
-        self.zero_container = zero_container
         self.costs_nitrogen = costs_nitrogen
 
     def last_index(self, output):
         return (np.ceil(len(output) / self.timestep).astype('int') - 1) * self.timestep - 1
 
-    def zero_nitrogen_growth(self, output, now):
-        current_date = output[-1]['day']
-        previous_date = output[self.last_index(output)]['day']
-
-        zero_nitrogen_results = self.zero_container.get_result
-        wso_current = zero_nitrogen_results[now][self.reward_var][current_date]
-        wso_previous = zero_nitrogen_results[now][self.reward_var][previous_date]
-        if wso_current is None: wso_current = 0.0
-        if wso_previous is None: wso_previous = 0.0
-        growth_baseline = wso_current - wso_previous
-        if self.reward_var == "TWSO":  # hack to deal with different units
-            growth_baseline = growth_baseline / 10.0
-        return growth_baseline
-
     def storage_organ_growth(self, output):
-
         wso_start = output[self.last_index(output)][self.reward_var]
         wso_finish = output[-1][self.reward_var]
         if wso_start is None: wso_start = 0.0
@@ -44,25 +28,21 @@ class Rewards:
 
         return reward, growth
 
-    def default_winterwheat_reward(self, output, amount, now):
-
+    def default_winterwheat_reward(self, output, output_baseline, amount):
         growth = self.storage_organ_growth(output)
-
-        growth_baseline = self.zero_nitrogen_growth(output, now)
-
+        growth_baseline = self.storage_organ_growth(output_baseline)
         benefits = growth - growth_baseline
-
         costs = self.costs_nitrogen * amount
         reward = benefits - costs
 
         return reward, growth
 
     # TODO agronomic nitrogen use efficiency still needs to be tested (See Vanlauwe et al, 2011)
-    def ane_reward(self, output, amount, now):
+    def ane_reward(self, output, output_baseline, amount):
         # agronomic nitrogen use efficiency
         growth = self.storage_organ_growth(output)
 
-        growth_baseline = self.zero_nitrogen_growth(output, now)
+        growth_baseline = self.storage_organ_growth(output_baseline)
 
         benefits = growth - growth_baseline
 
