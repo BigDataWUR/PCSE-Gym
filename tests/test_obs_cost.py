@@ -28,7 +28,7 @@ def initialize_env():
                                 costs_nitrogen=10, years=get_default_train_years(),
                                 locations=get_default_location(),
                                 action_space=action_spaces, action_multiplier=1.0, reward='DEF',
-                                **get_pcse_model(pcse_env), **kwargs)
+                                **get_model_kwargs(pcse_env), **kwargs)
 
     return env_pcse_eval
 
@@ -43,7 +43,7 @@ def initialize_no_baseline():
                                 costs_nitrogen=10, years=get_default_train_years(),
                                 locations=get_default_location(),
                                 action_space=action_spaces, action_multiplier=2.0, reward='GRO',
-                                **get_pcse_model(1))
+                                **get_model_kwargs(1))
 
     return env_pcse_eval
 

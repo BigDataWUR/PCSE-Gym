@@ -15,6 +15,8 @@ from scipy.optimize import minimize_scalar
 from bisect import bisect_left
 from .defaults import *
 from tqdm import tqdm
+import gymnasium as gym
+import numpy as np
 
 
 def compute_median(results_dict: dict, filter_list=None):
@@ -36,6 +38,23 @@ def get_ylim_dict():
     ylim['WSO'] = [0, 1000]
     ylim['TWSO'] = [0, 10000]
     return ylim
+
+
+def identity_line(ax=None, ls='--', *args, **kwargs):
+    # see: https://stackoverflow.com/q/22104256/3986320
+    ax = ax or plt.gca()
+    identity, = ax.plot([], [], ls=ls, *args, **kwargs)
+
+    def callback(axes):
+        low_x, high_x = ax.get_xlim()
+        low_y, high_y = ax.get_ylim()
+        low = min(low_x, low_y)
+        high = max(high_x, high_y)
+        identity.set_data([low, high], [low, high])
+    callback(ax)
+    ax.callbacks.connect('xlim_changed', callback)
+    ax.callbacks.connect('ylim_changed', callback)
+    return ax
 
 
 def get_titles():

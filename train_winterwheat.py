@@ -79,17 +79,17 @@ def train(log_dir, n_steps,
     if agent == 'PPO' or 'RPPO':
         hyperparams = {'batch_size': 64, 'n_steps': 2048, 'learning_rate': 0.0003, 'ent_coef': 0.0, 'clip_range': 0.3,
                        'n_epochs': 10, 'gae_lambda': 0.95, 'max_grad_norm': 0.5, 'vf_coef': 0.5,
-                       'policy_kwargs': get_policy_kwargs(crop_features=crop_features,
-                                                          weather_features=weather_features,
-                                                          action_features=action_features)}
+                       'policy_kwargs': get_policy_kwargs(n_crop_features=len(crop_features),
+                                                          n_weather_features=len(weather_features),
+                                                          n_action_features=len(action_features))}
         hyperparams['policy_kwargs']['net_arch'] = dict(pi=[256, 256], vf=[256, 256])
         hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
         hyperparams['policy_kwargs']['ortho_init'] = False
     if agent == 'DQN':
         hyperparams = {'exploration_fraction': 0.1, 'exploration_initial_eps': 1.0, 'exploration_final_eps': 0.01,
-                       'policy_kwargs': get_policy_kwargs(crop_features=crop_features,
-                                                          weather_features=weather_features,
-                                                          action_features=action_features)
+                       'policy_kwargs': get_policy_kwargs(n_crop_features=len(crop_features),
+                                                          n_weather_features=len(weather_features),
+                                                          n_action_features=len(action_features))
                        }
         hyperparams['policy_kwargs']['net_arch'] = [256, 256]
         hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
@@ -116,9 +116,8 @@ def train(log_dir, n_steps,
     env_pcse_train = WinterWheat(crop_features=crop_features, action_features=action_features,
                                  weather_features=weather_features,
                                  costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
-                                 all_years=all_years, all_locations=all_locations,
                                  action_space=action_space, action_multiplier=1.0, seed=seed,
-                                 reward=reward, **get_pcse_model(pcse_model), **kwargs)
+                                 reward=reward, **get_model_kwargs(pcse_model), **kwargs)
     # env_pcse_train = ActionLimiter(env_pcse_train, action_limit=4)
 
     # env_pcse_train = ActionMasker(env_pcse_train, mask_fertilization_actions)
@@ -157,19 +156,12 @@ def train(log_dir, n_steps,
                                   train_locations=train_locations, test_locations=test_locations,
                                   n_steps=args.nsteps)
 
-    debug = False
-    if debug:
-        print(model.policy)
-        actions, values, log_probs = model.policy(get_test_tensor(crop_features, action_features, weather_features))
-        print(f'actions: {actions} values: {values} log_probs: {log_probs} probs: {np.exp(log_probs.detach().numpy())}')
-        return
-
     env_pcse_eval = WinterWheat(crop_features=crop_features, action_features=action_features,
                                 weather_features=weather_features,
                                 costs_nitrogen=costs_nitrogen, years=test_years, locations=test_locations,
                                 all_years=all_years, all_locations=all_locations,
                                 action_space=action_space, action_multiplier=1.0, reward=reward,
-                                **get_pcse_model(pcse_model), **kwargs, seed=seed)
+                                **get_model_kwargs(pcse_model), **kwargs, seed=seed)
     # env_pcse_eval = ActionLimiter(env_pcse_eval, action_limit=4)
 
     tb_log_name = f'{tag}-{pcse_model_name}-Ncosts-{costs_nitrogen}-run'

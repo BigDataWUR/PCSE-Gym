@@ -1,5 +1,4 @@
 import os
-from tqdm import tqdm
 from collections import OrderedDict
 
 import pandas as pd
@@ -12,6 +11,7 @@ from collections import defaultdict
 import pcse_gym.envs.common_env
 from pcse_gym.utils.defaults import *
 from .rewards import *
+import gymnasium as gym
 
 
 class CustomFeatureExtractor(BaseFeaturesExtractor):
@@ -42,15 +42,15 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
         return x
 
 
-def get_policy_kwargs(crop_features=get_wofost_default_crop_features(),
-                      weather_features=get_default_weather_features(),
-                      action_features=get_default_action_features(),
+def get_policy_kwargs(n_crop_features=len(get_wofost_default_crop_features()),
+                      n_weather_features=len(get_default_weather_features()),
+                      n_action_features=len(get_default_action_features()),
                       n_timesteps=7):
     # Integration with BaseModel from Stable Baselines3
     policy_kwargs = dict(
         features_extractor_class=CustomFeatureExtractor,
-        features_extractor_kwargs=dict(n_timeseries=len(weather_features),
-                                       n_scalars=len(crop_features) + len(action_features),
+        features_extractor_kwargs=dict(n_timeseries=n_weather_features,
+                                       n_scalars=n_crop_features + n_action_features,
                                        n_timesteps=n_timesteps),
     )
     return policy_kwargs
@@ -85,10 +85,10 @@ def get_lintul_kwargs(config_dir=get_config_dir()):
     return lintul_kwargs
 
 
-def get_pcse_model(kwargs):
-    if kwargs == 0:
+def get_model_kwargs(pcse_model):
+    if pcse_model == 0:
         return get_lintul_kwargs()
-    elif kwargs == 1:
+    elif pcse_model == 1:
         return get_wofost_kwargs()
     else:
         raise Exception("Choose 0 or 1 for the environment")

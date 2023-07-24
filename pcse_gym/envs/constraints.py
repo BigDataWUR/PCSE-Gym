@@ -1,9 +1,7 @@
 import numpy as np
 from collections import OrderedDict
-from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
-from sb3_contrib.common.wrappers import ActionMasker
 import gymnasium as gym
-from gymnasium import ActionWrapper, ObservationWrapper
+from gymnasium import ActionWrapper
 
 
 # TODO, limit fertilization actions; WIP

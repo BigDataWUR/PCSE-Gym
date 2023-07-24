@@ -95,7 +95,7 @@ class WinterWheat(gym.Env):
             if isinstance(action, np.ndarray):
                 action, measure = action[0], action[1:]
             amount = action * self.action_multiplier
-            reward, growth = self.get_baseline_env(output, amount)
+            reward, growth = self.get_reward_and_growth(output, amount)
             obs, cost = self.measure_features.measure_act(obs, measure)
             measurement_cost = sum(cost)
             reward -= measurement_cost
@@ -104,10 +104,10 @@ class WinterWheat(gym.Env):
             if isinstance(action, np.ndarray):
                 action = action.item()
             amount = action * self.action_multiplier
-            reward, growth = self.get_baseline_env(output, amount)
+            reward, growth = self.get_reward_and_growth(output, amount)
             return obs, reward, growth
 
-    def get_baseline_env(self, output, amount):
+    def get_reward_and_growth(self, output, amount):
         if self.reward_function != 'GRO':
             zero_nitrogen_results = self.zero_nitrogen_env_storage.get_episode_output(self.baseline_env)
 
