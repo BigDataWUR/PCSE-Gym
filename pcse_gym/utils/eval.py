@@ -17,6 +17,7 @@ from .defaults import *
 from tqdm import tqdm
 import gymnasium as gym
 import numpy as np
+import torch
 
 
 def compute_median(results_dict: dict, filter_list=None):
