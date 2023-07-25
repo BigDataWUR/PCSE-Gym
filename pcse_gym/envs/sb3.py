@@ -215,7 +215,10 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         if isinstance(observation, tuple):
             observation = observation[0]
         for i, feature in enumerate(self.crop_features):
-            obs[i] = observation['crop_model'][feature][-1]
+            if feature == 'random':
+                obs[i] = np.random.default_rng().uniform(0, 10000)
+            else:
+                obs[i] = observation['crop_model'][feature][-1]
 
         if self.po_features is not None:
             index_feature = OrderedDict()
@@ -272,6 +275,7 @@ class ZeroNitrogenEnvStorage:
     """
     Container to store results from zero nitrogen policy (for re-use)
     """
+
     def __init__(self):
         self.results = {}
 

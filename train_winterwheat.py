@@ -181,9 +181,14 @@ if __name__ == '__main__':
                         help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
     parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, or DQN.")
     parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, GRO, or ANE")
-    parser.add_argument("-m", "--measure", type=bool, default=True, help="Train an agent in a partially observable"
-                                                                         "environment that decides when to measure"
-                                                                         "certain crop features")
+    parser.add_argument("-m", "--measure", action='store_true', help="--measure or --no-measure."
+                                                                     "Train an agent in a partially"
+                                                                     "observable environment that"
+                                                                     "decides when to measure"
+                                                                     "certain crop features")
+    parser.add_argument("--no-measure", action='store_false', dest='feature')
+    parser.set_defaults(measure=True)
+
     args = parser.parse_args()
     pcse_model_name = "LINTUL" if not args.environment else "WOFOST"
     print(rootdir)
@@ -202,7 +207,7 @@ if __name__ == '__main__':
         crop_features = ["DVS", "TAGP", "LAI", "NuptakeTotal", "NAVAIL", "SM"]
     else:
         # see https://github.com/ajwdewit/pcse/blob/master/pcse/crop/lintul3.py
-        crop_features = ["DVS", "TGROWTH", "LAI", "NUPTT", "TRAN", "TNSOIL", "TRAIN", "TRANRF", "WSO"]
+        crop_features = ["DVS", "TGROWTH", "LAI", "NUPTT", "TNSOIL", "TRAIN"]
     weather_features = ["IRRAD", "TMIN", "RAIN"]
     action_features = []  # alternative: "cumulative_nitrogen"
 
@@ -213,12 +218,14 @@ if __name__ == '__main__':
         action_spaces = gymnasium.spaces.Discrete(7)
     else:
         if args.environment:
-            po_features = ['TAGP', 'LAI', 'NAVAIL', 'NuptakeTotal', 'SM']
+            po_features = ['TAGP', 'LAI', 'NAVAIL', 'NuptakeTotal', 'SM', 'random']
+            if 'random' in po_features:
+                crop_features.append('random')
         else:
             po_features = ['TGROWTH', 'LAI', 'TNSOIL', 'NUPTT', 'TRAIN']
         kwargs['po_features'] = po_features
         kwargs['args_measure'] = True
-        a_shape = [7] + [2]*len(po_features)
+        a_shape = [7] + [2] * len(po_features)
         action_spaces = gymnasium.spaces.MultiDiscrete(a_shape)
 
     train(log_dir, train_years=train_years, test_years=test_years,
