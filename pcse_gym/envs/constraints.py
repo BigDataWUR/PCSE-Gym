@@ -78,13 +78,10 @@ class MeasureOrNot:
         if not self.feature_cost:
             for observed_feature in self.env.po_features:
                 if observed_feature not in self.list_of_costs():
-                    continue
-                self.feature_cost.append(self.list_of_costs()[observed_feature])
+                    self.feature_cost.append(1)
+                else:
+                    self.feature_cost.append(self.list_of_costs()[observed_feature])
             return self.feature_cost
-        # TODO: if a variable is not in list_of_costs, define default value
-        # for feature in self.env.po_features:
-        #     if feature not in list(self.list_of_costs().keys()):
-        #         self.feature_cost[feature] = 1
         else:
             return self.feature_cost
 
