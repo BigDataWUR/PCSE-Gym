@@ -59,10 +59,12 @@ def train(log_dir, n_steps,
     action_features: action features
     train_years: train years
     test_years: test years
-    all_years: union of train_years and test_years
     train_locations: train locations (latitude,longitude)
     test_locations: test locations (latitude,longitude)
-    all_locations: union of train_locations and test_locations
+    action_space: action space
+    pcse_model: 0 for LINTUL else WOFOST
+    agent: one of {PPO, RPPO, DQN}
+    reward: one of {DEF, GRO, or ANE}
     seed: random seed
     tag: tag for tensorboard and friends
     costs_nitrogen: float, penalty for fertilization application
