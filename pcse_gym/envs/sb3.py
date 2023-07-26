@@ -1,5 +1,6 @@
 import os
 from collections import OrderedDict
+from datetime import timedelta
 
 import pandas as pd
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
@@ -92,6 +93,11 @@ def get_model_kwargs(pcse_model):
         return get_wofost_kwargs()
     else:
         raise Exception("Choose 0 or 1 for the environment")
+
+
+def ratio_rescale(value, old_max=None, old_min=None, new_max=None, new_min=None):
+    new_value = (((value - old_min) * (new_max - new_min)) / (old_max - old_min)) + new_min
+    return new_value
 
 
 class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
@@ -269,6 +275,17 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
     @weather_data_provider.setter
     def weather_data_provider(self, weather):
         self._weather_data_provider = weather
+
+    # TODO estimation function due to static recovery rate of WOFOST/LINTUL; WIP
+    # Potentially enforcing the agent not to dump everything at the start (to be tested)
+    # Not to be used with CERES 'start-dump'
+    # Adapted, based on the findings of Raun, W.R. and Johnson, G.V. (1999)
+    def recovery_penalty(self, recovery=0.7):
+        date_now = self.date - self.start_date
+        date_end = self.end_date - self.start_date  # TODO end on flowering?
+        recovery = ratio_rescale(date_now / timedelta(days=1),
+                                 old_max=date_end / timedelta(days=1), old_min=0.0, new_max=0.8, new_min=0.30)
+        return recovery
 
 
 class ZeroNitrogenEnvStorage:
