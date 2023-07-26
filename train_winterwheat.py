@@ -159,7 +159,6 @@ def train(log_dir, n_steps,
     env_pcse_eval = WinterWheat(crop_features=crop_features, action_features=action_features,
                                 weather_features=weather_features,
                                 costs_nitrogen=costs_nitrogen, years=test_years, locations=test_locations,
-                                all_years=all_years, all_locations=all_locations,
                                 action_space=action_space, action_multiplier=1.0, reward=reward,
                                 **get_model_kwargs(pcse_model), **kwargs, seed=seed)
     # env_pcse_eval = ActionLimiter(env_pcse_eval, action_limit=4)
