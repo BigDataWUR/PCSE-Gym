@@ -120,6 +120,11 @@ class TestNoMeasure(unittest.TestCase):
         action = np.array([4])
         obs, reward, terminated, truncated, info = env2.step(action)
 
+        expected = -80
+        actual = reward
+
+        self.assertEqual(expected, actual)
+
 
 class TestRandomFeature(unittest.TestCase):
 
