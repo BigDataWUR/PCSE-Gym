@@ -170,7 +170,8 @@ class TestModel(unittest.TestCase):
         model_path = os.path.join(rootdir, 'tests/model-1.zip')
         stats_path = os.path.join(rootdir, 'tests/model-1.pkl')
         custom_objects = {"lr_schedule": lambda x: 0.0002, "clip_range": lambda x: 0.3}
-        model_cropgym = PPO.load(model_path, custom_objects=custom_objects, device='cuda', print_system_info=False)
+        custom_objects["action_space"] = gym.spaces.Discrete(3)
+        model_cropgym = PPO.load(model_path, custom_objects=custom_objects, device='cuda', print_system_info=True)
         rewards_model, results_model = {}, {}
         test_years = [1992, 2002]
         test_locations = [(52, 5.5), (48, 0)]
