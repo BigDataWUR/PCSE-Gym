@@ -174,7 +174,7 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
     return ax
 
 
-def save_results(results_dict, results_path):
+def summarize_results(results_dict):
     def intersection(lst1, lst2):
         lst3 = [value for value in lst1 if value in lst2]
         return lst3
@@ -200,6 +200,11 @@ def save_results(results_dict, results_path):
     df = pd.DataFrame.from_dict(save_data, orient='index',
                                 columns=variables_average + variables_cum + variables_end + variables_max +
                                         ['nevents', 'year', 'ndays', 'location'])
+    return df
+
+
+def save_results(results_dict, results_path):
+    df = summarize_results(results_dict)
     df.to_csv(results_path, index=False)
 
 

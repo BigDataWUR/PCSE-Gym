@@ -2,14 +2,23 @@ import unittest
 import numpy as np
 import time
 import warnings
+import os
+import lib_programname
 import gymnasium as gym
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
+from stable_baselines3 import PPO
 from pcse_gym.envs.winterwheat import WinterWheat
 from pcse_gym.envs.sb3 import get_model_kwargs
 from pcse_gym.utils.defaults import *
-from pcse_gym.utils.eval import FindOptimum
+from pcse_gym.utils.eval import FindOptimum, evaluate_policy, summarize_results
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+
+def get_rootdir():
+    path_to_program = lib_programname.get_path_executed_script()
+    rootdir = path_to_program.parents[1]
+    return rootdir
 
 
 def get_po_features(pcse_env=1):
@@ -38,15 +47,16 @@ def get_action_space(nitrogen_levels=7, po_features=[]):
 
 
 def initialize_env(pcse_env=1, po_features=[], crop_features=get_crop_features(pcse_env=1),
-                   costs_nitrogen=10, reward='DEF', action_multiplier=1.0, add_random=False):
+                   costs_nitrogen=10, reward='DEF', nitrogen_levels=7, action_multiplier=1.0, add_random=False,
+                   years=get_default_train_years(), locations=get_default_location()):
     if add_random:
         po_features.append('random'), crop_features.append('random')
-    action_space = get_action_space(nitrogen_levels=7, po_features=po_features)
+    action_space = get_action_space(nitrogen_levels=nitrogen_levels, po_features=po_features)
     kwargs = dict(po_features=po_features, args_measure=po_features is not None)
     env_return = WinterWheat(crop_features=crop_features,
                              costs_nitrogen=costs_nitrogen,
-                             years=get_default_train_years(),
-                             locations=get_default_location(),
+                             years=years,
+                             locations=locations,
                              action_space=action_space,
                              action_multiplier=action_multiplier,
                              reward=reward,
@@ -152,6 +162,32 @@ class TestCeres(unittest.TestCase):
     def test_multiple_years(self):
         ceres_result = FindOptimum(self.env, [1992, 2002]).optimize_start_dump().item()
         self.assertAlmostEqual(19.1, ceres_result, 1)
+
+
+class TestModel(unittest.TestCase):
+    def test_model(self):
+        rootdir = get_rootdir()
+        model_path = os.path.join(rootdir, 'tests/model-1.zip')
+        stats_path = os.path.join(rootdir, 'tests/model-1.pkl')
+        custom_objects = {"lr_schedule": lambda x: 0.0002, "clip_range": lambda x: 0.3}
+        model_cropgym = PPO.load(model_path, custom_objects=custom_objects, device='cuda', print_system_info=False)
+        rewards_model, results_model = {}, {}
+        test_years = [1992, 2002]
+        test_locations = [(52, 5.5), (48, 0)]
+        for test_year in test_years:
+            for location in list(set(test_locations)):
+                env = initialize_env(pcse_env=0, crop_features=get_crop_features(pcse_env=0), nitrogen_levels=3,
+                                     action_multiplier=2.0, years=test_year, locations=location)
+                env = DummyVecEnv([lambda: env])
+                env = VecNormalize.load(stats_path, env)
+                env.training, env.norm_reward = False, True
+                results_key = (test_year, location)
+                rewards_model[results_key], results_model[results_key] = evaluate_policy(model_cropgym, env, amount=1)
+        summary = summarize_results(results_model)
+        self.assertAlmostEqual(summary.loc[[(1992, (48, 0))]]['WSO'].values[0], 357.7, 1)
+        self.assertAlmostEqual(summary.loc[[(1992, (48, 0))]]['reward'].values[0], -74.8, 1)
+        self.assertAlmostEqual(summary.loc[[(2002, (52, 5.5))]]['WSO'].values[0], 880.5, 1)
+        self.assertAlmostEqual(summary.loc[[(2002, (52, 5.5))]]['reward'].values[0], 133.0, 1)
 
 
 if __name__ == '__main__':
