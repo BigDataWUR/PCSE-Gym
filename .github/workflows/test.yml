@@ -37,7 +37,8 @@ jobs:
           flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
       - name: Get paths
         run: |
-          export PYTHONPATH="${PYTHONPATH}:${GITHUB_WORKSPACE}/:${GITHUB_WORKSPACE}/pcse_gym"
+          echo "$GITHUB_WORKSPACE" >> $GITHUB_PATH
+          echo "$GITHUB_WORKSPACE/pcse_gym" >> $GITHUB_PATH
       - name: Test with pytest
         run: |
           pytest tests/test* -W ignore::DeprecationWarning
