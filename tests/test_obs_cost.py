@@ -3,7 +3,6 @@ import numpy as np
 import time
 import warnings
 import os
-import lib_programname
 import gymnasium as gym
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 from stable_baselines3 import PPO
@@ -13,12 +12,6 @@ from pcse_gym.utils.defaults import *
 from pcse_gym.utils.eval import FindOptimum, evaluate_policy, summarize_results
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
-
-
-def get_rootdir():
-    path_to_program = lib_programname.get_path_executed_script()
-    rootdir = path_to_program.parents[1]
-    return rootdir
 
 
 def get_po_features(pcse_env=1):
@@ -166,9 +159,8 @@ class TestCeres(unittest.TestCase):
 
 class TestModel(unittest.TestCase):
     def test_model(self):
-        rootdir = get_rootdir()
-        model_path = os.path.join(rootdir, 'tests/model-1.zip')
-        stats_path = os.path.join(rootdir, 'tests/model-1.pkl')
+        model_path = os.path.abspath('tests/model-1')
+        stats_path = os.path.abspath('tests/model-1.pkl')
         custom_objects = {"lr_schedule": lambda x: 0.0002, "clip_range": lambda x: 0.3}
         custom_objects["action_space"] = gym.spaces.Discrete(3)
         model_cropgym = PPO.load(model_path, custom_objects=custom_objects, device='cuda', print_system_info=True)
