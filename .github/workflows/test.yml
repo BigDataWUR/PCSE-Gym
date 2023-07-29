@@ -27,7 +27,7 @@ jobs:
           git clone https://github.com/ajwdewit/pcse.git
           cd pcse && git switch develop_WOFOST_v8_1 && git apply --ignore-space-change --ignore-whitespace ../PCSE-Gym/_notebooks_old/nitrogen-winterwheat/pcse-lintul3.patch
           pip install --quiet -e . && cd .. && cd PCSE-Gym
-          pip install stable_baselines3 sb3-contrib gymnasium tensorboard scipy tqdm pandas
+          pip install stable_baselines3 sb3-contrib gymnasium lib_programname tensorboard scipy tqdm pandas
           pip install numpy==1.24.3
       - name: Lint with flake8
         run: |
