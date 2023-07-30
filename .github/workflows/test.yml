@@ -21,14 +21,11 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install flake8 pytest pytest-cov
-          pip uninstall -y --quiet pcse
-          cd ..
-          rm -fr pcse
+          echo ${pwd}
           git clone https://github.com/ajwdewit/pcse.git
           cd pcse && git switch develop_WOFOST_v8_1 && git apply --ignore-space-change --ignore-whitespace ../PCSE-Gym/_notebooks_old/nitrogen-winterwheat/pcse-lintul3.patch
-          pip install --quiet -e . && cd .. && cd PCSE-Gym
-          pip install stable_baselines3 sb3-contrib gymnasium lib_programname tensorboard scipy tqdm pandas
-          pip install numpy==1.24.3
+          pip install --quiet -e . && cd ..
+          pip install stable_baselines3 sb3-contrib gymnasium lib_programname tensorboard scipy tqdm pandas numpy==1.24.3
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
@@ -39,6 +36,6 @@ jobs:
         run: |
           echo "$GITHUB_WORKSPACE" >> $GITHUB_ENV
           echo "$GITHUB_WORKSPACE/pcse_gym" >> $GITHUB_ENV
-          echo "PYTHONPATH=$GITHUB_WORKSPACE" >> $GITHUB_ENV
-          echo "PYTHONPATH=$GITHUB_WORKSPACE/pcse_gym" >> $GITHUB_ENV
+          echo "PYTHONPATH=${GITHUB_WORKSPACE}:${GITHUB_WORKSPACE}/pcse_gym" >> $GITHUB_ENV
+          echo $GITHUB_ENV
           pytest tests/test* -W ignore::DeprecationWarning
