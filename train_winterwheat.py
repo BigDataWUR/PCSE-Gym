@@ -188,7 +188,7 @@ if __name__ == '__main__':
                                                                      "observable environment that"
                                                                      "decides when to measure"
                                                                      "certain crop features")
-    parser.add_argument("--no-measure", action='store_false', dest='feature')
+    parser.add_argument("--no-measure", action='store_false', dest='measure')
     parser.set_defaults(measure=True)
 
     args = parser.parse_args()
