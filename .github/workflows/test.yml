@@ -21,7 +21,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install flake8 pytest pytest-cov
-          echo ${pwd}
+          cd ../
           git clone https://github.com/ajwdewit/pcse.git
           cd pcse && git switch develop_WOFOST_v8_1 && git apply --ignore-space-change --ignore-whitespace ../PCSE-Gym/_notebooks_old/nitrogen-winterwheat/pcse-lintul3.patch
           pip install --quiet -e . && cd ..
