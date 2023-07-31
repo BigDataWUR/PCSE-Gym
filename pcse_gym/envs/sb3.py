@@ -123,7 +123,7 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         self.action_space = action_space
         self.action_multiplier = action_multiplier
         self.reward_var = kwargs.get('reward_var', "TWSO")
-
+        self.args_vrr = kwargs.get('args_vrr')
         self.rewards = Rewards(self.reward_var, self.timestep)
 
         self.index_feature = OrderedDict()
@@ -135,8 +135,12 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
 
     def _apply_action(self, action):
         amount = action * self.action_multiplier
-        self._model._send_signal(signal=pcse.signals.apply_n, N_amount=amount * 10, N_recovery=0.7,
-                                 amount=amount, recovery=0.7)
+        if self.args_vrr:
+            recovery_rate = self.recovery_penalty()
+        else:
+            recovery_rate = 0.7
+        self._model._send_signal(signal=pcse.signals.apply_n, N_amount=amount * 10, N_recovery=recovery_rate,
+                                 amount=amount, recovery=recovery_rate)
 
     def _get_reward(self):
         return super()._get_reward(var=self.reward_var)
@@ -276,15 +280,18 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
     def weather_data_provider(self, weather):
         self._weather_data_provider = weather
 
-    # TODO estimation function due to static recovery rate of WOFOST/LINTUL; WIP
-    # Potentially enforcing the agent not to dump everything at the start (to be tested)
-    # Not to be used with CERES 'start-dump'
-    # Adapted, based on the findings of Raun, W.R. and Johnson, G.V. (1999)
+    # TODO make this into a wrapper
     def recovery_penalty(self, recovery=0.7):
+        """
+        estimation function due to static recovery rate of WOFOST/LINTUL
+        Potentially enforcing the agent not to dump everything at the start (to be tested)
+        Not to be used with CERES 'start-dump'
+        Adapted, based on the findings of Raun, W.R. and Johnson, G.V. (1999)
+        """
         date_now = self.date - self.start_date
         date_end = self.end_date - self.start_date  # TODO end on flowering?
         recovery = ratio_rescale(date_now / timedelta(days=1),
-                                 old_max=date_end / timedelta(days=1), old_min=0.0, new_max=0.8, new_min=0.30)
+                                 old_max=date_end / timedelta(days=1), old_min=0.0, new_max=0.8, new_min=0.3)
         return recovery
 
 

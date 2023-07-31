@@ -189,7 +189,8 @@ if __name__ == '__main__':
                                                                      "decides when to measure"
                                                                      "certain crop features")
     parser.add_argument("--no-measure", action='store_false', dest='measure')
-    parser.set_defaults(measure=True)
+    parser.add_argument("--variable-recovery-rate", action='store_true', dest='vrr')
+    parser.set_defaults(measure=True, vrr=False)
 
     args = parser.parse_args()
     pcse_model_name = "LINTUL" if not args.environment else "WOFOST"
@@ -215,7 +216,7 @@ if __name__ == '__main__':
 
     tag = f'Seed-{args.seed}'
 
-    kwargs = {}
+    kwargs = {'args_vrr': args.vrr}
     if not args.measure:
         action_spaces = gymnasium.spaces.Discrete(7)
     else:

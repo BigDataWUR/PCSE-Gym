@@ -70,3 +70,24 @@ class TestRandomFeature(unittest.TestCase):
         expected = -float(sum(expected))
 
         self.assertEqual(expected, reward)
+
+
+class TestRecoveryRate(unittest.TestCase):
+    def setUp(self):
+        self.env = initialize_env_rr()
+
+    def test_rr(self):
+        self.env.reset()
+        action = np.array([0])
+        _, _, _, _, info = self.env.step(action)
+        initial_n = list(info['NAVAIL'].values())[0]
+        action = np.array([2])
+        actual = int(action) * 10 * self.env.sb3_env.recovery_penalty()
+        _, _, _, _, info = self.env.step(action)
+        # key = info['NAVAIL'].keys()[-1]
+        end_n = list(info['NAVAIL'].values())[-1]
+
+        expected = end_n - initial_n
+
+        # assert almost equal due to possibly the crop taking up some nitrogen
+        self.assertAlmostEqual(expected, actual, 1)
