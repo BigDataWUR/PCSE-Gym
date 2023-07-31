@@ -1,6 +1,5 @@
 import unittest
 import numpy as np
-import time
 
 from initialize_env import *
 
