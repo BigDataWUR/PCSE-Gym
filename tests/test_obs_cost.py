@@ -1,12 +1,12 @@
 import unittest
 import numpy as np
 
-from initialize_env import *
+import initialize_env as init_env
 
 
 class TestMeasure(unittest.TestCase):
     def setUp(self):
-        self.env = initialize_env_po()
+        self.env = init_env.initialize_env_po()
 
     def test_oc(self):
         self.env.reset()
@@ -36,9 +36,10 @@ class TestMeasure(unittest.TestCase):
 
 class TestNoMeasure(unittest.TestCase):
     def setUp(self):
-        self.env = initialize_env_no_baseline()
+        self.env = init_env.initialize_env_no_baseline()
 
     def test_output(self):
+
         self.env.reset()
         action = np.array([3])
         _, _, _, _, _ = self.env.step(action)
@@ -53,7 +54,7 @@ class TestNoMeasure(unittest.TestCase):
 
 class TestRandomFeature(unittest.TestCase):
     def setUp(self):
-        self.env = initialize_env_random()
+        self.env = init_env.initialize_env_random()
 
     def test_random(self):
         self.env.reset()
@@ -74,7 +75,7 @@ class TestRandomFeature(unittest.TestCase):
 
 class TestRecoveryRate(unittest.TestCase):
     def setUp(self):
-        self.env = initialize_env_rr()
+        self.env = init_env.initialize_env_rr()
 
     def test_rr(self):
         self.env.reset()

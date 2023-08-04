@@ -1,18 +1,17 @@
 import os
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from datetime import timedelta
-
+import gymnasium as gym
 import pandas as pd
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
-
 import torch as th
 import torch.nn as nn
 import pcse
-from collections import defaultdict
-import pcse_gym.envs.common_env
-from pcse_gym.utils.defaults import *
-from .rewards import *
-import gymnasium as gym
+import numpy as np
+
+import pcse_gym.envs.common_env as common_env
+import pcse_gym.utils.defaults as defaults
+from .rewards import Rewards
 
 
 class CustomFeatureExtractor(BaseFeaturesExtractor):
@@ -43,9 +42,9 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
         return x
 
 
-def get_policy_kwargs(n_crop_features=len(get_wofost_default_crop_features()),
-                      n_weather_features=len(get_default_weather_features()),
-                      n_action_features=len(get_default_action_features()),
+def get_policy_kwargs(n_crop_features=len(defaults.get_wofost_default_crop_features()),
+                      n_weather_features=len(defaults.get_default_weather_features()),
+                      n_action_features=len(defaults.get_default_action_features()),
                       n_timesteps=7):
     # Integration with BaseModel from Stable Baselines3
     policy_kwargs = dict(
@@ -100,7 +99,7 @@ def ratio_rescale(value, old_max=None, old_min=None, new_max=None, new_min=None)
     return new_value
 
 
-class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
+class StableBaselinesWrapper(common_env.PCSEEnv):
     """
     Establishes compatibility with Stable Baselines3
 
@@ -109,14 +108,13 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         action_space=gym.spaces.Box(0, np.inf, shape=(1,), action_multiplier=1.0 gives 1.0*x
     """
 
-    def __init__(self, crop_features=get_wofost_default_crop_features(),
-                 weather_features=get_default_weather_features(),
-                 action_features=get_default_action_features(), costs_nitrogen=10.0, timestep=7,
+    def __init__(self, crop_features=defaults.get_wofost_default_crop_features(),
+                 weather_features=defaults.get_default_weather_features(),
+                 action_features=defaults.get_default_action_features(), costs_nitrogen=10.0, timestep=7,
                  years=None, location=None, seed=0, action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
                  action_multiplier=1.0, *args, **kwargs):
         self.costs_nitrogen = costs_nitrogen
         self.crop_features = crop_features
-        self.po_features = kwargs.get('po_features')
         self.weather_features = weather_features
         self.action_features = action_features
         super().__init__(timestep=timestep, years=years, location=location, *args, **kwargs)
@@ -124,8 +122,8 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         self.action_multiplier = action_multiplier
         self.reward_var = kwargs.get('reward_var', "TWSO")
         self.args_vrr = kwargs.get('args_vrr')
-        self.rewards = Rewards(self.reward_var, self.timestep)
-
+        self.po_features = kwargs.get('po_features')
+        self.rewards = Rewards(self.reward_var, self.timestep, self.costs_nitrogen)
         self.index_feature = OrderedDict()
         super().reset(seed=seed)
 
@@ -143,14 +141,16 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
                                  amount=amount, recovery=recovery_rate)
 
     def _get_reward(self):
+        # note that reward gets overwritten in step()
         return super()._get_reward(var=self.reward_var)
 
     def step(self, action):
         """
         Computes customized reward and populates info
         """
+        measure = None
         if isinstance(action, np.ndarray):
-            act, measure = action[0], action[1:]
+            action, measure = action[0], action[1:]
 
         obs, _, terminated, truncated, info = super().step(action)
         output = self.model.get_output()
@@ -180,30 +180,25 @@ class StableBaselinesWrapper(pcse_gym.envs.common_env.PCSEEnv):
         weather_info = pd.DataFrame(weather_observation).set_index("day").fillna(value=np.nan)
         info = {**pd.concat([crop_info, weather_info], axis=1, join="inner").to_dict()}
 
-        if 'action' not in info.keys():
-            info['action'] = {}
-        if 'measure' not in info.keys():
-            info['measure'] = {}
-        if isinstance(action, np.ndarray):
-            info['action'][output[-1 - self.timestep]['day']] = action[0]
-            info['measure'][output[-1 - self.timestep]['day']] = measure
-        else:
-            info['action'][output[-1 - self.timestep]['day']] = action
-        if 'fertilizer' not in info.keys():
-            info['fertilizer'] = {}
-        if isinstance(action, np.ndarray):
-            info['fertilizer'][output[-1 - self.timestep]['day']] = amount[0]
-        else:
-            info['fertilizer'][output[-1 - self.timestep]['day']] = amount
-        if 'reward' not in info.keys():
-            info['reward'] = {}
-        info['reward'][self.date] = reward
-        obs['actions'] = {'cumulative_nitrogen': sum(info['fertilizer'].values())}
-        obs['actions'] = {'cumulative_measurement': sum(info['measure'].values())}
-        if 'indexes' not in info.keys():
-            info['indexes'] = {}
-            if self.index_feature:
-                info['indexes'] = self.index_feature
+        def update_info(inf, key, date, value):
+            if key not in inf.keys():
+                inf[key] = {}
+            inf[key][date] = value
+            return inf
+
+        def get_start_date(outp):
+            return outp[-1 - self.timestep]['day']
+
+        info = update_info(info, 'action', get_start_date(output), action)
+        info = update_info(info, 'fertilizer', get_start_date(output), amount)
+        info = update_info(info, 'reward', self.date, reward)
+        if measure is not None:
+            info = update_info(info, 'measure', get_start_date(output), measure)
+
+        if self.index_feature:
+            if 'indexes' not in info.keys():
+                info['indexes'] = {}
+            info['indexes'] = self.index_feature
 
         return observation, reward, terminated, truncated, info
 

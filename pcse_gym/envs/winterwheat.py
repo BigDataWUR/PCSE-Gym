@@ -1,9 +1,12 @@
 import datetime
+import gymnasium as gym
+import numpy as np
 
-import pcse_gym.envs.common_env
-from .sb3 import *
+import pcse_gym.envs.common_env as common_env
+import pcse_gym.utils.defaults as defaults
 from .constraints import MeasureOrNot
-from pcse_gym.utils.defaults import *
+from .sb3 import ZeroNitrogenEnvStorage, StableBaselinesWrapper
+from .rewards import Rewards
 
 
 class WinterWheat(gym.Env):
@@ -16,9 +19,9 @@ class WinterWheat(gym.Env):
     Year and location of episode is randomly picked from years and locations through reset().
     """
 
-    def __init__(self, crop_features=get_wofost_default_crop_features(),
-                 action_features=get_default_action_features(),
-                 weather_features=get_default_weather_features(),
+    def __init__(self, crop_features=defaults.get_wofost_default_crop_features(),
+                 action_features=defaults.get_default_action_features(),
+                 weather_features=defaults.get_default_weather_features(),
                  seed=0, costs_nitrogen=None, timestep=7, years=None, locations=None,
                  action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
                  action_multiplier=1.0, reward=None,
@@ -31,33 +34,16 @@ class WinterWheat(gym.Env):
         self.years = [years] if isinstance(years, int) else years
         self.locations = [locations] if isinstance(locations, tuple) else locations
         self.action_multiplier = action_multiplier
-        self.po_features = kwargs.get('po_features', [])
         self.action_space = action_space
         self._timestep = timestep
         self.reward_function = reward
         self.reward_var = kwargs.get('reward_var', "TWSO")
+        self.po_features = kwargs.get('po_features', [])
 
         if self.reward_function != 'GRO':
-            self._env_baseline = StableBaselinesWrapper(crop_features=crop_features,
-                                                        action_features=action_features,
-                                                        weather_features=weather_features,
-                                                        costs_nitrogen=costs_nitrogen,
-                                                        timestep=timestep,
-                                                        years=self.years[0], location=self.locations[0],
-                                                        action_space=action_space,
-                                                        action_multiplier=action_multiplier,
-                                                        seed=seed,
-                                                        *args, **kwargs)
-        self._env = StableBaselinesWrapper(crop_features=crop_features,
-                                           action_features=action_features,
-                                           weather_features=weather_features,
-                                           costs_nitrogen=costs_nitrogen,
-                                           timestep=timestep,
-                                           years=self.years[0], location=self.locations[0],
-                                           action_space=action_space,
-                                           action_multiplier=action_multiplier,
-                                           seed=seed,
-                                           *args, **kwargs)
+            self._env_baseline = self._initialize_sb_wrapper(seed, *args, **kwargs)
+        self._env = self._initialize_sb_wrapper(seed, *args, **kwargs)
+
         self.observation_space = self._get_observation_space()
         self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
         self.rewards = Rewards(self.reward_var, self.timestep)
@@ -66,6 +52,18 @@ class WinterWheat(gym.Env):
             self.__measure = MeasureOrNot(self.sb3_env)
 
         super().reset(seed=seed)
+
+    def _initialize_sb_wrapper(self, seed, *args, **kwargs):
+        return StableBaselinesWrapper(crop_features=self.crop_features,
+                                      action_features=self.action_features,
+                                      weather_features=self.weather_features,
+                                      costs_nitrogen=self.costs_nitrogen,
+                                      timestep=self.timestep,
+                                      years=self.years[0], location=self.locations[0],
+                                      action_space=self.action_space,
+                                      action_multiplier=self.action_multiplier,
+                                      seed=seed,
+                                      *args, **kwargs)
 
     def _get_observation_space(self):
         nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
@@ -108,19 +106,16 @@ class WinterWheat(gym.Env):
             return obs, reward, growth
 
     def get_reward_and_growth(self, output, amount):
+        output_baseline = []
         if self.reward_function != 'GRO':
             zero_nitrogen_results = self.zero_nitrogen_env_storage.get_episode_output(self.baseline_env)
-
             # convert zero_nitrogen_results to pcse_output
-            output_baseline = []
             for (k, v) in zero_nitrogen_results[self.reward_var].items():
                 if k <= output[-1]['day']:
                     filtered_dict = {'day': k, self.reward_var: v}
                     output_baseline.append(filtered_dict)
 
-            reward, growth = self.get_reward_func(output, amount, output_baseline)
-        else:
-            reward, growth = self.get_reward_func(output, amount)
+        reward, growth = self.get_reward_func(output, amount, output_baseline)
         return reward, growth
 
     def get_reward_func(self, output, amount, output_baseline=None):
@@ -137,16 +132,16 @@ class WinterWheat(gym.Env):
     def overwrite_year(self, year):
         self.years = year
         if self.reward_function != 'GRO':
-            self.baseline_env.agro_management = pcse_gym.envs.common_env.replace_years(
+            self.baseline_env.agro_management = common_env.replace_years(
                 self.baseline_env.agro_management, year)
-        self.sb3_env.agro_management = pcse_gym.envs.common_env.replace_years(self.sb3_env.agro_management, year)
+        self.sb3_env.agro_management = common_env.replace_years(self.sb3_env.agro_management, year)
 
     def set_location(self, location):
         if self.reward_function != 'GRO':
             self.baseline_env.loc = location
-            self.baseline_env.weather_data_provider = pcse_gym.envs.common_env.get_weather_data_provider(location)
+            self.baseline_env.weather_data_provider = common_env.get_weather_data_provider(location)
         self.sb3_env.loc = location
-        self.sb3_env.weather_data_provider = pcse_gym.envs.common_env.get_weather_data_provider(location)
+        self.sb3_env.weather_data_provider = common_env.get_weather_data_provider(location)
 
     def overwrite_location(self, location):
         self.locations = location
@@ -156,9 +151,9 @@ class WinterWheat(gym.Env):
         if isinstance(self.years, list):
             year = self.np_random.choice(self.years)
             if self.reward_function != 'GRO':
-                self.baseline_env.agro_management = pcse_gym.envs.common_env.replace_years(
+                self.baseline_env.agro_management = common_env.replace_years(
                     self.baseline_env.agro_management, year)
-            self.sb3_env.agro_management = pcse_gym.envs.common_env.replace_years(self.sb3_env.agro_management, year)
+            self.sb3_env.agro_management = common_env.replace_years(self.sb3_env.agro_management, year)
 
         if isinstance(self.locations, list):
             location = self.locations[self.np_random.choice(len(self.locations), 1)[0]]

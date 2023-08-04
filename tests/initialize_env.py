@@ -2,7 +2,7 @@ import gymnasium as gym
 
 from pcse_gym.envs.winterwheat import WinterWheat
 from pcse_gym.envs.sb3 import get_model_kwargs
-from pcse_gym.utils.defaults import *
+import pcse_gym.utils.defaults as defaults
 
 
 def get_po_features(pcse_env=1):
@@ -15,9 +15,9 @@ def get_po_features(pcse_env=1):
 
 def get_crop_features(pcse_env=1):
     if pcse_env:
-        crop_features = get_wofost_default_crop_features()
+        crop_features = defaults.get_wofost_default_crop_features()
     else:
-        crop_features = get_lintul_default_crop_features()
+        crop_features = defaults.get_lintul_default_crop_features()
     return crop_features
 
 
@@ -32,7 +32,7 @@ def get_action_space(nitrogen_levels=7, po_features=[]):
 
 def initialize_env(pcse_env=1, po_features=[], crop_features=get_crop_features(pcse_env=1),
                    costs_nitrogen=10, reward='DEF', nitrogen_levels=7, action_multiplier=1.0, add_random=False,
-                   years=get_default_train_years(), locations=get_default_location(), args_vrr=False):
+                   years=defaults.get_default_train_years(), locations=defaults.get_default_location(), args_vrr=False):
     if add_random:
         po_features.append('random'), crop_features.append('random')
     action_space = get_action_space(nitrogen_levels=nitrogen_levels, po_features=po_features)

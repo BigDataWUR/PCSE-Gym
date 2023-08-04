@@ -13,7 +13,7 @@ from torch.utils.tensorboard import SummaryWriter
 from collections import defaultdict
 from scipy.optimize import minimize_scalar
 from bisect import bisect_left
-from .defaults import *
+import pcse_gym.utils.defaults as defaults
 from tqdm import tqdm
 import gymnasium as gym
 import numpy as np
@@ -108,6 +108,20 @@ def get_titles():
     return_dict["RAIN"] = ("Daily rainfall", "cm/day")
 
     return return_dict
+
+
+def get_dict_lintul_wofost():
+    return_list = [("WSO", "TWSO", 10), ("TNSOIL", "NAVAIL", 10)]
+    return return_list
+
+
+def convert_variables(results_storage):
+    for lintul, wofost, factor in get_dict_lintul_wofost():
+        if lintul in results_storage and wofost not in results_storage:
+            results_storage[wofost] = {x: y * factor for x, y in results_storage[lintul].items()}
+        if wofost in results_storage and lintul not in results_storage:
+            results_storage[lintul] = {x: y / factor for x, y in results_storage[wofost].items()}
+    return results_storage
 
 
 def report_ci(boot_metric, report_p=False):
@@ -396,8 +410,8 @@ class EvalCallback(BaseCallback):
     :param eval_freq: (int) Evaluate the agent every eval_freq call of the callback.
     """
 
-    def __init__(self, env_eval=None, train_years=get_default_train_years(), test_years=get_default_test_years(),
-                 train_locations=get_default_location(), test_locations=get_default_location(),
+    def __init__(self, env_eval=None, train_years=defaults.get_default_train_years(), test_years=defaults.get_default_test_years(),
+                 train_locations=defaults.get_default_location(), test_locations=defaults.get_default_location(),
                  n_eval_episodes=1, eval_freq=1000, pcse_model=1, seed=0, **kwargs):
         super(EvalCallback, self).__init__()
         self.test_years = test_years
@@ -600,10 +614,10 @@ class EvalCallback(BaseCallback):
 
 
 def determine_and_log_optimum(log_dir, env_train: Union[gym.Env, VecEnv],
-                              train_years=get_default_train_years(),
-                              test_years=get_default_test_years(),
-                              train_locations=get_default_location(),
-                              test_locations=get_default_location(),
+                              train_years=defaults.get_default_train_years(),
+                              test_years=defaults.get_default_test_years(),
+                              train_locations=defaults.get_default_location(),
+                              test_locations=defaults.get_default_location(),
                               n_steps=250000):
     """
     Run optimizer to find action that maximizes return value. Log to tensorboard.
