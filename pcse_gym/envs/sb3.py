@@ -11,7 +11,29 @@ import numpy as np
 
 import pcse_gym.envs.common_env as common_env
 import pcse_gym.utils.defaults as defaults
+import pcse_gym.utils.process_pcse_output as process_pcse
 from .rewards import Rewards
+
+
+def to_weather_info(days, weather_data, weather_variables):
+    weather_observation = []
+    for i, d in enumerate(days):
+        def def_value():
+            return 0
+        w = defaultdict(def_value)
+        w['day'] = d
+        for var in weather_variables:
+            w[var] = getattr(weather_data[i], var)
+        weather_observation.append(w)
+    weather_info = pd.DataFrame(weather_observation).set_index("day").fillna(value=np.nan)
+    return weather_info
+
+
+def update_info(inf, key, date, value):
+    if key not in inf.keys():
+        inf[key] = {}
+    inf[key][date] = value
+    return inf
 
 
 class CustomFeatureExtractor(BaseFeaturesExtractor):
@@ -80,7 +102,6 @@ def get_lintul_kwargs(config_dir=get_config_dir()):
         crop_parameters=os.path.join(config_dir, 'crop', 'lintul3_winterwheat.crop'),
         site_parameters=os.path.join(config_dir, 'site', 'lintul3_springwheat.site'),
         soil_parameters=os.path.join(config_dir, 'soil', 'lintul3_springwheat.soil'),
-        reward_var='WSO'
     )
     return lintul_kwargs
 
@@ -120,10 +141,9 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         super().__init__(timestep=timestep, years=years, location=location, *args, **kwargs)
         self.action_space = action_space
         self.action_multiplier = action_multiplier
-        self.reward_var = kwargs.get('reward_var', "TWSO")
         self.args_vrr = kwargs.get('args_vrr')
         self.po_features = kwargs.get('po_features')
-        self.rewards = Rewards(self.reward_var, self.timestep, self.costs_nitrogen)
+        self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, self.costs_nitrogen)
         self.index_feature = OrderedDict()
         super().reset(seed=seed)
 
@@ -141,8 +161,8 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
                                  amount=amount, recovery=recovery_rate)
 
     def _get_reward(self):
-        # note that reward gets overwritten in step()
-        return super()._get_reward(var=self.reward_var)
+        # Reward gets overwritten in step()
+        return 0
 
     def step(self, action):
         """
@@ -152,48 +172,29 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         if isinstance(action, np.ndarray):
             action, measure = action[0], action[1:]
 
-        obs, _, terminated, truncated, info = super().step(action)
-        output = self.model.get_output()
+        obs, _, terminated, truncated, _ = super().step(action)
 
-        benefits = self.rewards.storage_organ_growth(output)
-
-        amount = action * self.action_multiplier
-        costs = self.costs_nitrogen * amount
-        reward = benefits - costs
-
+        # populate observation
         observation = self._observation(obs)
 
-        crop_info = pd.DataFrame(output).set_index("day").fillna(value=np.nan)
-        days = [day['day'] for day in output]
-        weather_data = [self._weather_data_provider(day) for day in days]
-        weather_variables = self._weather_variables
-        weather_observation = []
-        for i, d in enumerate(days):
-            def def_value():
-                return 0
+        # populate reward
+        pcse_output = self.model.get_output()
+        amount = action * self.action_multiplier
+        reward, growth = self.rewards.growth_storage_organ(pcse_output, amount)
 
-            w = defaultdict(def_value)
-            w['day'] = d
-            for var in weather_variables:
-                w[var] = getattr(weather_data[i], var)
-            weather_observation.append(w)
-        weather_info = pd.DataFrame(weather_observation).set_index("day").fillna(value=np.nan)
+        # populate info
+        crop_info = pd.DataFrame(pcse_output).set_index("day").fillna(value=np.nan)
+        days = [day['day'] for day in pcse_output]
+        weather_data = [self._weather_data_provider(day) for day in days]
+        weather_info = to_weather_info(days, weather_data, self._weather_variables)
         info = {**pd.concat([crop_info, weather_info], axis=1, join="inner").to_dict()}
 
-        def update_info(inf, key, date, value):
-            if key not in inf.keys():
-                inf[key] = {}
-            inf[key][date] = value
-            return inf
-
-        def get_start_date(outp):
-            return outp[-1 - self.timestep]['day']
-
-        info = update_info(info, 'action', get_start_date(output), action)
-        info = update_info(info, 'fertilizer', get_start_date(output), amount)
+        start_date = process_pcse.get_start_date(pcse_output, self.timestep)
+        info = update_info(info, 'action', start_date, action)
+        info = update_info(info, 'fertilizer', start_date, amount)
         info = update_info(info, 'reward', self.date, reward)
         if measure is not None:
-            info = update_info(info, 'measure', get_start_date(output), measure)
+            info = update_info(info, 'measure', start_date, measure)
 
         if self.index_feature:
             if 'indexes' not in info.keys():

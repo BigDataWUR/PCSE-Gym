@@ -4,6 +4,7 @@ import numpy as np
 
 import pcse_gym.envs.common_env as common_env
 import pcse_gym.utils.defaults as defaults
+import pcse_gym.utils.process_pcse_output as process_pcse
 from .constraints import MeasureOrNot
 from .sb3 import ZeroNitrogenEnvStorage, StableBaselinesWrapper
 from .rewards import Rewards
@@ -11,8 +12,6 @@ from .rewards import Rewards
 
 class WinterWheat(gym.Env):
     """
-    @Code by Michiel Kallenberg 2022
-
     Environment with two sub-environments:
         (1) environment for applying actions of RL agent
         (2) a baseline environment (e.g. with zero nitrogen policy) for computing relative reward
@@ -37,7 +36,6 @@ class WinterWheat(gym.Env):
         self.action_space = action_space
         self._timestep = timestep
         self.reward_function = reward
-        self.reward_var = kwargs.get('reward_var', "TWSO")
         self.po_features = kwargs.get('po_features', [])
 
         if self.reward_function != 'GRO':
@@ -46,7 +44,7 @@ class WinterWheat(gym.Env):
 
         self.observation_space = self._get_observation_space()
         self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
-        self.rewards = Rewards(self.reward_var, self.timestep)
+        self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, costs_nitrogen)
 
         if self.po_features:
             self.__measure = MeasureOrNot(self.sb3_env)
@@ -110,9 +108,10 @@ class WinterWheat(gym.Env):
         if self.reward_function != 'GRO':
             zero_nitrogen_results = self.zero_nitrogen_env_storage.get_episode_output(self.baseline_env)
             # convert zero_nitrogen_results to pcse_output
-            for (k, v) in zero_nitrogen_results[self.reward_var].items():
+            var_name = process_pcse.get_name_storage_organ(zero_nitrogen_results.keys())
+            for (k, v) in zero_nitrogen_results[var_name].items():
                 if k <= output[-1]['day']:
-                    filtered_dict = {'day': k, self.reward_var: v}
+                    filtered_dict = {'day': k, var_name: v}
                     output_baseline.append(filtered_dict)
 
         reward, growth = self.get_reward_func(output, amount, output_baseline)
@@ -125,7 +124,7 @@ class WinterWheat(gym.Env):
             case 'DEF':
                 return self.rewards.default_winterwheat_reward(output, output_baseline, amount)
             case 'GRO':
-                return self.rewards.growth_reward(output, amount)
+                return self.rewards.growth_storage_organ(output, amount)
             case _:
                 return self.rewards.default_winterwheat_reward(output, output_baseline, amount)
 

@@ -1,23 +1,24 @@
 import os
 import datetime
 import pandas as pd
-from typing import Union
-from stable_baselines3 import PPO, DQN
-from sb3_contrib import RecurrentPPO
-from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv, VecNormalize, sync_envs_normalization
-from stable_baselines3.common import base_class
-from stable_baselines3.common.callbacks import BaseCallback
-from stable_baselines3.common.logger import Figure
+import gymnasium as gym
+import numpy as np
 import matplotlib.pyplot as plt
+import torch
 from torch.utils.tensorboard import SummaryWriter
 from collections import defaultdict
 from scipy.optimize import minimize_scalar
 from bisect import bisect_left
-import pcse_gym.utils.defaults as defaults
+from typing import Union
 from tqdm import tqdm
-import gymnasium as gym
-import numpy as np
-import torch
+from stable_baselines3 import PPO, DQN
+from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv, VecNormalize, sync_envs_normalization
+from stable_baselines3.common import base_class
+from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.logger import Figure
+from sb3_contrib import RecurrentPPO
+import pcse_gym.utils.defaults as defaults
+from pcse_gym.utils.process_pcse_output import get_dict_lintul_wofost
 
 
 def compute_median(results_dict: dict, filter_list=None):
@@ -110,17 +111,18 @@ def get_titles():
     return return_dict
 
 
-def get_dict_lintul_wofost():
-    return_list = [("WSO", "TWSO", 10), ("TNSOIL", "NAVAIL", 10)]
-    return return_list
-
-
 def convert_variables(results_storage):
     for lintul, wofost, factor in get_dict_lintul_wofost():
         if lintul in results_storage and wofost not in results_storage:
             results_storage[wofost] = {x: y * factor for x, y in results_storage[lintul].items()}
         if wofost in results_storage and lintul not in results_storage:
             results_storage[lintul] = {x: y / factor for x, y in results_storage[wofost].items()}
+
+    if "RNuptake" in results_storage.keys():
+        k = list(results_storage["RNuptake"].keys())
+        v = 0.1 * np.cumsum(list(results_storage["RNuptake"].values()))
+        results_storage["NUPTT"] = dict(zip(k, v))
+
     return results_storage
 
 
