@@ -919,7 +919,7 @@ CropParameters:
             - Deprecated; previously used (in patch) for enabling lintul-like growth of leaves
             - ['NA']
             RGRLAI_MIN:
-            - 0.007
+            - 0.004
             - Relative growth rate in exponential growth phase at maximum N stress
             - ['d-1']
             IDSL:
@@ -950,9 +950,20 @@ CropParameters:
                2.000, 0.000]
             - fraction of total dry matter to leaves as a function of DVS
             - ['-', 'mass.mass-1']
+            FSTB:
+            - [0.000, 0.350,
+               0.100, 0.350,
+               0.250, 0.300,
+               0.500, 0.500,
+               0.646, 0.700,
+               0.686, 1.000,
+               0.950, 1.000,
+               1.000, 0.000,
+               2.000, 0.000]
+            - fraction of total dry matter to stems as a function of DVS
+            - ['-', 'mass.mass-1']
             FOTB:
             - [0.000, 0.000,
-               0.686, 1.000,
                0.950, 0.000,
                1.000, 1.000,
                2.000, 1.000]
