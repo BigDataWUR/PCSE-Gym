@@ -927,7 +927,7 @@ CropParameters:
             - indicates whether pre-anthesis development depends on temperature (=0), plus daylength (=1) , plus vernalization (=2)
             - ['NA']
             TDWI:
-            - 60.00
+            - 80.00
             - initial total crop dry weight
             - ['kg.ha-1']
             SPAN:
