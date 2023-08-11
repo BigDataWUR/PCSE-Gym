@@ -1,5 +1,6 @@
 import os
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
+from datetime import timedelta
 import gymnasium as gym
 import pandas as pd
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
@@ -114,6 +115,11 @@ def get_model_kwargs(pcse_model):
         raise Exception("Choose 0 or 1 for the environment")
 
 
+def ratio_rescale(value, old_max=None, old_min=None, new_max=None, new_min=None):
+    new_value = (((value - old_min) * (new_max - new_min)) / (old_max - old_min)) + new_min
+    return new_value
+
+
 class StableBaselinesWrapper(common_env.PCSEEnv):
     """
     Establishes compatibility with Stable Baselines3
@@ -135,7 +141,10 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         super().__init__(timestep=timestep, years=years, location=location, *args, **kwargs)
         self.action_space = action_space
         self.action_multiplier = action_multiplier
+        self.args_vrr = kwargs.get('args_vrr')
+        self.po_features = kwargs.get('po_features')
         self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, self.costs_nitrogen)
+        self.index_feature = OrderedDict()
         super().reset(seed=seed)
 
     def _get_observation_space(self):
@@ -144,7 +153,10 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
 
     def _apply_action(self, action):
         amount = action * self.action_multiplier
-        recovery_rate = 0.7
+        if self.args_vrr:
+            recovery_rate = self.recovery_penalty()
+        else:
+            recovery_rate = 0.7
         self._model._send_signal(signal=pcse.signals.apply_n, N_amount=amount * 10, N_recovery=recovery_rate,
                                  amount=amount, recovery=recovery_rate)
 
@@ -156,6 +168,9 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         """
         Computes customized reward and populates info
         """
+        measure = None
+        if isinstance(action, np.ndarray):
+            action, measure = action[0], action[1:]
 
         obs, _, terminated, truncated, _ = super().step(action)
 
@@ -178,6 +193,13 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         info = update_info(info, 'action', start_date, action)
         info = update_info(info, 'fertilizer', start_date, amount)
         info = update_info(info, 'reward', self.date, reward)
+        if measure is not None:
+            info = update_info(info, 'measure', start_date, measure)
+
+        if self.index_feature:
+            if 'indexes' not in info.keys():
+                info['indexes'] = {}
+            info['indexes'] = self.index_feature
 
         return observation, reward, terminated, truncated, info
 
@@ -187,6 +209,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         if isinstance(obs, tuple):
             obs = obs[0]
         obs['actions'] = {'cumulative_nitrogen': 0.0}
+        obs['actions'] = {'cumulative_measurement': 0.0}
         return self._observation(obs, flag=True)
 
     def _observation(self, observation, flag=False):
@@ -198,7 +221,19 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         if isinstance(observation, tuple):
             observation = observation[0]
         for i, feature in enumerate(self.crop_features):
-            obs[i] = observation['crop_model'][feature][-1]
+            if feature == 'random':
+                obs[i] = np.random.default_rng().uniform(0, 10000)
+            else:
+                obs[i] = observation['crop_model'][feature][-1]
+
+        if self.po_features is not None:
+            index_feature = OrderedDict()
+            for i, feature in enumerate(self.crop_features):
+                if feature not in index_feature and not flag:
+                    if feature in self.po_features:
+                        index_feature[feature] = i
+                        if len(index_feature.keys()) == len(self.po_features):
+                            self.index_feature = index_feature
 
         for i, feature in enumerate(self.action_features):
             j = len(self.crop_features) + i
@@ -240,6 +275,20 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
     @weather_data_provider.setter
     def weather_data_provider(self, weather):
         self._weather_data_provider = weather
+
+    # TODO make this into a wrapper
+    def recovery_penalty(self, recovery=0.7):
+        """
+        estimation function due to static recovery rate of WOFOST/LINTUL
+        Potentially enforcing the agent not to dump everything at the start (to be tested)
+        Not to be used with CERES 'start-dump'
+        Adapted, based on the findings of Raun, W.R. and Johnson, G.V. (1999)
+        """
+        date_now = self.date - self.start_date
+        date_end = self.end_date - self.start_date  # TODO end on flowering?
+        recovery = ratio_rescale(date_now / timedelta(days=1),
+                                 old_max=date_end / timedelta(days=1), old_min=0.0, new_max=0.8, new_min=0.3)
+        return recovery
 
 
 class ZeroNitrogenEnvStorage:

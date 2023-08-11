@@ -1,19 +1,28 @@
+from comet_ml import Experiment
+from comet_ml.integration.gymnasium import CometLogger
+
+import os.path
+
 import gymnasium.spaces
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
-from sb3_contrib import RecurrentPPO
+
+from sb3_contrib import RecurrentPPO  # MaskablePPO
+# from sb3_contrib.common.envs import InvalidActionEnvDiscrete
+# from sb3_contrib.common.maskable.utils import get_action_masks
+# from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
+# from sb3_contrib.common.wrappers import ActionMasker
+
 import argparse
 import lib_programname
 import sys
-import os
-import torch.nn as nn
 
 from pcse_gym.envs.winterwheat import WinterWheat
-from pcse_gym.envs.sb3 import get_policy_kwargs, get_model_kwargs
+from pcse_gym.envs.sb3 import *
 from pcse_gym.utils.eval import EvalCallback, determine_and_log_optimum
-import pcse_gym.utils.defaults as defaults
 
+# from pcse_gym.envs.constraints import ActionLimiter
 
 path_to_program = lib_programname.get_path_executed_script()
 rootdir = path_to_program.parents[0]
@@ -27,14 +36,14 @@ if os.path.join(rootdir, "pcse_gym") not in sys.path:
 
 
 def train(log_dir, n_steps,
-          crop_features=defaults.get_wofost_default_crop_features(),
-          weather_features=defaults.get_default_weather_features(),
-          action_features=defaults.get_default_action_features(),
-          train_years=defaults.get_default_train_years(),
-          test_years=defaults.get_default_test_years(),
-          train_locations=defaults.get_default_location(),
-          test_locations=defaults.get_default_location(),
-          action_space=defaults.get_default_action_space(),
+          crop_features=get_wofost_default_crop_features(),
+          weather_features=get_default_weather_features(),
+          action_features=get_default_action_features(),
+          train_years=get_default_train_years(),
+          test_years=get_default_test_years(),
+          train_locations=get_default_location(),
+          test_locations=get_default_location(),
+          action_space=get_default_action_space(),
           pcse_model=0, agent=PPO, reward=None,
           seed=0, tag="Exp", costs_nitrogen=10.0,
           **kwargs):
@@ -61,6 +70,8 @@ def train(log_dir, n_steps,
     costs_nitrogen: float, penalty for fertilization application
 
     """
+    if agent == 'DQN':
+        assert not kwargs.get('args_measure'), f'cannot use {agent} with measure args'
 
     pcse_model_name = "LINTUL" if not pcse_model else "WOFOST"
 
@@ -83,13 +94,38 @@ def train(log_dir, n_steps,
         hyperparams['policy_kwargs']['net_arch'] = [256, 256]
         hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
 
+    # For comet use
+    use_comet = True
+
+    if use_comet:
+        with open(os.path.join(rootdir, 'comet', 'hbja_api_key'), 'r') as f:
+            api_key = f.readline()
+        comet_log = Experiment(
+            api_key=api_key,
+            project_name="experimental_cropgym",
+            workspace="pcse-gym",
+            log_graph=True,
+            auto_metric_logging=True,
+            auto_histogram_tensorboard_logging=True
+        )
+
+        comet_log.log_parameters(hyperparams)
+        comet_log.log_asset_folder(os.path.join(rootdir, 'pcse_gym', 'envs'), log_file_name=True, recursive=True)
+        comet_log.log_asset(os.path.join(rootdir, 'pcse_gym', 'utils', 'eval'), file_name='eval.py')
+
     env_pcse_train = WinterWheat(crop_features=crop_features, action_features=action_features,
                                  weather_features=weather_features,
                                  costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
                                  action_space=action_space, action_multiplier=1.0, seed=seed,
                                  reward=reward, **get_model_kwargs(pcse_model), **kwargs)
+    # env_pcse_train = ActionLimiter(env_pcse_train, action_limit=4)
+
+    # env_pcse_train = ActionMasker(env_pcse_train, mask_fertilization_actions)
 
     env_pcse_train = Monitor(env_pcse_train)
+
+    if use_comet and comet_log:
+        env_pcse_train = CometLogger(env_pcse_train, comet_log)
 
     match agent:
         case 'PPO':
@@ -147,11 +183,18 @@ if __name__ == '__main__':
                         help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
     parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, or DQN.")
     parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, GRO, or ANE")
-
+    parser.add_argument("-m", "--measure", action='store_true', help="--measure or --no-measure."
+                                                                     "Train an agent in a partially"
+                                                                     "observable environment that"
+                                                                     "decides when to measure"
+                                                                     "certain crop features")
+    parser.add_argument("--no-measure", action='store_false', dest='measure')
+    parser.add_argument("--variable-recovery-rate", action='store_true', dest='vrr')
     parser.set_defaults(measure=True, vrr=False)
 
     args = parser.parse_args()
     pcse_model_name = "LINTUL" if not args.environment else "WOFOST"
+    print(rootdir)
     log_dir = os.path.join(rootdir, 'tensorboard_logs', f'{pcse_model_name}_experiments')
     print(f'train for {args.nsteps} steps with costs_nitrogen={args.costs_nitrogen} (seed={args.seed})')
 
@@ -172,7 +215,21 @@ if __name__ == '__main__':
     action_features = []  # alternative: "cumulative_nitrogen"
 
     tag = f'Seed-{args.seed}'
-    action_spaces = gymnasium.spaces.Discrete(7)
+
+    kwargs = {'args_vrr': args.vrr}
+    if not args.measure:
+        action_spaces = gymnasium.spaces.Discrete(7)
+    else:
+        if args.environment:
+            po_features = ['TAGP', 'LAI', 'NAVAIL', 'NuptakeTotal', 'SM', 'random']
+            if 'random' in po_features:
+                crop_features.append('random')
+        else:
+            po_features = ['TGROWTH', 'LAI', 'TNSOIL', 'NUPTT', 'TRAIN']
+        kwargs['po_features'] = po_features
+        kwargs['args_measure'] = True
+        a_shape = [7] + [2] * len(po_features)
+        action_spaces = gymnasium.spaces.MultiDiscrete(a_shape)
 
     train(log_dir, train_years=train_years, test_years=test_years,
           train_locations=train_locations,
@@ -183,4 +240,4 @@ if __name__ == '__main__':
           weather_features=weather_features,
           action_features=action_features, action_space=action_spaces,
           pcse_model=args.environment, agent=args.agent,
-          reward=args.reward)
+          reward=args.reward, **kwargs)

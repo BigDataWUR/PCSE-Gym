@@ -6,7 +6,8 @@
 CropGym: a Reinforcement Learning Environment for Crop Management
 -----------------------------------------------------------------
 
-CropGym is a highly configurable `Python Gymnasium <https://gymnasium.farama.org/>`__ environment to conduct Reinforcement
+CropGym is a highly configurable `Python Open AI
+gym <https://gym.openai.com/>`__ environment to conduct Reinforcement
 Learning (RL) research for crop management. CropGym is built around
 `PCSE <https://pcse.readthedocs.io/en/stable/>`__, a well established
 python library that includes implementations of a variety of crop
