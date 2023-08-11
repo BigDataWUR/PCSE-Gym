@@ -5,7 +5,6 @@ import numpy as np
 import pcse_gym.envs.common_env as common_env
 import pcse_gym.utils.defaults as defaults
 import pcse_gym.utils.process_pcse_output as process_pcse
-from .constraints import MeasureOrNot
 from .sb3 import ZeroNitrogenEnvStorage, StableBaselinesWrapper
 from .rewards import Rewards
 
@@ -36,7 +35,6 @@ class WinterWheat(gym.Env):
         self.action_space = action_space
         self._timestep = timestep
         self.reward_function = reward
-        self.po_features = kwargs.get('po_features', [])
 
         if self.reward_function != 'GRO':
             self._env_baseline = self._initialize_sb_wrapper(seed, *args, **kwargs)
@@ -45,9 +43,6 @@ class WinterWheat(gym.Env):
         self.observation_space = self._get_observation_space()
         self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
         self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, costs_nitrogen)
-
-        if self.po_features:
-            self.__measure = MeasureOrNot(self.sb3_env)
 
         super().reset(seed=seed)
 
@@ -73,9 +68,7 @@ class WinterWheat(gym.Env):
         """
 
         obs, _, terminated, truncated, info = self._env.step(action)
-
         output = self.sb3_env.model.get_output()
-
         obs, reward, growth = self.process_output(action, output, obs)
 
         if 'reward' not in info.keys(): info['reward'] = {}
@@ -87,21 +80,11 @@ class WinterWheat(gym.Env):
 
     def process_output(self, action, output, obs):
 
-        if self.po_features and isinstance(action, np.ndarray) and action.dtype != np.float32:
-            if isinstance(action, np.ndarray):
-                action, measure = action[0], action[1:]
-            amount = action * self.action_multiplier
-            reward, growth = self.get_reward_and_growth(output, amount)
-            obs, cost = self.measure_features.measure_act(obs, measure)
-            measurement_cost = sum(cost)
-            reward -= measurement_cost
-            return obs, reward, growth
-        else:
-            if isinstance(action, np.ndarray):
-                action = action.item()
-            amount = action * self.action_multiplier
-            reward, growth = self.get_reward_and_growth(output, amount)
-            return obs, reward, growth
+        if isinstance(action, np.ndarray):
+            action = action.item()
+        amount = action * self.action_multiplier
+        reward, growth = self.get_reward_and_growth(output, amount)
+        return obs, reward, growth
 
     def get_reward_and_growth(self, output, amount):
         output_baseline = []
@@ -119,8 +102,6 @@ class WinterWheat(gym.Env):
 
     def get_reward_func(self, output, amount, output_baseline=None):
         match self.reward_function:  # Needs python 3.10+
-            case 'ANE':
-                return self.rewards.ane_reward(output, output_baseline, amount)
             case 'DEF':
                 return self.rewards.default_winterwheat_reward(output, output_baseline, amount)
             case 'GRO':
@@ -168,10 +149,6 @@ class WinterWheat(gym.Env):
 
     def render(self, mode="human"):
         pass
-
-    @property
-    def measure_features(self):
-        return self.__measure
 
     @property
     def sb3_env(self):

@@ -589,9 +589,6 @@ class EvalCallback(BaseCallback):
                 variables = ['action', 'WSO', 'reward', 'TNSOIL', 'val']
                 if self.po_features: variables.append('measure')
 
-            if 'measure' in variables:
-                variables = self.replace_measure_variable(variables)
-
             keys_figure = [(a, b) for a in self.test_years for b in self.test_locations]
             results_figure = {filter_key: result_model[filter_key] for filter_key in keys_figure}
 
