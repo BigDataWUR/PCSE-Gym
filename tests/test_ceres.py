@@ -1,6 +1,6 @@
 import unittest
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
-import initialize_env as init_env
+import tests.initialize_env as init_env
 from pcse_gym.utils.eval import FindOptimum
 
 

@@ -1,8 +1,7 @@
 import unittest
 import numpy as np
 
-import initialize_env as init_env
-
+import tests.initialize_env as init_env
 
 class TestMeasure(unittest.TestCase):
     def setUp(self):
