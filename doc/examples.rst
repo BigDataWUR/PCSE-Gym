@@ -12,7 +12,7 @@ Here we show a basic example of how to use the PCSE Environment
 
 
    # Import the PCSE Environment class
-   from pcse_gym.environment.env import PCSEEnv
+   from pcse_gym.envs.common_env import PCSEEnv
 
    # PCSE contains various utility classes to load parameter configurations
    from pcse.fileinput import CABOFileReader, YAMLCropDataProvider
@@ -22,14 +22,14 @@ Here we show a basic example of how to use the PCSE Environment
    # Note: the following configuration has not been chosen for its realism
    env = PCSEEnv(
        model_config='Wofost80_NWLP_FD.conf',
-       agro_config='../pcse_gym/environment/configs/agro/potato_cropcalendar.yaml',
+       agro_config='../pcse_gym/envs/configs/agro/potato_cropcalendar.yaml',
        crop_parameters=YAMLCropDataProvider(force_reload=True),
        site_parameters=WOFOST80SiteDataProvider(WAV=10,  # Initial amount of water in total soil profile [cm]
                                                 NAVAILI=10,  # Amount of N available in the pool at initialization of the system [kg/ha]
                                                 PAVAILI=50,  # Amount of P available in the pool at initialization of the system [kg/ha]
                                                 KAVAILI=100,  # Amount of K available in the pool at initialization of the system [kg/ha]
                                                 ),
-       soil_parameters=CABOFileReader('../pcse_gym/environment/configs/soil/ec3.CAB'),
+       soil_parameters=CABOFileReader('../pcse_gym/envs/configs/soil/ec3.CAB'),
    )
 
    # Reset/initialize the environment to obtain an initial observation
@@ -103,7 +103,7 @@ gym supports irrigation and fertilization
    }
 
    # Apply it to our environment, to see how the PCSE model progresses in 1 day without interference
-   o, r, done, info = env.step(a)
+   o, r, done, truncated, info = env.step(a)
 
    # By choosing different action values we can evaluate the effects of different agro-management policies. Which actions are supported by default depends on the PCSE model, which can be extended manually.
 
@@ -123,9 +123,12 @@ develop completely without interference:
 .. code:: python
 
    r_sum = 0
+   done = False
+   env.reset()
    while not done:
-       o, r, done, info = env.step(a)
+       o, r, done, truncated, info = env.step(a)
        r_sum += r
+   print(f"TWSO: {o['crop_model']['TWSO'][0]:.2f} Total reward: {r_sum:.2f}")
 
 The main objective of reinforcement learning is to build a policy that
 dictates when to choose which actions to maximize the expected eventual
@@ -145,7 +148,7 @@ costs of its application.
 .. code:: python
 
 
-   from pcse_gym.environment.env import PCSEEnv
+   from pcse_gym.envs.common_env import PCSEEnv
 
 
    class CustomPCSEEnv(PCSEEnv):
@@ -190,14 +193,14 @@ PCSEEnvironment class, but has a modified reward function.
 
    env = CustomPCSEEnv(
        model_config='Wofost80_NWLP_FD.conf',
-       agro_config='../pcse_gym/environment/configs/agro/potato_cropcalendar.yaml',
+       agro_config='../pcse_gym/envs/configs/agro/potato_cropcalendar.yaml',
        crop_parameters=YAMLCropDataProvider(force_reload=True),
        site_parameters=WOFOST80SiteDataProvider(WAV=10,  # Initial amount of water in total soil profile [cm]
                                                 NAVAILI=10,  # Amount of N available in the pool at initialization of the system [kg/ha]
                                                 PAVAILI=50,  # Amount of P available in the pool at initialization of the system [kg/ha]
                                                 KAVAILI=100,  # Amount of K available in the pool at initialization of the system [kg/ha]
                                                 ),
-       soil_parameters=CABOFileReader('../pcse_gym/environment/configs/soil/ec3.CAB'),
+       soil_parameters=CABOFileReader('../pcse_gym/envs/configs/soil/ec3.CAB'),
    )
 
    o = env.reset()
@@ -208,7 +211,7 @@ PCSEEnvironment class, but has a modified reward function.
        'N': 10,
    }
 
-   o, r, done, info = env.step(a)
+   o, r, done, truncated, info = env.step(a)
 
    print(r)
 

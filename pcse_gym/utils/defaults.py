@@ -1,0 +1,43 @@
+def get_lintul_default_crop_features():
+    # See get_titles() for description of variables
+    return ["DVS", "TGROWTH", "LAI", "NUPTT", "TRAN", "TNSOIL", "TRAIN", "TRANRF", "WSO"]
+
+
+def get_wofost_default_crop_features():
+    # See get_titles() for description of variables
+    return ["DVS", "TAGP", "LAI", "NuptakeTotal", "TRA", "NAVAIL", "SM", "RFTRA", "TWSO"]
+
+
+def get_default_weather_features():
+    # See get_titles() for description of variables
+    return ["IRRAD", "TMIN", "RAIN"]
+
+
+def get_default_action_features():
+    return []
+
+
+def get_default_location():
+    return (52, 5.5)
+
+
+def get_default_years():
+    return [*range(1990, 2022)]
+
+
+def get_default_train_years():
+    all_years = get_default_years()
+    train_years = [year for year in all_years if year % 2 == 1]
+    return train_years
+
+
+def get_default_test_years():
+    all_years = get_default_years()
+    test_years = [year for year in all_years if year % 2 == 0]
+    return test_years
+
+
+def get_default_action_space():
+    import gymnasium as gym
+    action_spaces = gym.spaces.Discrete(7)
+    return action_spaces
