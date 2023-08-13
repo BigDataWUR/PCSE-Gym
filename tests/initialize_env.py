@@ -13,14 +13,6 @@ def get_po_features(pcse_env=1):
     return po_features
 
 
-def get_crop_features(pcse_env=1):
-    if pcse_env:
-        crop_features = defaults.get_wofost_default_crop_features()
-    else:
-        crop_features = defaults.get_lintul_default_crop_features()
-    return crop_features
-
-
 def get_action_space(nitrogen_levels=7, po_features=[]):
     if po_features:
         a_shape = [nitrogen_levels] + [2] * len(po_features)
@@ -30,7 +22,7 @@ def get_action_space(nitrogen_levels=7, po_features=[]):
     return space_return
 
 
-def initialize_env(pcse_env=1, po_features=[], crop_features=get_crop_features(pcse_env=1),
+def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_default_crop_features(pcse_env=1),
                    costs_nitrogen=10, reward='DEF', nitrogen_levels=7, action_multiplier=1.0, add_random=False,
                    years=defaults.get_default_train_years(), locations=defaults.get_default_location(), args_vrr=False):
     if add_random:

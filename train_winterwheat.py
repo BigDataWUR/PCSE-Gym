@@ -1,26 +1,24 @@
+import argparse
+import lib_programname
+import sys
+import os.path
+import torch.nn as nn
 from comet_ml import Experiment
 from comet_ml.integration.gymnasium import CometLogger
-
-import os.path
-
 import gymnasium.spaces
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
-
 from sb3_contrib import RecurrentPPO  # MaskablePPO
 # from sb3_contrib.common.envs import InvalidActionEnvDiscrete
 # from sb3_contrib.common.maskable.utils import get_action_masks
 # from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 # from sb3_contrib.common.wrappers import ActionMasker
 
-import argparse
-import lib_programname
-import sys
-
 from pcse_gym.envs.winterwheat import WinterWheat
-from pcse_gym.envs.sb3 import *
+from pcse_gym.envs.sb3 import get_policy_kwargs, get_model_kwargs
 from pcse_gym.utils.eval import EvalCallback, determine_and_log_optimum
+import pcse_gym.utils.defaults as defaults
 
 # from pcse_gym.envs.constraints import ActionLimiter
 
@@ -36,14 +34,14 @@ if os.path.join(rootdir, "pcse_gym") not in sys.path:
 
 
 def train(log_dir, n_steps,
-          crop_features=get_wofost_default_crop_features(),
-          weather_features=get_default_weather_features(),
-          action_features=get_default_action_features(),
-          train_years=get_default_train_years(),
-          test_years=get_default_test_years(),
-          train_locations=get_default_location(),
-          test_locations=get_default_location(),
-          action_space=get_default_action_space(),
+          crop_features=defaults.get_wofost_default_crop_features(),
+          weather_features=defaults.get_default_weather_features(),
+          action_features=defaults.get_default_action_features(),
+          train_years=defaults.get_default_train_years(),
+          test_years=defaults.get_default_test_years(),
+          train_locations=defaults.get_default_location(),
+          test_locations=defaults.get_default_location(),
+          action_space=defaults.get_default_action_space(),
           pcse_model=0, agent=PPO, reward=None,
           seed=0, tag="Exp", costs_nitrogen=10.0,
           **kwargs):
@@ -205,14 +203,9 @@ if __name__ == '__main__':
     train_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
     test_locations = [(52, 5.5), (48, 0)]
 
-    if args.environment == 1:
-        # see https://github.com/ajwdewit/pcse/tree/develop_WOFOST_v8_1/pcse
-        crop_features = ["DVS", "TAGP", "LAI", "NuptakeTotal", "NAVAIL", "SM"]
-    else:
-        # see https://github.com/ajwdewit/pcse/blob/master/pcse/crop/lintul3.py
-        crop_features = ["DVS", "TGROWTH", "LAI", "NUPTT", "TNSOIL", "TRAIN"]
-    weather_features = ["IRRAD", "TMIN", "RAIN"]
-    action_features = []  # alternative: "cumulative_nitrogen"
+    crop_features = defaults.get_default_crop_features(pcse_env=args.environment)
+    weather_features = defaults.get_default_weather_features()
+    action_features = defaults.get_default_action_features()
 
     tag = f'Seed-{args.seed}'
 

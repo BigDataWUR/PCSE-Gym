@@ -8,6 +8,14 @@ def get_wofost_default_crop_features():
     return ["DVS", "TAGP", "LAI", "NuptakeTotal", "TRA", "NAVAIL", "SM", "RFTRA", "TWSO"]
 
 
+def get_default_crop_features(pcse_env=1):
+    if pcse_env:
+        crop_features = get_wofost_default_crop_features()
+    else:
+        crop_features = get_lintul_default_crop_features()
+    return crop_features
+
+
 def get_default_weather_features():
     # See get_titles() for description of variables
     return ["IRRAD", "TMIN", "RAIN"]
@@ -39,5 +47,5 @@ def get_default_test_years():
 
 def get_default_action_space():
     import gymnasium as gym
-    action_spaces = gym.spaces.Discrete(7)
-    return action_spaces
+    action_space = gym.spaces.Discrete(3)
+    return action_space

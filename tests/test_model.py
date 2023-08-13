@@ -6,6 +6,7 @@ from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 from stable_baselines3 import PPO
 from pcse_gym.utils.eval import evaluate_policy, summarize_results
 import tests.initialize_env as init_env
+import pcse_gym.utils.defaults as defaults
 
 # TODO: figure out a more robust way of obtaining the file paths
 class TestModel(unittest.TestCase):
@@ -20,7 +21,7 @@ class TestModel(unittest.TestCase):
         test_locations = [(52, 5.5), (48, 0)]
         for test_year in test_years:
             for location in list(set(test_locations)):
-                env = init_env.initialize_env(pcse_env=0, crop_features=init_env.get_crop_features(pcse_env=0), nitrogen_levels=3,
+                env = init_env.initialize_env(pcse_env=0, crop_features=defaults.get_default_crop_features(pcse_env=0), nitrogen_levels=3,
                                      action_multiplier=2.0, years=test_year, locations=location)
                 env = DummyVecEnv([lambda: env])
                 env = VecNormalize.load(stats_path, env)
