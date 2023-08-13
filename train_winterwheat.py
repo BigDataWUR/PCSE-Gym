@@ -1,4 +1,3 @@
-import gymnasium.spaces
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
@@ -55,7 +54,7 @@ def train(log_dir, n_steps,
     action_space: action space
     pcse_model: 0 for LINTUL else WOFOST
     agent: one of {PPO, RPPO, DQN}
-    reward: one of {DEF, GRO, or ANE}
+    reward: one of {DEF, GRO}
     seed: random seed
     tag: tag for tensorboard and friends
     costs_nitrogen: float, penalty for fertilization application
@@ -146,7 +145,7 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--environment", type=int, default=1,
                         help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
     parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, or DQN.")
-    parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, GRO, or ANE")
+    parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, or GRO")
 
     parser.set_defaults(measure=True, vrr=False)
 
@@ -162,25 +161,16 @@ if __name__ == '__main__':
     train_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
     test_locations = [(52, 5.5), (48, 0)]
 
-    if args.environment == 1:
-        # see https://github.com/ajwdewit/pcse/tree/develop_WOFOST_v8_1/pcse
-        crop_features = ["DVS", "TAGP", "LAI", "NuptakeTotal", "NAVAIL", "SM"]
-    else:
-        # see https://github.com/ajwdewit/pcse/blob/master/pcse/crop/lintul3.py
-        crop_features = ["DVS", "TGROWTH", "LAI", "NUPTT", "TNSOIL", "TRAIN"]
-    weather_features = ["IRRAD", "TMIN", "RAIN"]
-    action_features = []  # alternative: "cumulative_nitrogen"
-
     tag = f'Seed-{args.seed}'
-    action_spaces = gymnasium.spaces.Discrete(7)
 
     train(log_dir, train_years=train_years, test_years=test_years,
           train_locations=train_locations,
           test_locations=test_locations,
           n_steps=args.nsteps, seed=args.seed,
           tag=tag, costs_nitrogen=args.costs_nitrogen,
-          crop_features=crop_features,
-          weather_features=weather_features,
-          action_features=action_features, action_space=action_spaces,
+          crop_features=defaults.get_default_crop_features(pcse_env=args.environment),
+          weather_features=defaults.get_default_weather_features(),
+          action_features=defaults.get_default_action_features(),
+          action_space=defaults.get_default_action_space(),
           pcse_model=args.environment, agent=args.agent,
           reward=args.reward)
