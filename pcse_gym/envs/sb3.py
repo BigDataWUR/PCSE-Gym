@@ -195,15 +195,14 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         return observation, reward, terminated, truncated, info
 
     def reset(self, seed=None, return_info=False, options=None):
-
         obs = super().reset(seed=seed)
         if isinstance(obs, tuple):
             obs = obs[0]
         obs['actions'] = {'cumulative_nitrogen': 0.0}
         obs['actions'] = {'cumulative_measurement': 0.0}
-        return self._observation(obs, flag=True)
+        return self._observation(obs)
 
-    def _observation(self, observation, flag=False):
+    def _observation(self, observation):
         """
         Converts observation into np array to facilitate integration with Stable Baseline3
         """
@@ -216,15 +215,6 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
                 obs[i] = np.random.default_rng().uniform(0, 10000)
             else:
                 obs[i] = observation['crop_model'][feature][-1]
-
-        if self.po_features is not None:
-            index_feature = OrderedDict()
-            for i, feature in enumerate(self.crop_features):
-                if feature not in index_feature and not flag:
-                    if feature in self.po_features:
-                        index_feature[feature] = i
-                        if len(index_feature.keys()) == len(self.po_features):
-                            self.index_feature = index_feature
 
         for i, feature in enumerate(self.action_features):
             j = len(self.crop_features) + i

@@ -53,6 +53,45 @@ class MeasureOrNot:
         self.feature_ind_dict = OrderedDict()
         self.get_feature_cost_ind()
 
+    # override _observation method, a bit of duplicate code
+    def _observation(self, observation, flag=False):
+        obs = np.zeros(self.env.observation_space.shape)
+
+        if isinstance(observation, tuple):
+            observation = observation[0]
+
+        # start measure logic
+        index_feature = OrderedDict()
+
+        for i, feature in enumerate(self.env.crop_features):
+            if feature == 'random':
+                obs[i] = np.random.default_rng().uniform(0, 10000)
+            else:
+                obs[i] = observation['crop_model'][feature][-1]
+
+            if feature not in index_feature and not flag and feature in self.env.po_features:
+                index_feature[feature] = i
+                if len(index_feature.keys()) == len(self.env.po_features):
+                    self.index_feature = index_feature
+
+        for i, feature in enumerate(self.env.action_features):
+            j = len(self.env.crop_features) + i
+            obs[j] = observation['actions'][feature]
+        for d in range(self.env.timestep):
+            for i, feature in enumerate(self.env.weather_features):
+                j = d * len(self.env.weather_features) + len(self.env.crop_features) + len(self.env.action_features) + i
+                obs[j] = observation['weather'][feature][d]
+        return obs
+
+    # override reset method
+    def reset(self, seed=None, return_info=False, options=None):
+        obs = super().reset(seed=seed)
+        if isinstance(obs, tuple):
+            obs = obs[0]
+        obs['actions'] = {'cumulative_nitrogen': 0.0}
+        obs['actions'] = {'cumulative_measurement': 0.0}
+        return self._observation(obs, flag=True)
+
     def get_feature_cost_ind(self):
         for feature in self.env.po_features:
             if feature in self.env.crop_features:
@@ -60,9 +99,8 @@ class MeasureOrNot:
         self.feature_ind = tuple(self.feature_ind)
 
         for feature in self.env.crop_features:
-            if feature in self.env.po_features:
-                if feature not in self.feature_ind_dict.keys():
-                    self.feature_ind_dict[feature] = self.env.crop_features.index(feature)
+            if feature in self.env.po_features and feature not in self.feature_ind_dict:
+                self.feature_ind_dict[feature] = self.env.crop_features.index(feature)
 
     def measure_act(self, obs, measurement):
         """PROTOTYPE
