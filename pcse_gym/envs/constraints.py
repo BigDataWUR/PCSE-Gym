@@ -2,6 +2,9 @@ import numpy as np
 from collections import OrderedDict
 import gymnasium as gym
 from gymnasium import ActionWrapper
+import pcse
+from datetime import timedelta
+import pcse_gym.envs.sb3
 
 
 # TODO, limit fertilization actions; WIP
@@ -31,6 +34,11 @@ class ActionLimiter(ActionWrapper):
     def reset(self, **kwargs):
         self.counter = 0
         return self.env.reset(**kwargs)
+
+
+def ratio_rescale(value, old_max=None, old_min=None, new_max=None, new_min=None):
+    new_value = (((value - old_min) * (new_max - new_min)) / (old_max - old_min)) + new_min
+    return new_value
 
 
 class MeasureOrNot:
@@ -99,3 +107,30 @@ class MeasureOrNot:
             TRAIN=1
         )
         return lookup
+
+
+class VariableRecoveryRate(pcse_gym.envs.sb3.StableBaselinesWrapper):
+    def __init__(self, env):
+        super().__init__()
+        self.__dict__.update(env.__dict__)
+
+    def _apply_action(self, action):
+        amount = action * self.action_multiplier
+        recovery_rate = self.recovery_penalty()
+        self._model._send_signal(signal=pcse.signals.apply_n, N_amount=amount * 10, N_recovery=recovery_rate,
+                                 amount=amount, recovery=recovery_rate)
+
+    def recovery_penalty(self):
+        """
+        estimation function due to static recovery rate of WOFOST/LINTUL
+        Potentially enforcing the agent not to dump everything at the start (to be tested)
+        Not to be used with CERES 'start-dump'
+        Adapted, based on the findings of Raun, W.R. and Johnson, G.V. (1999)
+        """
+        date_now = self.date - self.start_date
+        date_end = self.end_date - self.start_date  # TODO end on flowering?
+        recovery = ratio_rescale(date_now / timedelta(days=1),
+                                 old_max=date_end / timedelta(days=1), old_min=0.0, new_max=0.8, new_min=0.3)
+        return recovery
+
+

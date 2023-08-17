@@ -3,6 +3,7 @@ import numpy as np
 
 import tests.initialize_env as init_env
 
+
 class TestMeasure(unittest.TestCase):
     def setUp(self):
         self.env = init_env.initialize_env_po()

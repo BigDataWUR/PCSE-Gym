@@ -5,7 +5,7 @@ import numpy as np
 import pcse_gym.envs.common_env as common_env
 import pcse_gym.utils.defaults as defaults
 import pcse_gym.utils.process_pcse_output as process_pcse
-from .constraints import MeasureOrNot
+from .constraints import MeasureOrNot, VariableRecoveryRate
 from .sb3 import ZeroNitrogenEnvStorage, StableBaselinesWrapper
 from .rewards import Rewards
 
@@ -42,6 +42,10 @@ class WinterWheat(gym.Env):
             self._env_baseline = self._initialize_sb_wrapper(seed, *args, **kwargs)
         self._env = self._initialize_sb_wrapper(seed, *args, **kwargs)
 
+        self.args_vrr = kwargs.get('args_vrr')
+        if self.args_vrr:
+            self._env = VariableRecoveryRate(self._env)
+
         self.observation_space = self._get_observation_space()
         self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
         self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, costs_nitrogen)
@@ -72,7 +76,7 @@ class WinterWheat(gym.Env):
         Computes customized reward and populates info
         """
 
-        obs, _, terminated, truncated, info = self._env.step(action)
+        obs, _, terminated, truncated, info = self.sb3_env.step(action)
 
         output = self.sb3_env.model.get_output()
 

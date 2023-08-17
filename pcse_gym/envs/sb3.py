@@ -115,11 +115,6 @@ def get_model_kwargs(pcse_model):
         raise Exception("Choose 0 or 1 for the environment")
 
 
-def ratio_rescale(value, old_max=None, old_min=None, new_max=None, new_min=None):
-    new_value = (((value - old_min) * (new_max - new_min)) / (old_max - old_min)) + new_min
-    return new_value
-
-
 class StableBaselinesWrapper(common_env.PCSEEnv):
     """
     Establishes compatibility with Stable Baselines3
@@ -153,12 +148,8 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
 
     def _apply_action(self, action):
         amount = action * self.action_multiplier
-        if self.args_vrr:
-            recovery_rate = self.recovery_penalty()
-        else:
-            recovery_rate = 0.7
-        self._model._send_signal(signal=pcse.signals.apply_n, N_amount=amount * 10, N_recovery=recovery_rate,
-                                 amount=amount, recovery=recovery_rate)
+        self._model._send_signal(signal=pcse.signals.apply_n, N_amount=amount * 10, N_recovery=0.7,
+                                 amount=amount, recovery=0.7)
 
     def _get_reward(self):
         # Reward gets overwritten in step()
@@ -275,20 +266,6 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
     @weather_data_provider.setter
     def weather_data_provider(self, weather):
         self._weather_data_provider = weather
-
-    # TODO make this into a wrapper
-    def recovery_penalty(self, recovery=0.7):
-        """
-        estimation function due to static recovery rate of WOFOST/LINTUL
-        Potentially enforcing the agent not to dump everything at the start (to be tested)
-        Not to be used with CERES 'start-dump'
-        Adapted, based on the findings of Raun, W.R. and Johnson, G.V. (1999)
-        """
-        date_now = self.date - self.start_date
-        date_end = self.end_date - self.start_date  # TODO end on flowering?
-        recovery = ratio_rescale(date_now / timedelta(days=1),
-                                 old_max=date_end / timedelta(days=1), old_min=0.0, new_max=0.8, new_min=0.3)
-        return recovery
 
 
 class ZeroNitrogenEnvStorage:
