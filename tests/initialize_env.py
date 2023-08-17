@@ -3,6 +3,7 @@ import gymnasium as gym
 from pcse_gym.envs.winterwheat import WinterWheat
 from pcse_gym.envs.sb3 import get_model_kwargs
 import pcse_gym.utils.defaults as defaults
+from pcse_gym.envs.constraints import ActionLimiter
 
 
 def get_po_features(pcse_env=1):
@@ -24,11 +25,13 @@ def get_action_space(nitrogen_levels=7, po_features=[]):
 
 def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_default_crop_features(pcse_env=1),
                    costs_nitrogen=10, reward='DEF', nitrogen_levels=7, action_multiplier=1.0, add_random=False,
-                   years=defaults.get_default_train_years(), locations=defaults.get_default_location(), args_vrr=False):
+                   years=defaults.get_default_train_years(), locations=defaults.get_default_location(), args_vrr=False,
+                   action_limit=False):
     if add_random:
         po_features.append('random'), crop_features.append('random')
     action_space = get_action_space(nitrogen_levels=nitrogen_levels, po_features=po_features)
-    kwargs = dict(po_features=po_features, args_measure=po_features is not None, args_vrr=args_vrr)
+    kwargs = dict(po_features=po_features, args_measure=po_features is not None, args_vrr=args_vrr,
+                  action_limit=action_limit)
     env_return = WinterWheat(crop_features=crop_features,
                              costs_nitrogen=costs_nitrogen,
                              years=years,
@@ -56,3 +59,15 @@ def initialize_env_random():
 
 def initialize_env_rr():
     return initialize_env(reward='GRO', args_vrr=True)
+
+
+def initialize_env_action_limit_no_measure(limit):
+    env = initialize_env(action_limit=True)
+    env = ActionLimiter(env, action_limit=limit)
+    return env
+
+
+def initialize_env_action_limit_measure(limit):
+    env = initialize_env(po_features=get_po_features(), action_limit=True)
+    env = ActionLimiter(env, action_limit=limit)
+    return env

@@ -15,6 +15,7 @@ from sb3_contrib import RecurrentPPO  # MaskablePPO
 # from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 # from sb3_contrib.common.wrappers import ActionMasker
 
+from pcse_gym.envs.constraints import ActionLimiter
 from pcse_gym.envs.winterwheat import WinterWheat
 from pcse_gym.envs.sb3 import get_policy_kwargs, get_model_kwargs
 from pcse_gym.utils.eval import EvalCallback, determine_and_log_optimum
@@ -73,6 +74,8 @@ def train(log_dir, n_steps,
 
     pcse_model_name = "LINTUL" if not pcse_model else "WOFOST"
 
+    flag_limit_action = kwargs.get('limit_action')
+
     print(f'Train model {pcse_model_name} with {agent} algorithm and seed {seed}. Logdir: {log_dir}')
     if agent == 'PPO' or 'RPPO':
         hyperparams = {'batch_size': 64, 'n_steps': 2048, 'learning_rate': 0.0003, 'ent_coef': 0.0, 'clip_range': 0.3,
@@ -116,7 +119,9 @@ def train(log_dir, n_steps,
                                  costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
                                  action_space=action_space, action_multiplier=1.0, seed=seed,
                                  reward=reward, **get_model_kwargs(pcse_model), **kwargs)
-    # env_pcse_train = ActionLimiter(env_pcse_train, action_limit=4)
+
+    if flag_limit_action:
+        env_pcse_train = ActionLimiter(env_pcse_train, action_limit=4)
 
     # env_pcse_train = ActionMasker(env_pcse_train, mask_fertilization_actions)
 
@@ -159,7 +164,8 @@ def train(log_dir, n_steps,
                                 costs_nitrogen=costs_nitrogen, years=test_years, locations=test_locations,
                                 action_space=action_space, action_multiplier=1.0, reward=reward,
                                 **get_model_kwargs(pcse_model), **kwargs, seed=seed)
-    # env_pcse_eval = ActionLimiter(env_pcse_eval, action_limit=4)
+    if flag_limit_action:
+        env_pcse_eval = ActionLimiter(env_pcse_eval, action_limit=4)
 
     tb_log_name = f'{tag}-{pcse_model_name}-Ncosts-{costs_nitrogen}-run'
 
@@ -188,7 +194,8 @@ if __name__ == '__main__':
                                                                      "certain crop features")
     parser.add_argument("--no-measure", action='store_false', dest='measure')
     parser.add_argument("--variable-recovery-rate", action='store_true', dest='vrr')
-    parser.set_defaults(measure=True, vrr=False)
+    parser.add_argument("--limit-freq", action='store_true', dest='limit_action')
+    parser.set_defaults(measure=True, vrr=False, limit_action=False)
 
     args = parser.parse_args()
     pcse_model_name = "LINTUL" if not args.environment else "WOFOST"
@@ -209,12 +216,12 @@ if __name__ == '__main__':
 
     tag = f'Seed-{args.seed}'
 
-    kwargs = {'args_vrr': args.vrr}
+    kwargs = {'args_vrr': args.vrr, 'limit_action': args.limit_action}
     if not args.measure:
         action_spaces = gymnasium.spaces.Discrete(7)
     else:
         if args.environment:
-            po_features = ['TAGP', 'LAI', 'NAVAIL', 'NuptakeTotal', 'SM', 'random']
+            po_features = ['TAGP', 'LAI', 'NAVAIL', 'NuptakeTotal', 'SM']
             if 'random' in po_features:
                 crop_features.append('random')
         else:
