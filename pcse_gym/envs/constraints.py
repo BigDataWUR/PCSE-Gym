@@ -1,34 +1,40 @@
+import gymnasium
 import numpy as np
 from collections import OrderedDict
-import gymnasium as gym
 from gymnasium import ActionWrapper
 import pcse
 from datetime import timedelta
 import pcse_gym.envs.sb3
 
 
-# TODO, limit fertilization actions; WIP
 class ActionLimiter(ActionWrapper):
+    """
+    Action Wrapper to limit fertilization actions
+    """
     def __init__(self, env, action_limit):
         super(ActionLimiter, self).__init__(env)
-        assert isinstance(env.action_space, gym.spaces.Discrete)
         self.counter = 0
         self.action_limit = action_limit
 
-    def valid_action_mask(self):
-        # TODO: does this work
-        action_masks = np.zeros((self.action_space.n,), dtype=int)
-
-        if self.counter > 3:
-            action_masks[0] = 1
-
-        return action_masks
-
     def action(self, action):
+        if isinstance(self.action_space, gymnasium.spaces.Discrete):
+            action = self.limiter_discrete(action)
+        elif isinstance(self.action_space, gymnasium.spaces.MultiDiscrete):
+            action = self.limiter_multi_discrete(action)
+        return action
+
+    def limiter_discrete(self, action):
         if action != 0:  # if there's an action, increase the counter
             self.counter += 1
         if self.counter > self.action_limit:  # return 0 if the action exceeds limit
             action = 0
+        return action
+
+    def limiter_multi_discrete(self, action):
+        if action[0] != 0:
+            self.counter += 1
+        if self.counter > self.action_limit:
+            action[0] = 0
         return action
 
     def reset(self, **kwargs):

@@ -200,9 +200,9 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
             obs = obs[0]
         obs['actions'] = {'cumulative_nitrogen': 0.0}
         obs['actions'] = {'cumulative_measurement': 0.0}
-        return self._observation(obs)
+        return self._observation(obs, flag=True)
 
-    def _observation(self, observation):
+    def _observation(self, observation, flag=False):
         """
         Converts observation into np array to facilitate integration with Stable Baseline3
         """
@@ -210,11 +210,17 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
 
         if isinstance(observation, tuple):
             observation = observation[0]
+
+        index_feature = OrderedDict()  # TODO, recheck for eval.py
         for i, feature in enumerate(self.crop_features):
             if feature == 'random':
                 obs[i] = np.random.default_rng().uniform(0, 10000)
             else:
                 obs[i] = observation['crop_model'][feature][-1]
+            if feature not in index_feature and not flag and feature in self.po_features:
+                index_feature[feature] = i
+                if len(index_feature.keys()) == len(self.po_features):
+                    self.index_feature = index_feature
 
         for i, feature in enumerate(self.action_features):
             j = len(self.crop_features) + i
