@@ -31,12 +31,15 @@ class Rewards:
     # TODO reward based on cost if deploying in the field, to be tested; WIP
     def deployment_reward(self, output, output_baseline, amount, vrr):
         """
-        reward function that mirrors a realistic (financial) cost of DT deploymeny in a field
+        reward function that mirrors a realistic (financial) cost of DT deployment in a field
         one unit of reward/cost equals roughly $1
         """
         recovered_fertilizer = amount * vrr
         unrecovered_fertilizer = (amount - recovered_fertilizer) * various_costs()['environmental']
-        cost_deployment = various_costs()['deployment']
+        if amount == 0:
+            cost_deployment = 0
+        else:
+            cost_deployment = various_costs()['deployment']
 
         growth = process_pcse.compute_growth_storage_organ(output, self.timestep)
         growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep)
