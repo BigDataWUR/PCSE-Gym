@@ -186,7 +186,7 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--environment", type=int, default=1,
                         help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
     parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, or DQN.")
-    parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, GRO, or ANE")
+    parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, DEP, GRO, or ANE")
     parser.add_argument("-m", "--measure", action='store_true', help="--measure or --no-measure."
                                                                      "Train an agent in a partially"
                                                                      "observable environment that"
@@ -198,6 +198,8 @@ if __name__ == '__main__':
     parser.set_defaults(measure=True, vrr=False, limit_action=False)
 
     args = parser.parse_args()
+    if args.reward == 'DEP':
+        args.vrr = True
     pcse_model_name = "LINTUL" if not args.environment else "WOFOST"
     print(rootdir)
     log_dir = os.path.join(rootdir, 'tensorboard_logs', f'{pcse_model_name}_experiments')

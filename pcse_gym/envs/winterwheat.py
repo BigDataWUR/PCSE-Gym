@@ -48,7 +48,14 @@ class WinterWheat(gym.Env):
 
         self.observation_space = self._get_observation_space()
         self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
-        self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, costs_nitrogen)
+
+        if self.reward_function == 'DEP':
+            assert self.args_vrr, "To use 'DEP' as a reward function," \
+                                  "--variable-recovery-rate must be set as true"
+            vrr = self._env.recovery_penalty()
+            self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, costs_nitrogen, vrr)
+        else:
+            self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, costs_nitrogen)
 
         if self.po_features:
             self.__measure = MeasureOrNot(self.sb3_env)
@@ -129,6 +136,9 @@ class WinterWheat(gym.Env):
                 return self.rewards.default_winterwheat_reward(output, output_baseline, amount)
             case 'GRO':
                 return self.rewards.growth_storage_organ(output, amount)
+            case 'DEP':
+                vrr = self.sb3_env.recovery_penalty()
+                return self.rewards.deployment_reward(output, output_baseline, amount, vrr)
             case _:
                 return self.rewards.default_winterwheat_reward(output, output_baseline, amount)
 

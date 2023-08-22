@@ -71,3 +71,7 @@ def initialize_env_action_limit_measure(limit):
     env = initialize_env(po_features=get_po_features(), action_limit=True)
     env = ActionLimiter(env, action_limit=limit)
     return env
+
+
+def initialize_env_reward_dep():
+    return initialize_env(reward='DEP', args_vrr=True)

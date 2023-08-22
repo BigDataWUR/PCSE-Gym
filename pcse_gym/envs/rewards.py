@@ -2,10 +2,11 @@ import pcse_gym.utils.process_pcse_output as process_pcse
 
 
 class Rewards:
-    def __init__(self, reward_var, timestep, costs_nitrogen=10.0):
+    def __init__(self, reward_var, timestep, costs_nitrogen=10.0, vrr=0.7):
         self.reward_var = reward_var
         self.timestep = timestep
         self.costs_nitrogen = costs_nitrogen
+        self.vrr = vrr
 
     def growth_storage_organ(self, output, amount):
         growth = process_pcse.compute_growth_storage_organ(output, self.timestep)
@@ -24,6 +25,24 @@ class Rewards:
         growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep)
         benefits = growth - growth_baseline
         costs = self.costs_nitrogen * amount
+        reward = benefits - costs
+        return reward, growth
+
+    # TODO reward based on cost if deploying in the field, to be tested; WIP
+    def deployment_reward(self, output, output_baseline, amount, vrr):
+        """
+        reward function that mirrors a realistic (financial) cost of DT deploymeny in a field
+        one unit of reward/cost equals roughly $1
+        """
+        recovered_fertilizer = amount * vrr
+        unrecovered_fertilizer = (amount - recovered_fertilizer) * various_costs()['environmental']
+        cost_deployment = various_costs()['deployment']
+
+        growth = process_pcse.compute_growth_storage_organ(output, self.timestep)
+        growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep)
+        benefits = growth - growth_baseline
+        fertilizer_price = various_costs()['fertilizer'] * amount
+        costs = fertilizer_price + unrecovered_fertilizer + cost_deployment
         reward = benefits - costs
         return reward, growth
 
@@ -70,3 +89,11 @@ def compute_economic_reward(wso, fertilizer, price_yield_ton=400.0, price_fertil
     convert_wso = g_m2_to_ton_hectare * price_yield_ton
     convert_fert = g_m2_to_ton_hectare * price_fertilizer_ton
     return 0.001 * (convert_wso * wso - convert_fert * fertilizer)
+
+@staticmethod
+def various_costs():
+    return dict(
+        deployment=50,
+        fertilizer=1,
+        environmental=2
+    )
