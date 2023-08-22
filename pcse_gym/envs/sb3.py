@@ -20,6 +20,7 @@ def to_weather_info(days, weather_data, weather_variables):
     for i, d in enumerate(days):
         def def_value():
             return 0
+
         w = defaultdict(def_value)
         w['day'] = d
         for var in weather_variables:
@@ -217,11 +218,13 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
                 obs[i] = np.random.default_rng().uniform(0, 10000)
             else:
                 obs[i] = observation['crop_model'][feature][-1]
-            if self.po_features:
-                if feature not in index_feature and not flag and feature in self.po_features:
-                    index_feature[feature] = i
-                    if len(index_feature.keys()) == len(self.po_features):
-                        self.index_feature = index_feature
+            if (self.po_features is not None and
+                    feature not in index_feature
+                    and not flag and feature in
+                    self.po_features):
+                index_feature[feature] = i
+                if len(index_feature.keys()) == len(self.po_features):
+                    self.index_feature = index_feature
 
         for i, feature in enumerate(self.action_features):
             j = len(self.crop_features) + i
