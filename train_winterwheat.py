@@ -118,7 +118,7 @@ def train(log_dir, n_steps,
                                  weather_features=weather_features,
                                  costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
                                  action_space=action_space, action_multiplier=1.0, seed=seed,
-                                 reward=reward, **get_model_kwargs(pcse_model), **kwargs)
+                                 reward=reward, **get_model_kwargs(pcse_model, train_locations), **kwargs)
 
     if flag_limit_action:
         env_pcse_train = ActionLimiter(env_pcse_train, action_limit=4)
@@ -163,7 +163,7 @@ def train(log_dir, n_steps,
                                 weather_features=weather_features,
                                 costs_nitrogen=costs_nitrogen, years=test_years, locations=test_locations,
                                 action_space=action_space, action_multiplier=1.0, reward=reward,
-                                **get_model_kwargs(pcse_model), **kwargs, seed=seed)
+                                **get_model_kwargs(pcse_model, train_locations), **kwargs, seed=seed)
     if flag_limit_action:
         env_pcse_eval = ActionLimiter(env_pcse_eval, action_limit=4)
 
@@ -209,8 +209,13 @@ if __name__ == '__main__':
     train_years = [year for year in all_years if year % 2 == 1]
     test_years = [year for year in all_years if year % 2 == 0]
 
-    train_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
-    test_locations = [(52, 5.5), (48, 0)]
+    """The Netherlands"""
+    # train_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
+    # test_locations = [(52, 5.5), (48, 0)]
+
+    """Lithuania"""
+    train_locations = [(55.0, 23.5), (55.0, 24.0), (55.5, 23.5)]
+    test_locations = [(52, 5.5), (55.0, 23.5)]
 
     crop_features = defaults.get_default_crop_features(pcse_env=args.environment)
     weather_features = defaults.get_default_weather_features()

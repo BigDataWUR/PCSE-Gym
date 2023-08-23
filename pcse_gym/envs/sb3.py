@@ -85,13 +85,13 @@ def get_config_dir():
     return config_dir
 
 
-def get_wofost_kwargs(config_dir=get_config_dir()):
+def get_wofost_kwargs(config_dir=get_config_dir(), soil_file='ec3.CAB', agro_file='wheat_cropcalendar.yaml'):
     wofost_kwargs = dict(
         model_config=os.path.join(config_dir, 'Wofost81_NWLP_FD.conf'),
-        agro_config=os.path.join(config_dir, 'agro', 'wheat_cropcalendar.yaml'),
+        agro_config=os.path.join(config_dir, 'agro', agro_file),
         crop_parameters=pcse.fileinput.YAMLCropDataProvider(fpath=os.path.join(config_dir, 'crop'), force_reload=True),
         site_parameters=pcse.util.WOFOST80SiteDataProvider(WAV=10, NAVAILI=10, PAVAILI=50, KAVAILI=100),
-        soil_parameters=pcse.fileinput.CABOFileReader(os.path.join(config_dir, 'soil', 'ec3.CAB'))
+        soil_parameters=pcse.fileinput.CABOFileReader(os.path.join(config_dir, 'soil', soil_file))
     )
     return wofost_kwargs
 
@@ -107,11 +107,20 @@ def get_lintul_kwargs(config_dir=get_config_dir()):
     return lintul_kwargs
 
 
-def get_model_kwargs(pcse_model):
+def get_model_kwargs(pcse_model, loc):
+    # TODO: site params?
+    # TODO: possibly tidy up
+    if (55.0, 23.5) in loc:
+        soil_file = 'babtai_lt.CAB'
+        agro_file = 'wheat_cropcalendar_lt.yaml'
+    else:
+        soil_file = 'ec3.CAB'
+        agro_file = 'wheat_cropcalendar.yaml'
+
     if pcse_model == 0:
         return get_lintul_kwargs()
     elif pcse_model == 1:
-        return get_wofost_kwargs()
+        return get_wofost_kwargs(soil_file=soil_file, agro_file=agro_file)
     else:
         raise Exception("Choose 0 or 1 for the environment")
 

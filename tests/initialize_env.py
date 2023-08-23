@@ -39,7 +39,7 @@ def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_defaul
                              action_space=action_space,
                              action_multiplier=action_multiplier,
                              reward=reward,
-                             **get_model_kwargs(pcse_env),
+                             **get_model_kwargs(pcse_env, locations),
                              **kwargs)
 
     return env_return
