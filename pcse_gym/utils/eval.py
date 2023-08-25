@@ -38,7 +38,7 @@ def get_ylim_dict():
 
     ylim = defaultdict(def_value)
     ylim['WSO'] = [0, 1000]
-    ylim['TWSO'] = [0, 10000]
+    ylim['TWSO'] = [0, 15000]
     return ylim
 
 
@@ -53,6 +53,7 @@ def identity_line(ax=None, ls='--', *args, **kwargs):
         low = min(low_x, low_y)
         high = max(high_x, high_y)
         identity.set_data([low, high], [low, high])
+
     callback(ax)
     ax.callbacks.connect('xlim_changed', callback)
     ax.callbacks.connect('ylim_changed', callback)
@@ -142,18 +143,90 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
                   put_legend=True, plot_average=False):
     titles = get_titles()
     xmax = 0
+    xmin = 9999
+    check = []
+
+    def restructure_x(day_nums):
+        # sanity check
+        # if number resets to 1, add subsequent number with previous so on
+        offset = 0
+        new_num = []
+        for i, n in enumerate(day_nums):
+            if i > 0 and day_nums[i] < day_nums[i - 1]:
+                offset += day_nums[i - 1]
+            new_num.append(n + offset)
+        return new_num
+
+    def month_of_year_ind(day_of_year):
+        month_lengths = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31] * 2
+        cumulative_days = 0
+        for i, length in enumerate(month_lengths):
+            cumulative_days += length
+            # sanity check
+            # if our day_of_year is less than the cumulative days,
+            # we've found our month
+            if day_of_year <= cumulative_days:
+                return i
+        else:
+            return None
+
+    def ticks_checker(inc_flag, _xmin):
+        mons = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec']
+        mon_days = [0, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335,
+                    366, 397, 425, 456, 486, 517, 547, 578, 609, 639, 670, 700]
+        if not inc_flag:
+            mons = mons * 2
+            _extra_month = next(m[0] for m in enumerate(mon_days) if m[1] >= xmax)
+            _xmin = month_of_year_ind(_xmin)
+            mon_days = mon_days[_xmin:_extra_month + 1]
+            mons = mons[_xmin:_extra_month + 1]
+        else:
+            _extra_month = next(m[0] for m in enumerate(mon_days) if m[1] >= xmax)
+            mon_days = mon_days[0:_extra_month + 1]
+            mons = mons[0:_extra_month + 1]
+        return mons, mon_days
+
+    def doy_generator():
+        # sanity check
+        # starts in Oct (274), resets in Jan (1), continue with offset for rest
+        # new dataframe starts in Oct (274)
+        last_value = None
+        while True:
+            current_value = (yield)
+            if last_value is None or (last_value < current_value):
+                last_value = current_value
+            elif last_value > current_value:
+                offset = last_value
+                current_value += offset
+            yield current_value
+
+    def doy_sender(_i):
+        gen.send(None)
+        return gen.send(_i)
+
+
     for label, results in results_dict.items():
         x, y = zip(*results[0][variable].items())
         x = ([i.timetuple().tm_yday for i in x])
+        inc = all(i < j for i, j in zip(x, x[1:]))
+        if not inc:
+            x = restructure_x(x)
         if variable in cumulative_variables: y = np.cumsum(y)
         if max(x) > xmax: xmax = max(x)
+        if min(x) < xmin: xmin = min(x)
         if not plot_average:
             ax.step(x, y, label=label, where='post')
 
     if plot_average:
-        plot_df = pd.concat([pd.DataFrame.from_dict(results[0][variable], orient='index', columns=[label])
-                            .rename(lambda i: i.timetuple().tm_yday) for label, results in results_dict.items()],
-                            axis=1)
+        dataframes_list = []
+        for label, results in results_dict.items():
+            gen = doy_generator()  # restart the generator
+            df = pd.DataFrame.from_dict(results[0][variable], orient='index', columns=[label])
+            df = df.rename(lambda i: doy_sender(i.timetuple().tm_yday))
+            dataframes_list.append(df)
+
+        plot_df = pd.concat(dataframes_list, axis=1)
+
         if variable in cumulative_variables: plot_df = plot_df.apply(np.cumsum, axis=0)
         plot_df.fillna(method='ffill', inplace=True)
         ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where='post')
@@ -167,11 +240,7 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
     ax.xaxis.grid(True, which='minor')
     ax.tick_params(axis='x', which='minor', grid_alpha=0.7, colors=ax.get_figure().get_facecolor(), grid_ls=":")
 
-    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec']
-    month_days = [0, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
-    extra_month = next(x[0] for x in enumerate(month_days) if x[1] >= xmax)
-    month_days = month_days[0:extra_month + 1]
-    months = months[0:extra_month + 1]
+    months, month_days = ticks_checker(inc, xmin)
     ax.set_xticks(month_days)
     ax.set_xticklabels(months)
 
@@ -412,7 +481,8 @@ class EvalCallback(BaseCallback):
     :param eval_freq: (int) Evaluate the agent every eval_freq call of the callback.
     """
 
-    def __init__(self, env_eval=None, train_years=defaults.get_default_train_years(), test_years=defaults.get_default_test_years(),
+    def __init__(self, env_eval=None, train_years=defaults.get_default_train_years(),
+                 test_years=defaults.get_default_test_years(),
                  train_locations=defaults.get_default_location(), test_locations=defaults.get_default_location(),
                  n_eval_episodes=1, eval_freq=1000, pcse_model=1, seed=0, **kwargs):
         super(EvalCallback, self).__init__()
@@ -582,7 +652,7 @@ class EvalCallback(BaseCallback):
                 self.logger.record(f'eval/nitrogen-median-train', compute_median(fertilizer, train_keys))
 
             if self.pcse_model:
-                variables = ['action', 'TWSO', 'reward', 'NAVAIL',
+                variables = ['DVS', 'action', 'TWSO', 'reward', 'NAVAIL',
                              'NuptakeTotal', 'fertilizer', 'val']
                 if self.po_features: variables.append('measure')
             else:

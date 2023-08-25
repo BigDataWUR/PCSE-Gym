@@ -22,20 +22,37 @@ def replace_years(agro_management, years):
     if not isinstance(years, list):
         years = [years]
 
-    updated_agro_management = [{k.replace(year=year): v for k, v in agro.items()} for agro, year in
-                               zip(agro_management, years)]
+    # TODO: refactor date_keys so it's lighter,
+    #  direct reference is a bit tricky with the dictionary name (2006-10-01)
+    agro = agro_management[0]
+    date_keys = [[v2.year for v1 in v.values() if isinstance(v1, dict) for v2 in v1.values()
+                  if isinstance(v2, datetime.date)] for v in agro.values()]
+    date_keys = date_keys[0]
+    if date_keys[0] < date_keys[1]:
+        updated_agro_management = [{k.replace(year=year-1): v for k, v in agro.items()} for agro, year in
+                                   zip(agro_management, years)]
+    else:
+        updated_agro_management = [{k.replace(year=year): v for k, v in agro.items()} for agro, year in
+                                   zip(agro_management, years)]
 
-    def replace_year_value(d, year):
+    def replace_year_value(d, year, y_sow=None):
         for k, v in d.items():
             if isinstance(v, dict):
-                replace_year_value(v, year)
+                replace_year_value(v, year, y_sow)
             else:
-                if isinstance(v, datetime.date):
+                if isinstance(v, datetime.date) and y_sow and k == 'crop_start_date':
+                    up_dict = {k: v.replace(year=y_sow)}
+                    d.update(up_dict)
+                elif isinstance(v, datetime.date):
                     up_dict = {k: v.replace(year=year)}
                     d.update(up_dict)
 
     for agro, year in zip(updated_agro_management, years):
-        replace_year_value(agro, year)
+        if date_keys[0] < date_keys[1]:
+            year_sow = year - 1
+            replace_year_value(agro, year, year_sow)
+        else:
+            replace_year_value(agro, year)
     return updated_agro_management
 
 
