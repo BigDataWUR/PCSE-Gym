@@ -107,7 +107,7 @@ def get_lintul_kwargs(config_dir=get_config_dir()):
     return lintul_kwargs
 
 
-def get_model_kwargs(pcse_model, loc):
+def get_model_kwargs(pcse_model, loc=defaults.get_default_location()):
     # TODO: site params?
     # TODO: possibly tidy up
     if (55.0, 23.5) in loc:
