@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 import gymnasium
 import numpy as np
 from collections import OrderedDict
@@ -5,6 +7,7 @@ from gymnasium import ActionWrapper
 import pcse
 from datetime import timedelta
 import pcse_gym.envs.sb3
+from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 
 
 class ActionLimiter(ActionWrapper):
@@ -45,6 +48,19 @@ class ActionLimiter(ActionWrapper):
 def ratio_rescale(value, old_max=None, old_min=None, new_max=None, new_min=None):
     new_value = (((value - old_min) * (new_max - new_min)) / (old_max - old_min)) + new_min
     return new_value
+
+
+def non_linear_ratio_rescale(value, old_max=None, old_min=None, new_max=None, new_min=None):
+    # Normalize the input value to [0, 1]
+    normalized_value = (value - old_min) / (old_max - old_min)
+
+    # Determine which segment we are in based on the normalized value
+    if normalized_value <= 0.5:
+        # Scale sine to [0, 1] and then rescale to [0.3, 0.55]
+        return 0.3 + 0.25 * np.sin(np.pi * normalized_value)
+    else:
+        # Scale sine to [0, 1] and then rescale to [0.55, 0.8]
+        return 0.55 + 0.25 * np.sin(np.pi * (normalized_value - 0.5))
 
 
 class MeasureOrNot:
@@ -121,7 +137,7 @@ class MeasureOrNot:
                                                "same length"
         for i, i_obs in enumerate(self.feature_ind):
             if not measurement[i]:
-                obs[i_obs] = 0  # might want to change this
+                obs[i_obs] = 0.0  # might want to change this
             else:
                 measuring_cost[i] = costs[i]
         return obs, measuring_cost
@@ -167,7 +183,7 @@ class VariableRecoveryRate(pcse_gym.envs.sb3.StableBaselinesWrapper):
     def recovery_penalty(self):
         """
         estimation function due to static recovery rate of WOFOST/LINTUL
-        Potentially enforcing the agent not to dump everything at the start (to be tested)
+        Potentially enforcing the agent not to dump everything at the start
         Not to be used with CERES 'start-dump'
         Adapted, based on the findings of Raun, W.R. and Johnson, G.V. (1999)
         """
@@ -177,4 +193,36 @@ class VariableRecoveryRate(pcse_gym.envs.sb3.StableBaselinesWrapper):
                                  old_max=date_end / timedelta(days=1), old_min=0.0, new_max=0.8, new_min=0.3)
         return recovery
 
+
+class VecNormalizePO(VecNormalize):
+    """
+    A wrapper of the normalizing wrapper for an SB3 vectorized environment
+    Overrides the normalization of partially observable crop variables in CropGym
+    """
+    def __init__(self, venv, *args, **kwargs):
+        super(VecNormalizePO, self).__init__(venv, *args, **kwargs)
+
+    def _normalize_obs(self, obs, obs_rms):
+        if self.venv.envs[0].unwrapped.sb3_env.index_feature:
+            index_feature = self.venv.envs[0].unwrapped.sb3_env.index_feature
+            actions = self.venv.unwrapped.actions
+            norm = super()._normalize_obs(obs, obs_rms)
+            for ind, act in zip(index_feature.values(), actions[1:]):
+                if act == 0:
+                    norm[ind] = -self.clip_obs  # if no measure, assign lower limit of normalization std
+            return norm
+        else:
+            return super()._normalize_obs(obs, obs_rms)
+
+    def _unnormalize_obs(self, obs, obs_rms):
+        if self.venv.envs[0].unwrapped.sb3_env.index_feature:
+            index_feature = self.venv.envs[0].unwrapped.sb3_env.index_feature
+            actions = self.venv.unwrapped.actions
+            unnorm = super()._unnormalize_obs(obs, obs_rms)
+            for ind, act in zip(index_feature.values(), actions[1:]):
+                if act == 0:
+                    unnorm[ind] = 0
+            return unnorm
+        else:
+            return super()._unnormalize_obs(obs, obs_rms)
 

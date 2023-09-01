@@ -15,7 +15,7 @@ from sb3_contrib import RecurrentPPO  # MaskablePPO
 # from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 # from sb3_contrib.common.wrappers import ActionMasker
 
-from pcse_gym.envs.constraints import ActionLimiter
+from pcse_gym.envs.constraints import ActionLimiter, VecNormalizePO
 from pcse_gym.envs.winterwheat import WinterWheat
 from pcse_gym.envs.sb3 import get_policy_kwargs, get_model_kwargs
 from pcse_gym.utils.eval import EvalCallback, determine_and_log_optimum
@@ -32,6 +32,15 @@ if rootdir not in sys.path:
 
 if os.path.join(rootdir, "pcse_gym") not in sys.path:
     sys.path.insert(0, os.path.join(rootdir, "pcse_gym"))
+
+
+def wrapper_vectorized_env(env_pcse_train, flag_po):
+    if flag_po:
+        return VecNormalizePO(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
+                              clip_obs=10., clip_reward=50., gamma=1)
+    else:
+        return VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
+                            clip_obs=10., clip_reward=50., gamma=1)
 
 
 def train(log_dir, n_steps,
@@ -75,6 +84,7 @@ def train(log_dir, n_steps,
     pcse_model_name = "LINTUL" if not pcse_model else "WOFOST"
 
     flag_limit_action = kwargs.get('limit_action')
+    flag_po = kwargs.get('po_features')
 
     print(f'Train model {pcse_model_name} with {agent} algorithm and seed {seed}. Logdir: {log_dir}')
     if agent == 'PPO' or 'RPPO':
@@ -132,8 +142,7 @@ def train(log_dir, n_steps,
 
     match agent:
         case 'PPO':
-            env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
-                                          clip_obs=10., clip_reward=50., gamma=1)
+            env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po)
             model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
                         tensorboard_log=log_dir)
         case 'DQN':
@@ -142,13 +151,11 @@ def train(log_dir, n_steps,
             model = DQN('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
                         tensorboard_log=log_dir)
         case 'RPPO':
-            env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
-                                          clip_obs=10., clip_reward=50., gamma=1)
+            env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po)
             model = RecurrentPPO('MlpLstmPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
                                  tensorboard_log=log_dir)
         case _:
-            env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
-                                          clip_obs=10., clip_reward=50., gamma=1)
+            env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po)
             model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
                         tensorboard_log=log_dir)
 
