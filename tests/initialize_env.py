@@ -75,3 +75,7 @@ def initialize_env_action_limit_measure(limit):
 
 def initialize_env_reward_dep():
     return initialize_env(reward='DEP', args_vrr=True)
+
+
+def initialize_env_reward_ane():
+    return initialize_env(reward='ANE')

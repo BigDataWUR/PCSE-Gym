@@ -655,6 +655,7 @@ class EvalCallback(BaseCallback):
                 variables = ['DVS', 'action', 'TWSO', 'reward', 'NAVAIL',
                              'NuptakeTotal', 'fertilizer', 'val']
                 if self.po_features: variables.append('measure')
+                if self.env_eval.reward_function == 'ANE': variables.append('moving_ANE')
             else:
                 variables = ['action', 'WSO', 'reward', 'TNSOIL', 'val']
                 if self.po_features: variables.append('measure')

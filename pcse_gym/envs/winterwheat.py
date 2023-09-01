@@ -57,6 +57,9 @@ class WinterWheat(gym.Env):
         else:
             self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, costs_nitrogen)
 
+        if self.reward_function == 'ANE':
+            self.ane = self.rewards.ContainerANE(self.timestep)
+
         if self.po_features:
             self.__measure = MeasureOrNot(self.sb3_env)
 
@@ -93,6 +96,10 @@ class WinterWheat(gym.Env):
         info['reward'][self.date] = reward
         if 'growth' not in info.keys(): info['growth'] = {}
         info['growth'][self.date] = growth
+        if self.reward_function == 'ANE':
+            if 'moving_ANE' not in info.keys():
+                info['moving_ANE'] = {}
+            info['moving_ANE'][self.date] = self.ane.moving_ane
 
         return obs, reward, terminated, truncated, info
 
@@ -131,7 +138,7 @@ class WinterWheat(gym.Env):
     def get_reward_func(self, output, amount, output_baseline=None):
         match self.reward_function:  # Needs python 3.10+
             case 'ANE':
-                return self.rewards.ane_reward(output, output_baseline, amount)
+                return self.rewards.ane_reward(self.ane, output, output_baseline, amount)
             case 'DEF':
                 return self.rewards.default_winterwheat_reward(output, output_baseline, amount)
             case 'GRO':
@@ -171,6 +178,8 @@ class WinterWheat(gym.Env):
         if isinstance(self.locations, list):
             location = self.locations[self.np_random.choice(len(self.locations), 1)[0]]
             self.set_location(location)
+        if self.reward_function == 'ANE':
+            self.ane.reset()
         if self.reward_function != 'GRO':
             self.baseline_env.reset(seed=seed)
         obs = self.sb3_env.reset(seed=seed)

@@ -127,8 +127,8 @@ def train(log_dir, n_steps,
 
     env_pcse_train = Monitor(env_pcse_train)
 
-    if use_comet and comet_log:
-        env_pcse_train = CometLogger(env_pcse_train, comet_log)
+    # if use_comet and comet_log:
+    #     env_pcse_train = CometLogger(env_pcse_train, comet_log)
 
     match agent:
         case 'PPO':
