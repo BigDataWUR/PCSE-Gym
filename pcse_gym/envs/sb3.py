@@ -110,6 +110,8 @@ def get_lintul_kwargs(config_dir=get_config_dir()):
 def get_model_kwargs(pcse_model, loc=defaults.get_default_location()):
     # TODO: site params?
     # TODO: possibly tidy up
+    if not isinstance(loc, list):
+        loc = [loc]
     if (55.0, 23.5) in loc:
         soil_file = 'babtai_lt.CAB'
         agro_file = 'wheat_cropcalendar_lt.yaml'
