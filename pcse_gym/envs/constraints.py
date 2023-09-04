@@ -1,5 +1,3 @@
-from copy import deepcopy
-
 import gymnasium
 import numpy as np
 from collections import OrderedDict
@@ -7,7 +5,7 @@ from gymnasium import ActionWrapper
 import pcse
 from datetime import timedelta
 import pcse_gym.envs.sb3
-from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
+from stable_baselines3.common.vec_env import VecNormalize
 
 
 class ActionLimiter(ActionWrapper):
@@ -67,10 +65,8 @@ class MeasureOrNot:
     """
     Container to store indexes and index matching logic of the environment observation and the measurement actions
     """
-
     def __init__(self, env):
         self.env = env
-        self.feature_cost = []
         self.feature_ind = []
         self.feature_ind_dict = OrderedDict()
         self.get_feature_cost_ind()
@@ -125,37 +121,68 @@ class MeasureOrNot:
                 self.feature_ind_dict[feature] = self.env.crop_features.index(feature)
 
     def measure_act(self, obs, measurement):
-        """PROTOTYPE
+        """
         iterate through feature index from sb3 observation.
         if a measurement action is 0, observation is 0
-        otherwise, add cost to getting the measurement"""
-        costs = self.get_observation_cost()
+        if measure action 1, add a noisy observation
+        if measure action 2, give correct observation
+        """
         measuring_cost = np.zeros(len(measurement))
-        # for feature in set(self.feature_ind_dict) & set(self.list_of_costs()):
 
-        assert len(measurement) == len(costs), "Action space and partially observable features are not the" \
-                                               "same length"
         for i, i_obs in enumerate(self.feature_ind):
             if not measurement[i]:
-                obs[i_obs] = 0.0  # might want to change this
+                obs[i_obs] = 0.0
+            elif measurement[i] == 1:
+                measuring_cost[i] = self.get_observation_cost(measurement[i], i_obs)
             else:
-                measuring_cost[i] = costs[i]
+                obs[i_obs] = self.get_noise(obs[i_obs], i_obs)
+                measuring_cost[i] = self.get_observation_cost(measurement[i], i_obs)
         return obs, measuring_cost
 
-    def get_observation_cost(self):
-        if not self.feature_cost:
-            for observed_feature in self.env.po_features:
-                if observed_feature not in self.list_of_costs():
-                    self.feature_cost.append(1)
-                else:
-                    self.feature_cost.append(self.list_of_costs()[observed_feature])
-            return self.feature_cost
-        else:
-            return self.feature_cost
+    def get_noise(self, obs, index):
+        rng = np.random.default_rng()
+        feature = self.get_match(index)
+        match feature:
+            case 'LAI':
+                obs = rng.normal(obs, 0.4)
+            case 'SM':
+                obs = rng.normal(obs, 0.2)
+            case 'NAVAIL':
+                obs = rng.normal(obs, 5)
+            case 'NuptakeTotal':
+                obs = rng.normal(obs, 5)
+            case 'TAGP':
+                obs = rng.normal(obs, 2)
+            case _:
+                obs = rng.normal(obs, 1)
+        return obs
+
+    def get_observation_cost(self, price, ind):
+        costs = self.list_of_costs(price)
+        key_cost = self.get_match(ind)
+        value_cost = costs.get(key_cost, 1)
+        return value_cost
+
+    def list_of_costs(self, cost):
+        match cost:
+            case 1:
+                return self.exp_costs()
+            case 2:
+                return self.cheap_costs()
+            case _:
+                return Exception("Not a valid choice")
+
+    def get_match(self, reference):
+        key_match = None
+        for key, value in self.feature_ind_dict.items():
+            if value == reference:
+                key_match = key
+                break
+        return key_match
 
     @staticmethod
-    def list_of_costs():
-        lookup = dict(
+    def exp_costs():
+        return dict(
             LAI=1,
             TAGP=5,
             NAVAIL=5,
@@ -166,7 +193,20 @@ class MeasureOrNot:
             NUPTT=3,
             TRAIN=1
         )
-        return lookup
+
+    @staticmethod
+    def cheap_costs():
+        return dict(
+            LAI=0.5,
+            TAGP=2.5,
+            NAVAIL=2.5,
+            NuptakeTotal=2,
+            SM=0.5,
+            TGROWTH=2.5,
+            TNSOIL=2.5,
+            NUPTT=2,
+            TRAIN=0.5
+        )
 
 
 class VariableRecoveryRate(pcse_gym.envs.sb3.StableBaselinesWrapper):
@@ -221,7 +261,7 @@ class VecNormalizePO(VecNormalize):
             unnorm = super()._unnormalize_obs(obs, obs_rms)
             for ind, act in zip(index_feature.values(), actions[1:]):
                 if act == 0:
-                    unnorm[ind] = 0
+                    unnorm[ind] = 0.0
             return unnorm
         else:
             return super()._unnormalize_obs(obs, obs_rms)

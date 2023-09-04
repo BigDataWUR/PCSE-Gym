@@ -200,11 +200,16 @@ if __name__ == '__main__':
                                                                      "decides when to measure"
                                                                      "certain crop features")
     parser.add_argument("--no-measure", action='store_false', dest='measure')
+    parser.add_argument("--noisy-measure", action='store_true', dest='noisy_measure')
     parser.add_argument("--variable-recovery-rate", action='store_true', dest='vrr')
     parser.add_argument("--limit-freq", action='store_true', dest='limit_action')
-    parser.set_defaults(measure=True, vrr=False, limit_action=False)
+    parser.set_defaults(measure=True, vrr=False, limit_action=False, noisy_measure=False)
 
     args = parser.parse_args()
+
+    if not args.measure and args.noisy_measure:
+        parser.error("noisy measure should be used with measure")
+
     if args.reward == 'DEP':
         args.vrr = True
     pcse_model_name = "LINTUL" if not args.environment else "WOFOST"
@@ -217,12 +222,12 @@ if __name__ == '__main__':
     test_years = [year for year in all_years if year % 2 == 0]
 
     """The Netherlands"""
-    # train_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
-    # test_locations = [(52, 5.5), (48, 0)]
+    train_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
+    test_locations = [(52, 5.5), (48, 0)]
 
     """Lithuania"""
-    train_locations = [(55.0, 23.5), (55.0, 24.0), (55.5, 23.5)]
-    test_locations = [(52, 5.5), (55.0, 23.5)]
+    # train_locations = [(55.0, 23.5), (55.0, 24.0), (55.5, 23.5)]
+    # test_locations = [(52, 5.5), (55.0, 23.5)]
 
     crop_features = defaults.get_default_crop_features(pcse_env=args.environment)
     weather_features = defaults.get_default_weather_features()
@@ -230,7 +235,7 @@ if __name__ == '__main__':
 
     tag = f'Seed-{args.seed}'
 
-    kwargs = {'args_vrr': args.vrr, 'limit_action': args.limit_action}
+    kwargs = {'args_vrr': args.vrr, 'limit_action': args.limit_action, 'noisy_measure': args.noisy_measure}
     if not args.measure:
         action_spaces = gymnasium.spaces.Discrete(7)
     else:
@@ -242,7 +247,11 @@ if __name__ == '__main__':
             po_features = ['TGROWTH', 'LAI', 'TNSOIL', 'NUPTT', 'TRAIN']
         kwargs['po_features'] = po_features
         kwargs['args_measure'] = True
-        a_shape = [7] + [2] * len(po_features)
+        if not args.noisy_measure:
+            m_shape = 2
+        else:
+            m_shape = 3
+        a_shape = [7] + [m_shape] * len(po_features)
         action_spaces = gymnasium.spaces.MultiDiscrete(a_shape)
 
     train(log_dir, train_years=train_years, test_years=test_years,

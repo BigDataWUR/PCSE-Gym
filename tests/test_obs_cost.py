@@ -10,11 +10,14 @@ class TestMeasure(unittest.TestCase):
 
     def test_oc(self):
         self.env.reset()
-        cost = self.env.measure_features.get_observation_cost()
 
         obs = np.ones(30)
 
         measure = [1, 1, 1, 1, 1]
+
+        cost = []
+        for m, f in zip(measure, self.env.measure_features.feature_ind):
+            cost.append(self.env.measure_features.get_observation_cost(m,f))
 
         _, measurement_cost = self.env.measure_features.measure_act(obs, measure)
 
@@ -32,6 +35,47 @@ class TestMeasure(unittest.TestCase):
             actual.append(a)
         expected = list(np.zeros(3))
         self.assertListEqual(expected, actual)
+
+
+class TestNoisyMeasure(unittest.TestCase):
+    def setUp(self):
+        self.env = init_env.initialize_env_po_noisy()
+
+    def test_noisy_oc(self):
+        self.env.reset()
+        obs = np.ones(30)
+        measure = [1, 2, 1, 2, 1]
+        cost = []
+        for m, f in zip(measure, self.env.measure_features.feature_ind):
+            cost.append(self.env.measure_features.get_observation_cost(m, f))
+        _, measurement_cost = self.env.measure_features.measure_act(obs, measure)
+
+        self.assertListEqual(cost, list(measurement_cost))
+
+    def test_noise_value(self):
+        self.env.reset()
+        action = np.array([0, 2, 2, 2, 2, 2])
+        obs, _, _, _, _ = self.env.step(action)
+
+        lai_std, sm_std, navail_std, nuptaketotal_std, tagp_std = 0.4, 0.2, 5, 5, 2
+
+        lai = obs[self.env.measure_features.feature_ind_dict['LAI']]
+        sm = obs[self.env.measure_features.feature_ind_dict['SM']]
+        navail = obs[self.env.measure_features.feature_ind_dict['NAVAIL']]
+        nuptaketotal = obs[self.env.measure_features.feature_ind_dict['NuptakeTotal']]
+        tagp = obs[self.env.measure_features.feature_ind_dict['TAGP']]
+
+        # assert that range of noisy observations are within the defined std
+        self.assertLessEqual(lai, lai + lai_std)
+        self.assertGreaterEqual(lai, lai - lai_std)
+        self.assertLessEqual(sm, sm + sm_std)
+        self.assertGreaterEqual(sm, sm - sm_std)
+        self.assertLessEqual(navail, navail + navail_std)
+        self.assertGreaterEqual(navail, navail - navail_std)
+        self.assertLessEqual(nuptaketotal, nuptaketotal + nuptaketotal_std)
+        self.assertGreaterEqual(nuptaketotal, nuptaketotal - nuptaketotal_std)
+        self.assertLessEqual(tagp, tagp + tagp_std)
+        self.assertGreaterEqual(tagp, tagp - tagp_std)
 
 
 class TestNoMeasure(unittest.TestCase):
@@ -62,10 +106,9 @@ class TestRandomFeature(unittest.TestCase):
         measure = action[1:]
         obs, reward, terminated, truncated, info = self.env.step(action)
         expected = []
-        costs = self.env.measure_features.get_observation_cost()
-        for i, cost in zip(measure, costs):
-            if i:
-                expected.append(cost)
+        for num, m in zip(self.env.measure_features.feature_ind, measure):
+            if m:
+                expected.append(self.env.measure_features.get_observation_cost(m, num))
             else:
                 expected.append(0)
         expected = -float(sum(expected))

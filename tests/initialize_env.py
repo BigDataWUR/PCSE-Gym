@@ -26,12 +26,12 @@ def get_action_space(nitrogen_levels=7, po_features=[]):
 def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_default_crop_features(pcse_env=1),
                    costs_nitrogen=10, reward='DEF', nitrogen_levels=7, action_multiplier=1.0, add_random=False,
                    years=defaults.get_default_train_years(), locations=defaults.get_default_location(), args_vrr=False,
-                   action_limit=False):
+                   action_limit=False, noisy_measure=False):
     if add_random:
         po_features.append('random'), crop_features.append('random')
     action_space = get_action_space(nitrogen_levels=nitrogen_levels, po_features=po_features)
     kwargs = dict(po_features=po_features, args_measure=po_features is not None, args_vrr=args_vrr,
-                  action_limit=action_limit)
+                  action_limit=action_limit, noisy_measure=noisy_measure)
     env_return = WinterWheat(crop_features=crop_features,
                              costs_nitrogen=costs_nitrogen,
                              years=years,
@@ -47,6 +47,10 @@ def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_defaul
 
 def initialize_env_po():
     return initialize_env(po_features=get_po_features())
+
+
+def initialize_env_po_noisy():
+    return initialize_env(po_features=get_po_features(), noisy_measure=True)
 
 
 def initialize_env_no_baseline():
