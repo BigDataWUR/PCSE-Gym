@@ -1,0 +1,36 @@
+[tool.poetry]
+name = "cropgym"
+version = "0.0.1"
+description = "Reinforcement Learning Environment for Crop Management"
+authors = ["Wageningen University and Research"]
+readme = "README.md"
+homepage = "https://cropgym.ai/"
+keywords = ["reinforcement learning"]
+packages = [
+    { include = "pcse_gym" }
+]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+gymnasium = "^0.29.1"
+pcse = "^5.5.5"
+pyyaml = "^6.0.1"
+numpy = "^1.25.2"
+datetime = "^5.2"
+
+stable-baselines3 = { version = "^2.1.0", optional = true }
+sb3-contrib = { version = "^2.1.0", optional = true }
+matplotlib = { version = "^3.7.2", optional = true }
+torch = { version = "^2.0.1", optional = true }
+lib-programname = { version = "^2.0.9", optional = true }
+tensorboard = { version = "^2.14.0", optional = true }
+scipy = { version = "^1.11.2", optional = true }
+tqdm = { version = "^4.66.1", optional = true }
+pandas = { version = "^2.1.0", optional = true }
+
+[tool.poetry.extras]
+sb-integration = ["stable-baselines3", "sb3-contrib", "matplotlib", "torch", "lib-programname", "tensorboard", "scipy", "tqdm", "pandas"]
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"

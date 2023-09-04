@@ -187,9 +187,9 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         if isinstance(obs, tuple):
             obs = obs[0]
         obs['actions'] = {'cumulative_nitrogen': 0.0}
-        return self._observation(obs, flag=True)
+        return self._observation(obs)
 
-    def _observation(self, observation, flag=False):
+    def _observation(self, observation):
         """
         Converts observation into np array to facilitate integration with Stable Baseline3
         """
