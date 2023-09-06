@@ -15,13 +15,12 @@ from sb3_contrib import RecurrentPPO  # MaskablePPO
 # from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 # from sb3_contrib.common.wrappers import ActionMasker
 
-from pcse_gym.envs.constraints import ActionLimiter, VecNormalizePO
+from pcse_gym.envs.constraints import ActionConstrainer, VecNormalizePO
 from pcse_gym.envs.winterwheat import WinterWheat
 from pcse_gym.envs.sb3 import get_policy_kwargs, get_model_kwargs
 from pcse_gym.utils.eval import EvalCallback, determine_and_log_optimum
 import pcse_gym.utils.defaults as defaults
 
-# from pcse_gym.envs.constraints import ActionLimiter
 
 path_to_program = lib_programname.get_path_executed_script()
 rootdir = path_to_program.parents[0]
@@ -83,8 +82,9 @@ def train(log_dir, n_steps,
 
     pcse_model_name = "LINTUL" if not pcse_model else "WOFOST"
 
-    flag_limit_action = kwargs.get('limit_action')
-    flag_po = kwargs.get('po_features')
+    action_limit = kwargs.get('action_limit', 0)
+    flag_po = kwargs.get('po_features', [])
+    n_budget = kwargs.get('n_budget', 0)
 
     print(f'Train model {pcse_model_name} with {agent} algorithm and seed {seed}. Logdir: {log_dir}')
     if agent == 'PPO' or 'RPPO':
@@ -106,7 +106,7 @@ def train(log_dir, n_steps,
         hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
 
     # For comet use
-    use_comet = True
+    use_comet = False
 
     if use_comet:
         with open(os.path.join(rootdir, 'comet', 'hbja_api_key'), 'r') as f:
@@ -130,15 +130,13 @@ def train(log_dir, n_steps,
                                  action_space=action_space, action_multiplier=1.0, seed=seed,
                                  reward=reward, **get_model_kwargs(pcse_model, train_locations), **kwargs)
 
-    if flag_limit_action:
-        env_pcse_train = ActionLimiter(env_pcse_train, action_limit=4)
-
-    # env_pcse_train = ActionMasker(env_pcse_train, mask_fertilization_actions)
+    if action_limit or n_budget > 0:
+        env_pcse_train = ActionConstrainer(env_pcse_train, action_limit=action_limit, n_budget=n_budget)
 
     env_pcse_train = Monitor(env_pcse_train)
 
-    # if use_comet and comet_log:
-    #     env_pcse_train = CometLogger(env_pcse_train, comet_log)
+    if use_comet and comet_log:
+        env_pcse_train = CometLogger(env_pcse_train, comet_log)
 
     match agent:
         case 'PPO':
@@ -171,8 +169,8 @@ def train(log_dir, n_steps,
                                 costs_nitrogen=costs_nitrogen, years=test_years, locations=test_locations,
                                 action_space=action_space, action_multiplier=1.0, reward=reward,
                                 **get_model_kwargs(pcse_model, train_locations), **kwargs, seed=seed)
-    if flag_limit_action:
-        env_pcse_eval = ActionLimiter(env_pcse_eval, action_limit=4)
+    if action_limit or n_budget > 0:
+        env_pcse_eval = ActionConstrainer(env_pcse_eval, action_limit=action_limit, n_budget=n_budget)
 
     tb_log_name = f'{tag}-{pcse_model_name}-Ncosts-{costs_nitrogen}-run'
 
@@ -194,6 +192,9 @@ if __name__ == '__main__':
                         help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
     parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, or DQN.")
     parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, DEP, GRO, or ANE")
+    parser.add_argument("-b", "--n_budget", type=int, default=0, help="Nitrogen budget. kg/ha. Recommended 180")
+    parser.add_argument("-l", "--action_limit", type=int, default=0, help="Limit fertilization frequency."
+                                                                          "Recommended 4 times")
     parser.add_argument("-m", "--measure", action='store_true', help="--measure or --no-measure."
                                                                      "Train an agent in a partially"
                                                                      "observable environment that"
@@ -202,8 +203,7 @@ if __name__ == '__main__':
     parser.add_argument("--no-measure", action='store_false', dest='measure')
     parser.add_argument("--noisy-measure", action='store_true', dest='noisy_measure')
     parser.add_argument("--variable-recovery-rate", action='store_true', dest='vrr')
-    parser.add_argument("--limit-freq", action='store_true', dest='limit_action')
-    parser.set_defaults(measure=True, vrr=False, limit_action=False, noisy_measure=False)
+    parser.set_defaults(measure=True, vrr=False, noisy_measure=False)
 
     args = parser.parse_args()
 
@@ -213,6 +213,7 @@ if __name__ == '__main__':
     if args.reward == 'DEP':
         args.vrr = True
     pcse_model_name = "LINTUL" if not args.environment else "WOFOST"
+
     print(rootdir)
     log_dir = os.path.join(rootdir, 'tensorboard_logs', f'{pcse_model_name}_experiments')
     print(f'train for {args.nsteps} steps with costs_nitrogen={args.costs_nitrogen} (seed={args.seed})')
@@ -222,12 +223,12 @@ if __name__ == '__main__':
     test_years = [year for year in all_years if year % 2 == 0]
 
     """The Netherlands"""
-    train_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
-    test_locations = [(52, 5.5), (48, 0)]
+    # train_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
+    # test_locations = [(52, 5.5), (48, 0)]
 
     """Lithuania"""
-    # train_locations = [(55.0, 23.5), (55.0, 24.0), (55.5, 23.5)]
-    # test_locations = [(52, 5.5), (55.0, 23.5)]
+    train_locations = [(55.0, 23.5), (55.0, 24.0), (55.5, 23.5)]
+    test_locations = [(52, 5.5), (55.0, 23.5)]
 
     crop_features = defaults.get_default_crop_features(pcse_env=args.environment)
     weather_features = defaults.get_default_weather_features()
@@ -235,7 +236,8 @@ if __name__ == '__main__':
 
     tag = f'Seed-{args.seed}'
 
-    kwargs = {'args_vrr': args.vrr, 'limit_action': args.limit_action, 'noisy_measure': args.noisy_measure}
+    kwargs = {'args_vrr': args.vrr, 'action_limit': args.action_limit, 'noisy_measure': args.noisy_measure,
+              'n_budget': args.n_budget}
     if not args.measure:
         action_spaces = gymnasium.spaces.Discrete(7)
     else:

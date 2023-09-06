@@ -8,30 +8,58 @@ import pcse_gym.envs.sb3
 from stable_baselines3.common.vec_env import VecNormalize
 
 
-class ActionLimiter(ActionWrapper):
+class ActionConstrainer(ActionWrapper):
     """
     Action Wrapper to limit fertilization actions
     """
-    def __init__(self, env, action_limit):
-        super(ActionLimiter, self).__init__(env)
+    def __init__(self, env, action_limit=0, n_budget=0):
+        super(ActionConstrainer, self).__init__(env)
         self.counter = 0
         self.action_limit = action_limit
+        self.n_counter = 0
+        self.n_budget = n_budget
 
     def action(self, action):
-        if isinstance(self.action_space, gymnasium.spaces.Discrete):
-            action = self.limiter_discrete(action)
-        elif isinstance(self.action_space, gymnasium.spaces.MultiDiscrete):
-            action = self.limiter_multi_discrete(action)
+        if self.action_limit > 0:
+            if isinstance(self.action_space, gymnasium.spaces.Discrete):
+                action = self.freq_limiter_discrete(action)
+            elif isinstance(self.action_space, gymnasium.spaces.MultiDiscrete):
+                action = self.freq_limiter_multi_discrete(action)
+        if self.n_budget > 0:
+            if isinstance(self.action_space, gymnasium.spaces.Discrete):
+                action = self.discrete_n_budget(action)
+            elif isinstance(self.action_space, gymnasium.spaces.MultiDiscrete):
+                action = self.multi_discrete_n_budget(action)
         return action
 
-    def limiter_discrete(self, action):
+    def discrete_n_budget(self, action):
+        if self.n_counter == self.n_budget:
+            action = 0
+            return action
+        self.n_counter += action * 10
+        if self.n_counter > self.n_budget:
+            action = ((self.n_budget + action * 10) - self.n_counter) / 10
+            self.n_counter = self.n_budget
+        return action
+
+    def multi_discrete_n_budget(self, action):
+        if self.n_counter == self.n_budget:
+            action[0] = 0
+            return action
+        self.n_counter += action[0] * 10
+        if self.n_counter > self.n_budget:
+            action[0] = ((self.n_budget + action[0] * 10) - self.n_counter) / 10
+            self.n_counter = self.n_budget
+        return action
+
+    def freq_limiter_discrete(self, action):
         if action != 0:  # if there's an action, increase the counter
             self.counter += 1
         if self.counter > self.action_limit:  # return 0 if the action exceeds limit
             action = 0
         return action
 
-    def limiter_multi_discrete(self, action):
+    def freq_limiter_multi_discrete(self, action):
         if action[0] != 0:
             self.counter += 1
         if self.counter > self.action_limit:
@@ -40,6 +68,7 @@ class ActionLimiter(ActionWrapper):
 
     def reset(self, **kwargs):
         self.counter = 0
+        self.n_counter = 0
         return self.env.reset(**kwargs)
 
 
@@ -124,8 +153,8 @@ class MeasureOrNot:
         """
         iterate through feature index from sb3 observation.
         if a measurement action is 0, observation is 0
-        if measure action 1, add a noisy observation
-        if measure action 2, give correct observation
+        if measure action 2, add a noisy observation
+        if measure action 1, give correct observation
         """
         measuring_cost = np.zeros(len(measurement))
 
