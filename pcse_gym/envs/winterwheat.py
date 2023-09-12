@@ -2,8 +2,6 @@ import datetime
 import gymnasium as gym
 import numpy as np
 
-from ray.rllib.env.env_context import EnvContext
-
 import pcse_gym.envs.common_env as common_env
 import pcse_gym.utils.defaults as defaults
 import pcse_gym.utils.process_pcse_output as process_pcse
@@ -226,7 +224,7 @@ class WinterWheatRay(WinterWheat):
     @:param config: a config file or a dict that contains input parameters for the custom environment; in this case
     winterwheat
     """
-    def __init__(self, config: EnvContext, *args, **kwargs):
+    def __init__(self, config, *args, **kwargs):
         super(WinterWheatRay, self).__init__(crop_features=config['crop_features'],
                                              action_features=config['action_features'],
                                              weather_features=config['weather_features'],
