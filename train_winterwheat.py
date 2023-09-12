@@ -3,24 +3,35 @@ import lib_programname
 import sys
 import os.path
 import torch.nn as nn
+
 from comet_ml import Experiment
 from comet_ml.integration.gymnasium import CometLogger
+
 import gymnasium.spaces
+from gymnasium.wrappers import NormalizeObservation, NormalizeReward
+
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
+
 from sb3_contrib import RecurrentPPO  # MaskablePPO
 # from sb3_contrib.common.envs import InvalidActionEnvDiscrete
 # from sb3_contrib.common.maskable.utils import get_action_masks
 # from sb3_contrib.common.maskable.policies import MaskableActorCriticPolicy
 # from sb3_contrib.common.wrappers import ActionMasker
 
+import ray
+from ray import tune
+from ray.tune.registry import register_env
+from popgym.baselines.ray_models.ray_gru import GRU
+
 from pcse_gym.envs.constraints import ActionConstrainer, VecNormalizePO
-from pcse_gym.envs.winterwheat import WinterWheat
+from pcse_gym.envs.winterwheat import WinterWheat, WinterWheatRay
 from pcse_gym.envs.sb3 import get_policy_kwargs, get_model_kwargs
 from pcse_gym.utils.eval import EvalCallback, determine_and_log_optimum
+from pcse_gym.utils.rllib_helpers import (get_rllib_config, winterwheat_config_maker, ww_lim, ww_lim_norm,
+                                          ww_nor, ww_unwrapped_unnormalized)
 import pcse_gym.utils.defaults as defaults
-
 
 path_to_program = lib_programname.get_path_executed_script()
 rootdir = path_to_program.parents[0]
@@ -124,16 +135,16 @@ def train(log_dir, n_steps,
         comet_log.log_asset_folder(os.path.join(rootdir, 'pcse_gym', 'envs'), log_file_name=True, recursive=True)
         comet_log.log_asset(os.path.join(rootdir, 'pcse_gym', 'utils', 'eval'), file_name='eval.py')
 
-    env_pcse_train = WinterWheat(crop_features=crop_features, action_features=action_features,
-                                 weather_features=weather_features,
-                                 costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
-                                 action_space=action_space, action_multiplier=1.0, seed=seed,
-                                 reward=reward, **get_model_kwargs(pcse_model, train_locations), **kwargs)
+    if agent != "GRU-PPO":
+        env_pcse_train = WinterWheat(crop_features=crop_features, action_features=action_features,
+                                     weather_features=weather_features,
+                                     costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
+                                     action_space=action_space, action_multiplier=1.0, seed=seed,
+                                     reward=reward, **get_model_kwargs(pcse_model, train_locations), **kwargs)
 
-    if action_limit or n_budget > 0:
-        env_pcse_train = ActionConstrainer(env_pcse_train, action_limit=action_limit, n_budget=n_budget)
-
-    env_pcse_train = Monitor(env_pcse_train)
+        env_pcse_train = Monitor(env_pcse_train)
+        if action_limit or n_budget > 0:
+            env_pcse_train = ActionConstrainer(env_pcse_train, action_limit=action_limit, n_budget=n_budget)
 
     if use_comet and comet_log:
         env_pcse_train = CometLogger(env_pcse_train, comet_log)
@@ -152,7 +163,32 @@ def train(log_dir, n_steps,
             env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po)
             model = RecurrentPPO('MlpLstmPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
                                  tensorboard_log=log_dir)
+        case 'GRU-PPO':
+            env_config = winterwheat_config_maker(crop_features=crop_features, action_features=action_features,
+                                                  weather_features=weather_features,
+                                                  costs_nitrogen=costs_nitrogen, years=train_years,
+                                                  locations=train_locations,
+                                                  action_space=action_space, action_multiplier=1.0, seed=seed,
+                                                  reward=reward, **get_model_kwargs(pcse_model, train_locations),
+                                                  **kwargs)
+
+            register_env('WinterWheatRay', ww_unwrapped_unnormalized)
+
+            rllib_config = get_rllib_config(GRU, env_config, 'WinterWheatRay', action_limit, n_budget)
+
+            ray.init(ignore_reinit_error=False)
+
+            tune.run(
+                "PPO",
+                config=rllib_config,
+                stop={
+                    # "training_iteration": args.nsteps/1_000
+                    "timesteps_total": args.nsteps
+                }
+            )
+            # raise NotImplementedError
         case _:
+            env_pcse_train = Monitor(env_pcse_train)
             env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po)
             model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
                         tensorboard_log=log_dir)
@@ -164,22 +200,23 @@ def train(log_dir, n_steps,
                                   train_locations=train_locations, test_locations=test_locations,
                                   n_steps=args.nsteps)
 
-    env_pcse_eval = WinterWheat(crop_features=crop_features, action_features=action_features,
-                                weather_features=weather_features,
-                                costs_nitrogen=costs_nitrogen, years=test_years, locations=test_locations,
-                                action_space=action_space, action_multiplier=1.0, reward=reward,
-                                **get_model_kwargs(pcse_model, train_locations), **kwargs, seed=seed)
-    if action_limit or n_budget > 0:
-        env_pcse_eval = ActionConstrainer(env_pcse_eval, action_limit=action_limit, n_budget=n_budget)
+    if agent != 'GRU-PPO':
+        env_pcse_eval = WinterWheat(crop_features=crop_features, action_features=action_features,
+                                    weather_features=weather_features,
+                                    costs_nitrogen=costs_nitrogen, years=test_years, locations=test_locations,
+                                    action_space=action_space, action_multiplier=1.0, reward=reward,
+                                    **get_model_kwargs(pcse_model, train_locations), **kwargs, seed=seed)
+        if action_limit or n_budget > 0:
+            env_pcse_eval = ActionConstrainer(env_pcse_eval, action_limit=action_limit, n_budget=n_budget)
 
-    tb_log_name = f'{tag}-{pcse_model_name}-Ncosts-{costs_nitrogen}-run'
+        tb_log_name = f'{tag}-{pcse_model_name}-Ncosts-{costs_nitrogen}-run'
 
-    model.learn(total_timesteps=n_steps,
-                callback=EvalCallback(env_eval=env_pcse_eval, test_years=test_years,
-                                      train_years=train_years, train_locations=train_locations,
-                                      test_locations=test_locations, seed=seed, pcse_model=pcse_model,
-                                      **kwargs),
-                tb_log_name=tb_log_name)
+        model.learn(total_timesteps=n_steps,
+                    callback=EvalCallback(env_eval=env_pcse_eval, test_years=test_years,
+                                          train_years=train_years, train_locations=train_locations,
+                                          test_locations=test_locations, seed=seed, pcse_model=pcse_model,
+                                          **kwargs),
+                    tb_log_name=tb_log_name)
 
 
 if __name__ == '__main__':
@@ -190,7 +227,7 @@ if __name__ == '__main__':
     parser.add_argument("-c", "--costs_nitrogen", type=float, default=10.0, help="Costs for nitrogen")
     parser.add_argument("-e", "--environment", type=int, default=1,
                         help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
-    parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, or DQN.")
+    parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, GRU-PPO or DQN.")
     parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, DEP, GRO, or ANE")
     parser.add_argument("-b", "--n_budget", type=int, default=0, help="Nitrogen budget. kg/ha. Recommended 180")
     parser.add_argument("-l", "--action_limit", type=int, default=0, help="Limit fertilization frequency."
@@ -209,7 +246,8 @@ if __name__ == '__main__':
 
     if not args.measure and args.noisy_measure:
         parser.error("noisy measure should be used with measure")
-
+    if args.agent not in ['PPO', 'RPPO', 'GRU-PPO', 'DQN']:
+        parser.error("Invalid agent argument. Please choose PPO, RPPO, GRU-PPO, DQN")
     if args.reward == 'DEP':
         args.vrr = True
     pcse_model_name = "LINTUL" if not args.environment else "WOFOST"

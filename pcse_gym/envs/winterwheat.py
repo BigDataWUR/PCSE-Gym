@@ -2,6 +2,8 @@ import datetime
 import gymnasium as gym
 import numpy as np
 
+from ray.rllib.env.env_context import EnvContext
+
 import pcse_gym.envs.common_env as common_env
 import pcse_gym.utils.defaults as defaults
 import pcse_gym.utils.process_pcse_output as process_pcse
@@ -188,6 +190,115 @@ class WinterWheat(gym.Env):
         info = {}
 
         return obs, info
+
+    def render(self, mode="human"):
+        pass
+
+    @property
+    def measure_features(self):
+        return self.__measure
+
+    @property
+    def sb3_env(self):
+        return self._env
+
+    @property
+    def baseline_env(self):
+        return self._env_baseline
+
+    @property
+    def date(self) -> datetime.date:
+        return self.sb3_env.model.day
+
+    @property
+    def loc(self) -> datetime.date:
+        return self.sb3_env.loc
+
+    @property
+    def timestep(self):
+        return self._timestep
+
+
+class WinterWheatRay(WinterWheat):
+    """
+    A wrapper for Ray's RLlib that replaces most of the param input arguments with a config file containing all the info
+
+    @:param config: a config file or a dict that contains input parameters for the custom environment; in this case
+    winterwheat
+    """
+    def __init__(self, config: EnvContext, *args, **kwargs):
+        super(WinterWheatRay, self).__init__(crop_features=config['crop_features'],
+                                             action_features=config['action_features'],
+                                             weather_features=config['weather_features'],
+                                             seed=config['seed'],
+                                             costs_nitrogen=config['costs_nitrogen'],
+                                             timestep=config['timestep'],
+                                             years=config['years'], locations=config['locations'],
+                                             action_space=config['action_space'],
+                                             action_multiplier=config['action_multiplier'],
+                                             reward=config['reward'], args=config['args'],
+                                             kwargs=config['kwargs'])
+
+        self.crop_features = config['crop_features']
+        self.action_features = config['action_features']
+        self.weather_features = config['weather_features']
+        self.costs_nitrogen = config['costs_nitrogen']
+        self.years = [config['years']] if isinstance(config['years'], int) else config['years']
+        self.locations = [config['locations']] if isinstance(config['locations'], tuple) else config['locations']
+        self.action_multiplier = config['action_multiplier']
+        self.action_space = config['action_space']
+        self._timestep = config['timestep']
+        self.reward_function = config['reward']
+        self.po_features = config['kwargs'].get('po_features', [])
+
+        if self.reward_function != 'GRO':
+            self._env_baseline = StableBaselinesWrapper(crop_features=self.crop_features,
+                                                        action_features=self.action_features,
+                                                        weather_features=self.weather_features,
+                                                        costs_nitrogen=self.costs_nitrogen,
+                                                        timestep=self.timestep,
+                                                        years=self.years[0], location=self.locations[0],
+                                                        action_space=self.action_space,
+                                                        action_multiplier=self.action_multiplier,
+                                                        seed=config['seed'],
+                                                        *config['args'], **config['kwargs'])
+        self._env = StableBaselinesWrapper(crop_features=self.crop_features,
+                                           action_features=self.action_features,
+                                           weather_features=self.weather_features,
+                                           costs_nitrogen=self.costs_nitrogen,
+                                           timestep=self.timestep,
+                                           years=self.years[0], location=self.locations[0],
+                                           action_space=self.action_space,
+                                           action_multiplier=self.action_multiplier,
+                                           seed=config['seed'],
+                                           *config['args'], **config['kwargs'])
+
+        self.args_vrr = config['kwargs'].get('args_vrr')
+        if self.args_vrr:
+            self._env = VariableRecoveryRate(self._env)
+
+        self.observation_space = self._get_observation_space()
+        self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
+
+        if self.reward_function == 'DEP':
+            assert self.args_vrr, "To use 'DEP' as a reward function," \
+                                  "--variable-recovery-rate must be set as true"
+            vrr = self._env.recovery_penalty()
+            self.rewards = Rewards(config['kwargs'].get('reward_var'), self.timestep, config['costs_nitrogen'], vrr)
+        else:
+            self.rewards = Rewards(config['kwargs'].get('reward_var'), self.timestep, config['costs_nitrogen'])
+
+        if self.reward_function == 'ANE':
+            self.ane = self.rewards.ContainerANE(self.timestep)
+
+        if self.po_features:
+            self.__measure = MeasureOrNot(self.sb3_env)
+
+        super().reset(seed=config['seed'])
+
+    def _get_observation_space(self):
+        nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
+        return gym.spaces.Box(-np.inf, np.inf, shape=(nvars,))
 
     def render(self, mode="human"):
         pass
