@@ -1,11 +1,9 @@
-import gymnasium as gym
 import numpy as np
 import torch.nn as nn
 from typing import TYPE_CHECKING, Dict, Optional, Tuple, Union
 
-import pcse_gym.utils.defaults as defaults
-from pcse_gym.envs.winterwheat import WinterWheatRay
-from pcse_gym.envs.constraints import ActionConstrainer
+import gymnasium as gym
+from gymnasium.wrappers import NormalizeObservation, NormalizeReward
 
 from ray.rllib.algorithms.callbacks import DefaultCallbacks
 from ray.rllib.env.base_env import BaseEnv
@@ -19,14 +17,19 @@ if TYPE_CHECKING:
     from ray.rllib.algorithms.algorithm import Algorithm
     from ray.rllib.evaluation import RolloutWorker
 
+import pcse_gym.utils.defaults as defaults
+import pcse_gym.utils.eval as eval
+from pcse_gym.envs.winterwheat import WinterWheatRay
+from pcse_gym.envs.constraints import ActionConstrainer
+
 
 def ww_unwrapped_unnormalized(env_config):
     return WinterWheatRay(env_config)
 
-# TODO: Normalize using Gymnasium Wrapper
+
 def ww_nor(env_config):
     env = WinterWheatRay(env_config)
-    env = gym.RewardWrapper(gym.ObservationWrapper(env))
+    env = NormalizeObservation(NormalizeReward(env))
     return env
 
 
@@ -43,7 +46,7 @@ def ww_lim_norm(env_config):
     action_limit = env_config.get("action_limit", 0)
     n_budget = env_config.get("n_budget", 0)
     env = ActionConstrainer(env, action_limit=action_limit, n_budget=n_budget)
-    env = gym.RewardWrapper(gym.ObservationWrapper(env))
+    env = NormalizeObservation(NormalizeReward(env))
     return env
 
 
@@ -123,7 +126,7 @@ def get_rllib_config(model, env_config, env="WinterWheatRay", action_limit=0, n_
 
 
 # TODO: implement callbacks with the RLlib tune.run training possibly mimicking implemented SB3 callback
-class SB3CallbackWrapper(DefaultCallbacks):
+class RayEvalCallback(DefaultCallbacks):
     def __init__(self):
         super().__init__()
 
@@ -132,8 +135,8 @@ class SB3CallbackWrapper(DefaultCallbacks):
             *,
             worker: "RolloutWorker",
             base_env: BaseEnv,
-            policies: Dict[PolicyID, Policy],
-            episode: Union[Episode, EpisodeV2],
+            policies: Dict[str, Policy],
+            episode: Episode,
             env_index: Optional[int] = None,
             **kwargs,
     ):
@@ -158,13 +161,37 @@ class SB3CallbackWrapper(DefaultCallbacks):
             "after env.reset()"
         )
 
-    # def on_episode_end(
-    #         self,
-    #         *,
-    #         worker: "RolloutWorker",
-    #         base_env: BaseEnv,
-    #         policies: Dict[PolicyID, Policy],
-    #         episode: Union[Episode, EpisodeV2, Exception],
-    #         env_index: Optional[int] = None,
-    #         **kwargs,
-    # ):
+    def on_episode_end(
+            self,
+            *,
+            worker: "RolloutWorker",
+            base_env: BaseEnv,
+            policies: Dict[PolicyID, Policy],
+            episode: Union[Episode, EpisodeV2, Exception],
+            env_index: Optional[int] = None,
+            **kwargs,
+    ):
+        print(episode)
+
+    def on_evaluate_end(
+        self,
+        *,
+        algorithm: "Algorithm",
+        evaluation_metrics: dict,
+        **kwargs,
+    ) -> None:
+        """Runs when the evaluation is done.
+
+        Runs at the end of Algorithm.evaluate().
+
+        Args:
+            algorithm: Reference to the algorithm instance.
+            evaluation_metrics: Results dict to be returned from algorithm.evaluate().
+                You can mutate this object to add additional metrics.
+            kwargs: Forward compatibility placeholder.
+        """
+        pass
+
+
+
+

@@ -2,6 +2,7 @@ import argparse
 import lib_programname
 import sys
 import os.path
+import time
 import torch.nn as nn
 
 from comet_ml import Experiment
@@ -172,9 +173,14 @@ def train(log_dir, n_steps,
                                                   reward=reward, **get_model_kwargs(pcse_model, train_locations),
                                                   **kwargs)
 
-            register_env('WinterWheatRay', ww_unwrapped_unnormalized)
+            register_env('WinterWheatRay', ww_lim_norm)
 
             rllib_config = get_rllib_config(GRU, env_config, 'WinterWheatRay', action_limit, n_budget)
+
+            def trial_str_creator(trial):
+                prefix = args.agent + "_" + pcse_model_name
+                trialname = prefix + "_" + time.strftime("%Y-%m-%d_%H-%M-%S") + trial.trial_id
+                return trialname
 
             ray.init(ignore_reinit_error=False)
 
@@ -184,7 +190,9 @@ def train(log_dir, n_steps,
                 stop={
                     # "training_iteration": args.nsteps/1_000
                     "timesteps_total": args.nsteps
-                }
+                },
+                local_dir=os.path.join(rootdir, "tensorboard_logs/rllib"),
+                trial_name_creator=trial_str_creator
             )
             # raise NotImplementedError
         case _:
@@ -230,13 +238,14 @@ if __name__ == '__main__':
     parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, GRU-PPO or DQN.")
     parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, DEP, GRO, or ANE")
     parser.add_argument("-b", "--n_budget", type=int, default=0, help="Nitrogen budget. kg/ha. Recommended 180")
-    parser.add_argument("-l", "--action_limit", type=int, default=0, help="Limit fertilization frequency."
-                                                                          "Recommended 4 times")
+    parser.add_argument("--action_limit", type=int, default=0, help="Limit fertilization frequency."
+                                                                    "Recommended 4 times")
     parser.add_argument("-m", "--measure", action='store_true', help="--measure or --no-measure."
                                                                      "Train an agent in a partially"
                                                                      "observable environment that"
                                                                      "decides when to measure"
                                                                      "certain crop features")
+    parser.add_argument("-l", "--location", type=str, default="NL", help="location to train the agent. NL or LT.")
     parser.add_argument("--no-measure", action='store_false', dest='measure')
     parser.add_argument("--noisy-measure", action='store_true', dest='noisy_measure')
     parser.add_argument("--variable-recovery-rate", action='store_true', dest='vrr')
@@ -260,13 +269,16 @@ if __name__ == '__main__':
     train_years = [year for year in all_years if year % 2 == 1]
     test_years = [year for year in all_years if year % 2 == 0]
 
-    """The Netherlands"""
-    # train_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
-    # test_locations = [(52, 5.5), (48, 0)]
-
-    """Lithuania"""
-    train_locations = [(55.0, 23.5), (55.0, 24.0), (55.5, 23.5)]
-    test_locations = [(52, 5.5), (55.0, 23.5)]
+    if args.location == "NL":
+        """The Netherlands"""
+        train_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
+        test_locations = [(52, 5.5), (48, 0)]
+    elif args.location == "LT":
+        """Lithuania"""
+        train_locations = [(55.0, 23.5), (55.0, 24.0), (55.5, 23.5)]
+        test_locations = [(52, 5.5), (55.0, 23.5)]
+    else:
+        parser.error("--location arg should be either LT or NL")
 
     crop_features = defaults.get_default_crop_features(pcse_env=args.environment)
     weather_features = defaults.get_default_weather_features()

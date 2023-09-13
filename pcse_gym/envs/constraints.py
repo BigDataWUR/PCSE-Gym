@@ -1,4 +1,4 @@
-import gymnasium
+import gymnasium as gym
 import numpy as np
 from collections import OrderedDict
 from gymnasium import ActionWrapper
@@ -21,14 +21,14 @@ class ActionConstrainer(ActionWrapper):
 
     def action(self, action):
         if self.action_limit > 0:
-            if isinstance(self.action_space, gymnasium.spaces.Discrete):
+            if isinstance(self.action_space, gym.spaces.Discrete):
                 action = self.freq_limiter_discrete(action)
-            elif isinstance(self.action_space, gymnasium.spaces.MultiDiscrete):
+            elif isinstance(self.action_space, gym.spaces.MultiDiscrete):
                 action = self.freq_limiter_multi_discrete(action)
         if self.n_budget > 0:
-            if isinstance(self.action_space, gymnasium.spaces.Discrete):
+            if isinstance(self.action_space, gym.spaces.Discrete):
                 action = self.discrete_n_budget(action)
-            elif isinstance(self.action_space, gymnasium.spaces.MultiDiscrete):
+            elif isinstance(self.action_space, gym.spaces.MultiDiscrete):
                 action = self.multi_discrete_n_budget(action)
         return action
 
@@ -44,10 +44,12 @@ class ActionConstrainer(ActionWrapper):
 
     def multi_discrete_n_budget(self, action):
         if self.n_counter == self.n_budget:
+            action = action.copy()  # Needed for RLlib VecEnvs
             action[0] = 0
             return action
         self.n_counter += action[0] * 10
         if self.n_counter > self.n_budget:
+            action = action.copy()
             action[0] = ((self.n_budget + action[0] * 10) - self.n_counter) / 10
             self.n_counter = self.n_budget
         return action
@@ -63,6 +65,7 @@ class ActionConstrainer(ActionWrapper):
         if action[0] != 0:
             self.counter += 1
         if self.counter > self.action_limit:
+            action = action.copy()
             action[0] = 0
         return action
 
@@ -139,7 +142,7 @@ class MeasureOrNot:
         obs['actions'] = {'cumulative_measurement': 0.0}
         return self._observation(obs, flag=True)
 
-    def get_feature_cost_ind(self):
+    def get_feature_cost_ind(self) -> None:
         for feature in self.env.po_features:
             if feature in self.env.crop_features:
                 self.feature_ind.append(self.env.crop_features.index(feature))
@@ -243,7 +246,7 @@ class VariableRecoveryRate(pcse_gym.envs.sb3.StableBaselinesWrapper):
         super().__init__()
         self.__dict__.update(env.__dict__)
 
-    def _apply_action(self, action):
+    def _apply_action(self, action) -> None:
         amount = action * self.action_multiplier
         recovery_rate = self.recovery_penalty()
         self._model._send_signal(signal=pcse.signals.apply_n, N_amount=amount * 10, N_recovery=recovery_rate,
@@ -294,4 +297,37 @@ class VecNormalizePO(VecNormalize):
             return unnorm
         else:
             return super()._unnormalize_obs(obs, obs_rms)
+
+
+class ClipNormalizeObservation(gym.wrappers.NormalizeObservation):
+    """
+    Wrapper to add capability of clipping the observation running std.
+    Mimicking SB3 VecNormalize.
+    """
+    def __init__(self, venv, clip, *args, **kwargs):
+        super(ClipNormalizeObservation, self).__init__(venv, *args, **kwargs)
+        self.clip = clip
+
+    def normalize(self, obs):
+        """Normalises the observation using the running mean and variance of the observations."""
+        self.obs_rms.update(obs)
+        return np.clip((obs - self.obs_rms.mean) / np.sqrt(self.obs_rms.var + self.epsilon), -self.clip, self.clip)
+
+
+class ClipNormalizeReward(gym.wrappers.NormalizeReward):
+    """
+    Wrapper to add capability of clipping the observation running std.
+    Mimicking SB3 VecNormalize.
+    """
+
+    def __init__(self, venv, clip, *args, **kwargs):
+        super(ClipNormalizeReward, self).__init__(venv, *args, **kwargs)
+        self.clip = clip
+
+    def normalize(self, obs):
+        """Normalises the observation using the running mean and variance of the observations."""
+        self.obs_rms.update(obs)
+        return np.clip((obs - self.obs_rms.mean) / np.sqrt(self.obs_rms.var + self.epsilon), -self.clip, self.clip)
+
+
 
