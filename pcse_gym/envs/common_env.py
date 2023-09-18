@@ -1,5 +1,6 @@
 import datetime
 import os
+import copy
 
 import numpy as np
 import yaml
@@ -18,6 +19,48 @@ import pcse
 """
 
 
+# TODO replace the usage of the function replace_years() with this. If we do, a lot of refactoring needed.
+def generate_agro_management(years: list, start_type='emergence') -> list:
+    """
+    Function to generate a dictionary from the wheat_cropcalendar.yaml file
+
+    :param years: a list of years, preferably a set() of test and train years
+    :param start_type: the crop state when starting the simulation.
+           Either 'sowing' or 'emergence'. It is 'emergence' by default.
+    :return: a list of dicts of the PCSE campaign schedule
+    """
+    assert start_type == 'emergence' or start_type == 'sowing', "start_type has to be either 'emergence' or 'sowing'"
+
+    # Base structure of wheat_cropcalendar.yaml
+    base_structure = {
+        'CropCalendar': {
+            'crop_name': 'wheat',
+            'variety_name': 'winter wheat',
+            'crop_start_type': start_type,
+            'crop_end_type': 'earliest',
+            'max_duration': 365
+        },
+        'StateEvents': None,
+        'TimedEvents': None  # can be modified if we add fixed fertilization events
+    }
+
+    # Generate structure for each year
+    agro_management = []
+    for year in years:
+        year_structure = copy.deepcopy(base_structure)  # use deepcopy to ensure propagation
+        # Correctly setting the dates for each year
+        if start_type == 'emergence':
+            year_structure['CropCalendar']['crop_start_date'] = f"{year}-01-01"
+        elif start_type == 'sowing':
+            year_structure['CropCalendar']['crop_start_date'] = f"{year - 1}-10-01"
+        year_structure['CropCalendar']['crop_end_date'] = f"{year}-09-01"
+        if start_type == 'emergence':
+            agro_management.append({f"{year}-01-01": year_structure})
+        elif start_type == 'sowing':
+            agro_management.append({f"{year - 1}-10-01": year_structure})  # year - 1 to match sowing date
+    return agro_management
+
+
 def replace_years(agro_management, years):
     if not isinstance(years, list):
         years = [years]
@@ -29,7 +72,7 @@ def replace_years(agro_management, years):
                   if isinstance(v2, datetime.date)] for v in agro.values()]
     date_keys = date_keys[0]
     if date_keys[0] < date_keys[1]:
-        updated_agro_management = [{k.replace(year=year-1): v for k, v in agro.items()} for agro, year in
+        updated_agro_management = [{k.replace(year=year - 1): v for k, v in agro.items()} for agro, year in
                                    zip(agro_management, years)]
     else:
         updated_agro_management = [{k.replace(year=year): v for k, v in agro.items()} for agro, year in
