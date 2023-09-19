@@ -228,7 +228,7 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
         plot_df = pd.concat(dataframes_list, axis=1)
 
         if variable in cumulative_variables: plot_df = plot_df.apply(np.cumsum, axis=0)
-        plot_df.fillna(method='ffill', inplace=True)
+        plot_df.ffill(inplace=True)
         ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where='post')
         ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step='post')
 
@@ -364,12 +364,12 @@ def evaluate_policy(
             if isinstance(policy, base_class.BaseAlgorithm):
                 if isinstance(policy, PPO):
                     action, state = policy.predict(obs, state=state, deterministic=deterministic)
-                    sb_actions, sb_values, sb_log_probs = policy.policy(torch.from_numpy(obs),
-                                                                        deterministic=deterministic)
-                    sb_prob = np.exp(sb_log_probs.detach().numpy()).item()
-                    sb_val = sb_values.detach().item()
-                    prob = sb_prob
-                    val = sb_val
+                    # sb_actions, sb_values, sb_log_probs = policy.policy(torch.from_numpy(obs),
+                    #                                                     deterministic=deterministic)
+                    # sb_prob = np.exp(sb_log_probs.detach().numpy()).item()
+                    # sb_val = sb_values.detach().item()
+                    # prob = sb_prob
+                    # val = sb_val
                 if isinstance(policy, RecurrentPPO):
                     action, lstm_state = policy.predict(obs, state=lstm_state, deterministic=deterministic)
                 if isinstance(policy, DQN):
@@ -467,6 +467,20 @@ def get_cumulative_variables():
     return ['fertilizer', 'reward']
 
 
+def get_measure_graphs(episode_infos):
+    measure_graph = {}
+    feature_order = episode_infos[0]['indexes'].keys()
+    for date, measurement in episode_infos[0]['measure'].items():
+        for feature, measure in zip(feature_order, measurement):
+            feature = 'measure_' + feature
+            if feature not in measure_graph.keys():
+                measure_graph[feature] = {}
+            if date not in measure_graph[feature].keys():
+                measure_graph[feature][date] = measure
+    episode_infos[0] = episode_infos[0] | measure_graph  # Python 3.9.0
+    return episode_infos
+
+
 class EvalCallback(BaseCallback):
     """
     Callback for evaluating an agent. Writes the following to tensorboard:
@@ -534,19 +548,6 @@ class EvalCallback(BaseCallback):
                 cumulative += [variable]
         return (variables, cumulative) if cumulative else variables
 
-    def get_measure_graphs(self, episode_infos):
-        measure_graph = {}
-        feature_order = episode_infos[0]['indexes'].keys()
-        for date, measurement in episode_infos[0]['measure'].items():
-            for feature, measure in zip(feature_order, measurement):
-                feature = 'measure_' + feature
-                if feature not in measure_graph.keys():
-                    measure_graph[feature] = {}
-                if date not in measure_graph[feature].keys():
-                    measure_graph[feature][date] = measure
-        episode_infos[0] = episode_infos[0] | measure_graph  # Python 3.9.0
-        return episode_infos
-
     def _on_step(self):
         train_year = self.model.get_env().get_attr("date")[0].year
         self.histogram_training_years[train_year] = self.histogram_training_years[train_year] + 1
@@ -578,7 +579,7 @@ class EvalCallback(BaseCallback):
             '''logic for measure graph'''
             if 'measure' in variables:
                 variables, cumulative = self.replace_measure_variable(variables, cumulative)
-                episode_infos = self.get_measure_graphs(episode_infos)
+                episode_infos = get_measure_graphs(episode_infos)
 
             for i, variable in enumerate(variables):
                 n_timepoints = len(episode_infos[0][variable])
@@ -630,7 +631,7 @@ class EvalCallback(BaseCallback):
                     my_key = (year, test_location)
                     reward[my_key] = episode_rewards[0].item()
                     if self.po_features:
-                        episode_infos = self.get_measure_graphs(episode_infos)
+                        episode_infos = get_measure_graphs(episode_infos)
                     fertilizer[my_key] = sum(episode_infos[0]['fertilizer'].values())
                     self.logger.record(f'eval/reward-{my_key}', reward[my_key])
                     self.logger.record(f'eval/nitrogen-{my_key}', fertilizer[my_key])

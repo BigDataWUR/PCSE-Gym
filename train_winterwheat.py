@@ -1,4 +1,6 @@
 import argparse
+
+import numpy as np
 import lib_programname
 import sys
 import os.path
@@ -168,12 +170,14 @@ def train(log_dir, n_steps,
             env_config = winterwheat_config_maker(crop_features=crop_features, action_features=action_features,
                                                   weather_features=weather_features,
                                                   costs_nitrogen=costs_nitrogen, years=train_years,
-                                                  locations=train_locations,
-                                                  action_space=action_space, action_multiplier=1.0, seed=seed,
-                                                  reward=reward, **get_model_kwargs(pcse_model, train_locations),
+                                                  eval_years=test_years, locations=train_locations,
+                                                  eval_locations=test_locations, action_space=action_space,
+                                                  action_multiplier=1.0, seed=seed,
+                                                  reward=reward, pcse_model=pcse_model,
+                                                  **get_model_kwargs(pcse_model, train_locations),
                                                   **kwargs)
 
-            register_env('WinterWheatRay', ww_lim_norm)
+            register_env('WinterWheatRay', ww_lim)
 
             rllib_config = get_rllib_config(GRU, env_config, 'WinterWheatRay', action_limit, n_budget)
 
@@ -194,7 +198,6 @@ def train(log_dir, n_steps,
                 local_dir=os.path.join(rootdir, "tensorboard_logs/rllib"),
                 trial_name_creator=trial_str_creator
             )
-            # raise NotImplementedError
         case _:
             env_pcse_train = Monitor(env_pcse_train)
             env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po)

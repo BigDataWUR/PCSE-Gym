@@ -248,6 +248,7 @@ class WinterWheatRay(WinterWheat):
         self._timestep = config['timestep']
         self.reward_function = config['reward']
         self.po_features = config['kwargs'].get('po_features', [])
+        self.pcse_model = config['pcse_model']
 
         if self.reward_function != 'GRO':
             self._env_baseline = StableBaselinesWrapper(crop_features=self.crop_features,

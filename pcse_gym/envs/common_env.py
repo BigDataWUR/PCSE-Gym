@@ -22,7 +22,7 @@ import pcse
 # TODO replace the usage of the function replace_years() with this. If we do, a lot of refactoring needed.
 def generate_agro_management(years: list, start_type='emergence') -> list:
     """
-    Function to generate a dictionary from the wheat_cropcalendar.yaml file
+    Function to generate a dictionary, mimicking the wheat_cropcalendar.yaml file
 
     :param years: a list of years, preferably a set() of test and train years
     :param start_type: the crop state when starting the simulation.
