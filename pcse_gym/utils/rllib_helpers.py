@@ -29,6 +29,12 @@ from torch.utils.tensorboard import SummaryWriter
 
 import matplotlib.pyplot as plt
 
+from popgym.baselines.ray_models.ray_mlp import MLP
+from popgym.baselines.ray_models.ray_gru import GRU
+from popgym.baselines.ray_models.ray_indrnn import IndRNN
+from popgym.baselines.ray_models.ray_diffnc import DiffNC
+from popgym.baselines.ray_models.ray_s4d import S4D
+
 
 def ww_unwrapped_unnormalized(env_config):
     return WinterWheatRay(env_config)
@@ -91,14 +97,61 @@ def winterwheat_config_maker(crop_features=defaults.get_wofost_default_crop_feat
     return config
 
 
-def get_rllib_config(model, env_config, env="WinterWheatRay", action_limit=0, n_budget=0):
+def get_algo(model):
+    if model == 'GRU':
+        return GRU
+    if model == 'PosMLP':
+        return MLP
+    if model == 'IndRNN':
+        return IndRNN
+    if model == 'DiffNC':
+        return DiffNC
+    if model == 'S4D':
+        return S4D
+    else:
+        raise Exception("Agent name error!")
+
+
+def modify_algo_config(conf, model):
+    conf['model']['custom_model_config']["preprocessor_input_size"] = 256
+    conf['model']['custom_model_config']["preprocessor"] = nn.Sequential(nn.Linear(256, 256), nn.ReLU())
+    conf['model']['custom_model_config']["preprocessor_output_size"] = 256
+    conf['model']['custom_model_config']["hidden_size"] = 256
+    conf['model']['custom_model_config']["postprocessor"] = nn.Sequential(nn.Linear(256, 256), nn.ReLU())
+    conf['model']['custom_model_config']["postprocessor_output_size"] = 256
+    conf['model']['custom_model_config']["actor"] = nn.Sequential(nn.Linear(256, 256), nn.ReLU())
+    conf['model']['custom_model_config']["critic"] = nn.Sequential(nn.Linear(256, 256), nn.ReLU())
+    conf['model']['custom_model_config']["postprocessor_output_size"] = 256
+    if model == 'GRU':
+        # conf['model']['custom_model_config']["preprocessor_input_size"] = 128
+        # conf['model']['custom_model_config']["preprocessor"] = nn.Sequential(nn.Linear(128, 256), nn.LeakyReLU())
+        # conf['model']['custom_model_config']["preprocessor_output_size"] = 256
+        # conf['model']['custom_model_config']["hidden_size"] = 256
+        # conf['model']['custom_model_config']["postprocessor"] = nn.Sequential(nn.Linear(256, 256), nn.LeakyReLU())
+        # conf['model']['custom_model_config']["postprocessor_output_size"] = 256
+        # conf['model']['custom_model_config']["actor"] = nn.Sequential(nn.Linear(256, 256), nn.LeakyReLU())
+        # conf['model']['custom_model_config']["critic"] = nn.Sequential(nn.Linear(256, 256), nn.LeakyReLU())
+        # conf['model']['custom_model_config']["postprocessor_output_size"] = 256
+        conf['model']['custom_model_config']["num_recurrent_layers"] = 1
+    if model == 'IndRNN':
+        conf['model']['custom_model_config']["activation"] = "tanh"
+    if model == 'DiffNC':
+        conf['model']['custom_model_config']["num_hidden_layers"] = 1
+        conf['model']['custom_model_config']["num_layers"] = 1
+        conf['model']['custom_model_config']["read_heads"] = 4
+        conf['model']['custom_model_config']["cell_size"] = 32
+        conf['model']['custom_model_config']["nonlinearity"] = "tanh"
+    return conf
+
+
+def get_algo_config(model, env_config, env="WinterWheatRay"):
     bptt_size = 1024
     return {
         "model": {
             "max_seq_len": bptt_size,
             "custom_model": model,
             "custom_model_config": {
-                # Override the hidden_size from BASE_CONFIG
+                ## Generally will be replaced
                 # The input and output sizes of the MLP feeding the memory model
                 "preprocessor_input_size": 128,
                 "preprocessor_output_size": 64,
@@ -111,10 +164,8 @@ def get_rllib_config(model, env_config, env="WinterWheatRay", action_limit=0, n_
                 "postprocessor": nn.Sequential(nn.Linear(128, 64), nn.ReLU()),
                 "postprocessor_output_size": 64,
                 # Actor and critic networks
-                "actor": nn.Linear(64, 64),
-                "critic": nn.Linear(64, 64),
-                # We can also override GRU-specific hyperparams
-                "num_recurrent_layers": 1,
+                "actor": nn.Sequential(nn.Linear(64, 64), nn.LeakyReLU()),
+                "critic": nn.Sequential(nn.Linear(64,  64), nn.LeakyReLU()),
             },
         },
         # Some other rllib defaults you might want to change
