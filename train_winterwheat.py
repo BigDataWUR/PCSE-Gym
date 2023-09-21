@@ -5,12 +5,7 @@ import os.path
 import time
 import torch.nn as nn
 
-from comet_ml import Experiment
-from comet_ml.integration.gymnasium import CometLogger
-
 import gymnasium.spaces
-
-from stable_baselines3 import PPO, DQN
 
 from pcse_gym.envs.constraints import ActionConstrainer, VecNormalizePO
 from pcse_gym.envs.winterwheat import WinterWheat
@@ -50,7 +45,7 @@ def train(log_dir, n_steps,
           train_locations=defaults.get_default_location(),
           test_locations=defaults.get_default_location(),
           action_space=defaults.get_default_action_space(),
-          pcse_model=0, agent=PPO, reward=None,
+          pcse_model=0, agent='PPO', reward=None,
           seed=0, tag="Exp", costs_nitrogen=10.0,
           **kwargs):
     """
@@ -90,6 +85,8 @@ def train(log_dir, n_steps,
     use_comet = False
 
     if use_comet:
+        from comet_ml import Experiment
+        from comet_ml.integration.gymnasium import CometLogger
         with open(os.path.join(rootdir, 'comet', 'hbja_api_key'), 'r') as f:
             api_key = f.readline()
         comet_log = Experiment(
@@ -106,6 +103,7 @@ def train(log_dir, n_steps,
 
     match framework:
         case 'sb3':
+            from stable_baselines3 import PPO, DQN
             from stable_baselines3.common.monitor import Monitor
 
             print('Using the StableBaselines3 framework')
