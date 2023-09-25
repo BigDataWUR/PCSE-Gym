@@ -34,6 +34,10 @@ Use Cases
 
    usecases.rst
 
+Citing CropGym
+--------------
+Kallenberg, M., Overweg, H., Van Bree, R., & Athanasiadis, I. (2023). Nitrogen management with reinforcement learning and crop growth models. Environmental Data Science, 2, E34. doi:10.1017/eds.2023.28
+
 
 Indices and tables
 ==================
