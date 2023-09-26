@@ -36,8 +36,19 @@ Use Cases
 
 Citing CropGym
 --------------
-Kallenberg, M., Overweg, H., Van Bree, R., & Athanasiadis, I. (2023). Nitrogen management with reinforcement learning and crop growth models. Environmental Data Science, 2, E34. doi:10.1017/eds.2023.28
 
+If you use CropGym in your publications, please cite us following this Bibtex entry::
+
+    @article{cropgym,
+      title={Nitrogen management with reinforcement learning and crop growth models},
+      volume={2},
+      DOI={10.1017/eds.2023.28},
+      journal={Environmental Data Science},
+      publisher={Cambridge University Press},
+      author={Kallenberg, Michiel G.J. and Overweg, Hiske and van Bree, Ron and Athanasiadis, Ioannis N.},
+      year={2023},
+      pages={e34}
+    }
 
 Indices and tables
 ==================
