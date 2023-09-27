@@ -281,7 +281,7 @@ class VecNormalizePO(VecNormalize):
             norm = super()._normalize_obs(obs, obs_rms)
             for ind, act in zip(index_feature.values(), actions[1:]):
                 if act == 0:
-                    norm[ind] = -self.clip_obs  # if no measure, assign lower limit of normalization std
+                    norm[ind] = -self.clip_obs  # if not measuring, assign lower limit of normalization std
             return norm
         else:
             return super()._normalize_obs(obs, obs_rms)
@@ -297,6 +297,52 @@ class VecNormalizePO(VecNormalize):
             return unnorm
         else:
             return super()._unnormalize_obs(obs, obs_rms)
+
+    def step_wait(self):
+        """
+        Apply sequence of actions to sequence of environments
+        actions -> (observations, rewards, dones)
+
+        where ``dones`` is a boolean vector indicating whether each element is new.
+        """
+        obs, rewards, dones, infos = self.venv.step_wait()
+        self.old_obs = obs
+        self.old_reward = rewards
+
+        if self.training and self.norm_obs:
+            if isinstance(obs, dict) and isinstance(self.obs_rms, dict):
+                for key in self.obs_rms.keys():
+                    self.obs_rms[key].update(obs[key])
+            else:
+                if self.venv.envs[0].unwrapped.sb3_env.index_feature:
+                    # sanity check
+                    # if measured, get index of action, then get index of features that are not measured
+                    obs_new = obs.copy()
+                    index_feature = list(self.venv.envs[0].unwrapped.sb3_env.index_feature.values())
+                    measure = self.venv.unwrapped.actions
+                    measure_index = [i for i, e in enumerate(measure[0][1:]) if e == 1]
+                    if len(measure_index) > 0:
+                        index_feature = np.delete(index_feature, measure_index)  # remove feat. from rms if not measured
+                    obs_new = np.delete(obs, list(index_feature))
+                    self.obs_rms.update(obs_new)
+                else:
+                    self.obs_rms.update(obs)
+
+        obs = self.normalize_obs(obs)
+
+        if self.training:
+            self._update_reward(rewards)
+        rewards = self.normalize_reward(rewards)
+
+        # Normalize the terminal observations
+        for idx, done in enumerate(dones):
+            if not done:
+                continue
+            if "terminal_observation" in infos[idx]:
+                infos[idx]["terminal_observation"] = self.normalize_obs(infos[idx]["terminal_observation"])
+
+        self.returns[dones] = 0
+        return obs, rewards, dones, infos
 
 
 class ClipNormalizeObservation(gym.wrappers.NormalizeObservation):

@@ -11,8 +11,6 @@ from pcse_gym.envs.constraints import ActionConstrainer, VecNormalizePO
 from pcse_gym.envs.winterwheat import WinterWheat
 from pcse_gym.envs.sb3 import get_policy_kwargs, get_model_kwargs
 from pcse_gym.utils.eval import EvalCallback, determine_and_log_optimum
-from pcse_gym.utils.rllib_helpers import (get_algo_config, winterwheat_config_maker, get_algo, ww_lim, ww_lim_norm,
-                                          ww_nor, ww_unwrapped_unnormalized, modify_algo_config)
 import pcse_gym.utils.defaults as defaults
 
 path_to_program = lib_programname.get_path_executed_script()
@@ -84,23 +82,6 @@ def train(log_dir, n_steps,
     # For comet use
     use_comet = False
 
-    if use_comet:
-        from comet_ml import Experiment
-        from comet_ml.integration.gymnasium import CometLogger
-        with open(os.path.join(rootdir, 'comet', 'hbja_api_key'), 'r') as f:
-            api_key = f.readline()
-        comet_log = Experiment(
-            api_key=api_key,
-            project_name="experimental_cropgym",
-            workspace="pcse-gym",
-            log_graph=True,
-            auto_metric_logging=True,
-            auto_histogram_tensorboard_logging=True
-        )
-
-        comet_log.log_asset_folder(os.path.join(rootdir, 'pcse_gym', 'envs'), log_file_name=True, recursive=True)
-        comet_log.log_asset(os.path.join(rootdir, 'pcse_gym', 'utils', 'eval'), file_name='eval.py')
-
     match framework:
         case 'sb3':
             from stable_baselines3 import PPO, DQN
@@ -128,7 +109,24 @@ def train(log_dir, n_steps,
                                }
                 hyperparams['policy_kwargs']['net_arch'] = [256, 256]
                 hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
+
             if use_comet:
+                from comet_ml import Experiment
+                from comet_ml.integration.gymnasium import CometLogger
+                with open(os.path.join(rootdir, 'comet', 'hbja_api_key'), 'r') as f:
+                    api_key = f.readline()
+                comet_log = Experiment(
+                    api_key=api_key,
+                    project_name="cropGym_obj1",
+                    workspace="pcse-gym",
+                    log_code=True,
+                    log_graph=True,
+                    auto_metric_logging=True,
+                    auto_histogram_tensorboard_logging=True
+                )
+                comet_log.log_asset_folder(os.path.join(rootdir, 'pcse_gym', 'envs'), log_file_name=True,
+                                           recursive=True)
+                comet_log.log_asset(os.path.join(rootdir, 'pcse_gym', 'utils', 'eval'), file_name='eval.py')
                 comet_log.log_parameters(hyperparams)
 
             env_pcse_train = WinterWheat(crop_features=crop_features, action_features=action_features,
@@ -143,6 +141,7 @@ def train(log_dir, n_steps,
 
             if use_comet and comet_log:
                 env_pcse_train = CometLogger(env_pcse_train, comet_log)
+                comet_log.add_tags(['sb3', agent, seed])
 
             match agent:
                 case 'PPO':
@@ -187,6 +186,9 @@ def train(log_dir, n_steps,
             import ray
             from ray import tune
             from ray.tune.registry import register_env
+            from pcse_gym.utils.rllib_helpers import (get_algo_config, winterwheat_config_maker, get_algo, ww_lim,
+                                                      ww_lim_norm,
+                                                      ww_nor, ww_unwrapped_unnormalized, modify_algo_config)
 
             print('Using the RLlib framework')
             log_dir_ = os.path.join(rootdir, "tensorboard_logs/rllib")
@@ -211,7 +213,23 @@ def train(log_dir, n_steps,
             algo_config = get_algo_config(get_algo(agent), env_config, 'WinterWheatRay')
             modify_algo_config(algo_config, agent)
 
-            ray.init(ignore_reinit_error=False)
+            comet_callback = None
+            if use_comet:
+                from ray.air.integrations.comet import CometLoggerCallback
+                with open(os.path.join(rootdir, 'comet', 'hbja_api_key'), 'r') as f:
+                    api_key = f.readline()
+                comet_callback = [CometLoggerCallback(
+                        api_key=api_key,
+                        project_name='cropGym_obj1',
+                        workspace="pcse-gym",
+                        tags=['rllib', agent, seed],
+                        log_code=True,
+                        log_graph=True,
+                        auto_metric_logging=True,
+                        auto_histogram_tensorboard_logging=True
+                    )]
+
+            ray.init()
 
             tune.run(
                 "PPO",
@@ -221,7 +239,8 @@ def train(log_dir, n_steps,
                     "timesteps_total": args.nsteps
                 },
                 local_dir=log_dir_,
-                trial_name_creator=trial_str_creator
+                trial_name_creator=trial_str_creator,
+                callbacks=comet_callback
             )
         case _:
             raise Exception("Framework choice error!")
