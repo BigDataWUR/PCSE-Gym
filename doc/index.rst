@@ -40,6 +40,7 @@ Citing CropGym
 If you use CropGym in your publications, please cite us following this Bibtex entry
 
 .. code-block:: text
+
     @article{cropgym,
       title={Nitrogen management with reinforcement learning and crop growth models},
       volume={2},
