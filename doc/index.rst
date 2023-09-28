@@ -55,6 +55,7 @@ If you use CropGym in your publications, please cite us following this Bibtex en
 Contact
 -------
 :email:`email<info@cropgym.ai>`
+:email:`info@cropgym.ai`
 
 Indices and tables
 ==================
