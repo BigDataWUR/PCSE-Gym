@@ -41,7 +41,8 @@ release = ''
 extensions = [
     'sphinx.ext.autodoc',
     'sphinx.ext.githubpages',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'sphinxcontrib.email'
 ]
 
 autodoc_default_options = {'private-members': True}
@@ -179,3 +180,4 @@ epub_exclude_files = ['search.html']
 
 
 # -- Extension configuration -------------------------------------------------
+email_automode = True
