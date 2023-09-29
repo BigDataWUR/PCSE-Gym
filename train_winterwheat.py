@@ -26,11 +26,11 @@ if os.path.join(rootdir, "pcse_gym") not in sys.path:
 
 def wrapper_vectorized_env(env_pcse_train, flag_po):
     from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
-    if flag_po:
-        return VecNormalizePO(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
-                              clip_obs=10., clip_reward=50., gamma=1)
-    else:
-        return VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
+    # if flag_po:
+    #     return VecNormalizePO(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
+    #                           clip_obs=10., clip_reward=50., gamma=1)
+    # else:
+    return VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
                             clip_obs=10., clip_reward=50., gamma=1)
 
 
@@ -213,6 +213,8 @@ def train(log_dir, n_steps,
             algo_config = get_algo_config(get_algo(agent), env_config, 'WinterWheatRay')
             modify_algo_config(algo_config, agent)
 
+            algo_config['observation_filter'] = "MeanStdFilter"
+
             comet_callback = None
             if use_comet:
                 from ray.air.integrations.comet import CometLoggerCallback
@@ -240,8 +242,11 @@ def train(log_dir, n_steps,
                 },
                 local_dir=log_dir_,
                 trial_name_creator=trial_str_creator,
-                callbacks=comet_callback
+                callbacks=comet_callback,
+                checkpoint_freq=10,
+                checkpoint_at_end=True,
             )
+
         case _:
             raise Exception("Framework choice error!")
 
