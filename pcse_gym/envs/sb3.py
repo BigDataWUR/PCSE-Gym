@@ -156,11 +156,15 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
             if feature in self.po_features:
                 self.index_feature[feature] = i
         self.step_check = False
+        self.no_weather = kwargs.get('no_weather', False)
 
         super().reset(seed=seed)
 
     def _get_observation_space(self):
-        nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
+        if self.no_weather:
+            nvars = len(self.crop_features)
+        else:
+            nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
         return gym.spaces.Box(0, np.inf, shape=(nvars,))
 
     def _apply_action(self, action):
@@ -236,18 +240,23 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
             else:
                 obs[i] = observation['crop_model'][feature][-1]
 
-        for i, feature in enumerate(self.action_features):
-            j = len(self.crop_features) + i
-            obs[j] = observation['actions'][feature]
-        for d in range(self.timestep):
-            for i, feature in enumerate(self.weather_features):
-                j = d * len(self.weather_features) + len(self.crop_features) + len(self.action_features) + i
-                obs[j] = observation['weather'][feature][d]
+        if not self.no_weather:
+            for i, feature in enumerate(self.action_features):
+                j = len(self.crop_features) + i
+                obs[j] = observation['actions'][feature]
+            for d in range(self.timestep):
+                for i, feature in enumerate(self.weather_features):
+                    j = d * len(self.weather_features) + len(self.crop_features) + len(self.action_features) + i
+                    obs[j] = observation['weather'][feature][d]
         return obs
 
     @property
     def model(self):
         return self._model
+
+    @property
+    def date(self):
+        return self.model.day
 
     @property
     def loc(self):

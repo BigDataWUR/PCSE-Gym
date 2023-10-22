@@ -1,7 +1,6 @@
 import numpy as np
-import ray.rllib.evaluation.episode_v2
 import torch.nn as nn
-from typing import TYPE_CHECKING, Dict, Optional, Tuple, Union
+from typing import TYPE_CHECKING, Dict, Optional, Tuple, Union, List
 
 import gymnasium as gym
 from gymnasium.wrappers import NormalizeObservation, NormalizeReward
@@ -14,7 +13,8 @@ from ray.rllib.evaluation.episode_v2 import EpisodeV2
 from ray.rllib.policy import Policy
 
 from ray.rllib.utils.typing import PolicyID, AgentID
-from tqdm import tqdm
+
+from ray.air.integrations.comet import CometLoggerCallback
 
 if TYPE_CHECKING:
     from ray.rllib.algorithms.algorithm import Algorithm
@@ -165,7 +165,7 @@ def get_algo_config(model, env_config, env="WinterWheatRay"):
                 "postprocessor_output_size": 64,
                 # Actor and critic networks
                 "actor": nn.Sequential(nn.Linear(64, 64), nn.LeakyReLU()),
-                "critic": nn.Sequential(nn.Linear(64,  64), nn.LeakyReLU()),
+                "critic": nn.Sequential(nn.Linear(64, 64), nn.LeakyReLU()),
             },
         },
         # Some other rllib defaults you might want to change
@@ -175,7 +175,9 @@ def get_algo_config(model, env_config, env="WinterWheatRay"):
         # These should be a factor of bptt_size
         "sgd_minibatch_size": bptt_size * 4,
         # Should be a factor of sgd_minibatch_size
-        "train_batch_size": bptt_size * 8,
+        "train_batch_size": bptt_size * 8,  # size has to be (rollout_fragment_length*num_num_rollout_workers*
+        # num_envs_per_worker)
+
         # You probably don't want to change these values
         "rollout_fragment_length": bptt_size,
         "framework": "torch",
@@ -189,7 +191,11 @@ def get_algo_config(model, env_config, env="WinterWheatRay"):
         # "disable_env_checking": True,
         "keep_per_episode_custom_metrics": True,
 
-        #other stuff
+        # resources
+        "num_rollout_workers": 8,
+        "num_envs_per_worker": 1,  # if more than one, possibility of sync error with PCSE
+
+        # other stuff
         # "_enable_rl_module_api": False,
         # "_enable_learner_api": False,
     }
@@ -197,6 +203,11 @@ def get_algo_config(model, env_config, env="WinterWheatRay"):
 
 # TODO: document how to install ray[rllib] to make this operational
 class RayEvalCallback(DefaultCallbacks):
+    """
+    Callback wrapper to run external test evaluations of the trained agent everytime
+    a training iteration is finished
+    """
+
     def __init__(self):
         super().__init__()
 
@@ -396,4 +407,3 @@ class RayEvalCallback(DefaultCallbacks):
                                plot_average=True)
             writer.add_figure(f'figures/avg-{variable}', fig, result["timesteps_total"])
             plt.close()
-

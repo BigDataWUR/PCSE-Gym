@@ -31,7 +31,7 @@ def wrapper_vectorized_env(env_pcse_train, flag_po):
     #                           clip_obs=10., clip_reward=50., gamma=1)
     # else:
     return VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
-                            clip_obs=10., clip_reward=50., gamma=1)
+                        clip_obs=10., clip_reward=50., gamma=1)
 
 
 def train(log_dir, n_steps,
@@ -78,6 +78,7 @@ def train(log_dir, n_steps,
     flag_po = kwargs.get('po_features', [])
     n_budget = kwargs.get('n_budget', 0)
     framework = kwargs.get('framework', 'sb3')
+    no_weather = kwargs.get('no_weather', False)
 
     # For comet use
     use_comet = False
@@ -94,9 +95,12 @@ def train(log_dir, n_steps,
                 hyperparams = {'batch_size': 64, 'n_steps': 2048, 'learning_rate': 0.0003, 'ent_coef': 0.0,
                                'clip_range': 0.3,
                                'n_epochs': 10, 'gae_lambda': 0.95, 'max_grad_norm': 0.5, 'vf_coef': 0.5,
-                               'policy_kwargs': get_policy_kwargs(n_crop_features=len(crop_features),
-                                                                  n_weather_features=len(weather_features),
-                                                                  n_action_features=len(action_features))}
+                               'policy_kwargs': {},
+                               }
+                if not no_weather:
+                    hyperparams['policy_kwargs'] = get_policy_kwargs(n_crop_features=len(crop_features),
+                                                                     n_weather_features=len(weather_features),
+                                                                     n_action_features=len(action_features))
                 hyperparams['policy_kwargs']['net_arch'] = dict(pi=[256, 256], vf=[256, 256])
                 hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
                 hyperparams['policy_kwargs']['ortho_init'] = False
@@ -221,15 +225,15 @@ def train(log_dir, n_steps,
                 with open(os.path.join(rootdir, 'comet', 'hbja_api_key'), 'r') as f:
                     api_key = f.readline()
                 comet_callback = [CometLoggerCallback(
-                        api_key=api_key,
-                        project_name='cropGym_obj1',
-                        workspace="pcse-gym",
-                        tags=['rllib', agent, seed],
-                        log_code=True,
-                        log_graph=True,
-                        auto_metric_logging=True,
-                        auto_histogram_tensorboard_logging=True
-                    )]
+                    api_key=api_key,
+                    project_name='cropGym_obj1',
+                    workspace="pcse-gym",
+                    tags=['rllib', agent, seed],
+                    log_code=True,
+                    log_graph=True,
+                    auto_metric_logging=True,
+                    auto_histogram_tensorboard_logging=True
+                )]
 
             ray.init()
 
@@ -246,7 +250,22 @@ def train(log_dir, n_steps,
                 checkpoint_freq=10,
                 checkpoint_at_end=True,
             )
+        case 'ACNO-MDP':
+            raise NotImplementedError
+            from pcse_gym.agents.BAM_QMDP import BAM_QMDP as ATM
+            from pcse_gym.envs.acno_mdp_wrapper import am_env
+            from pcse_gym.train_acno_mdp_agents import run_training
 
+            env = WinterWheat(crop_features=crop_features, action_features=action_features,
+                              weather_features=weather_features,
+                              costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
+                              action_space=action_space, action_multiplier=1.0, seed=seed,
+                              reward=reward, **get_model_kwargs(pcse_model, train_locations), **kwargs)
+            env = am_env(env, 0)
+
+            model = ATM(env, offline_training_steps=0)
+
+            run_training(model, agent, pcse_model_name, n_runs=n_steps / 40, n_eps=20, args=args, do_save=False)
         case _:
             raise Exception("Framework choice error!")
 
@@ -260,9 +279,9 @@ if __name__ == '__main__':
     parser.add_argument("-e", "--environment", type=int, default=1,
                         help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
     parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, GRU,"
-                                                                       "IndRNN, DiffNC, PosMLP, or DQN")
+                                                                       "IndRNN, DiffNC, PosMLP, ATM or DQN")
     parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, DEP, GRO, or ANE")
-    parser.add_argument("-b", "--n_budget", type=int, default=0, help="Nitrogen budget. kg/ha. Recommended 180")
+    parser.add_argument("-b", "--n_budget", type=int, default=0, help="Nitrogen budget. kg/ha")
     parser.add_argument("--action_limit", type=int, default=0, help="Limit fertilization frequency."
                                                                     "Recommended 4 times")
     parser.add_argument("-m", "--measure", action='store_true', help="--measure or --no-measure."
@@ -274,18 +293,22 @@ if __name__ == '__main__':
     parser.add_argument("--no-measure", action='store_false', dest='measure')
     parser.add_argument("--noisy-measure", action='store_true', dest='noisy_measure')
     parser.add_argument("--variable-recovery-rate", action='store_true', dest='vrr')
-    parser.set_defaults(measure=True, vrr=False, noisy_measure=False, framework='sb3')
+    parser.add_argument("--no-weather", action='store_true', dest='no_weather')
+    parser.add_argument("--random_feature", action='store_true', dest='random_feature')
+    parser.set_defaults(measure=True, vrr=False, noisy_measure=False, framework='sb3', no_weather=False, random_feature=False)
 
     args = parser.parse_args()
 
     if not args.measure and args.noisy_measure:
         parser.error("noisy measure should be used with measure")
-    if args.agent not in ['PPO', 'RPPO', 'DQN', 'GRU', 'PosMLP', 'S4D', 'IndRNN', 'DiffNC']:
-        parser.error("Invalid agent argument. Please choose PPO, RPPO, GRU, IndRNN, DiffNC, PosMLP, DQN")
+    if args.agent not in ['PPO', 'RPPO', 'DQN', 'GRU', 'PosMLP', 'S4D', 'IndRNN', 'DiffNC', 'ATM']:
+        parser.error("Invalid agent argument. Please choose PPO, RPPO, GRU, IndRNN, DiffNC, PosMLP, ATM, DQN")
     if args.reward == 'DEP':
         args.vrr = True
     if args.agent in ['GRU', 'PosMLP', 'S4D', 'IndRNN', 'DiffNC']:
         args.framework = 'rllib'
+    elif args.agent in ['ATM']:
+        args.framework = 'ACNO-MDP'
     pcse_model_name = "LINTUL" if not args.environment else "WOFOST"
 
     print(rootdir)
@@ -307,19 +330,21 @@ if __name__ == '__main__':
     else:
         parser.error("--location arg should be either LT or NL")
 
-    crop_features = defaults.get_default_crop_features(pcse_env=args.environment)
+    crop_features = defaults.get_default_crop_features(pcse_env=args.environment, minimal=True)
     weather_features = defaults.get_default_weather_features()
     action_features = defaults.get_default_action_features()
 
     tag = f'Seed-{args.seed}'
 
     kwargs = {'args_vrr': args.vrr, 'action_limit': args.action_limit, 'noisy_measure': args.noisy_measure,
-              'n_budget': args.n_budget, 'framework': args.framework}
+              'n_budget': args.n_budget, 'framework': args.framework, 'no_weather': args.no_weather}
     if not args.measure:
         action_spaces = gymnasium.spaces.Discrete(7)
     else:
         if args.environment:
             po_features = ['TAGP', 'LAI', 'NAVAIL', 'NuptakeTotal', 'SM']
+            if args.random_feature:
+                po_features.append('random')
             if 'random' in po_features:
                 crop_features.append('random')
         else:

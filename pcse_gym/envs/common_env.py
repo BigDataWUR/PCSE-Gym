@@ -20,7 +20,7 @@ import pcse
 
 
 # TODO replace the usage of the function replace_years() with this. If we do, a lot of refactoring needed.
-def generate_agro_management(years: list, start_type='emergence') -> list:
+def generate_agro_management(years: list, start_type='emergence', ) -> list:
     """
     Function to generate a dictionary, mimicking the wheat_cropcalendar.yaml file
 
@@ -197,6 +197,9 @@ class PCSEEnv(gym.Env):
         self._crop_params = crop_parameters
         self._site_params = site_parameters
         self._soil_params = soil_parameters
+
+        # Agent will have no access to weather
+        self.no_weather = kwargs.get('no_weather', False)
 
         # Store the agro-management config
         with open(agro_config, 'r') as f:

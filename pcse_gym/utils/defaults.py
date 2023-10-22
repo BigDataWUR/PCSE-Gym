@@ -8,8 +8,15 @@ def get_wofost_default_crop_features():
     return ["DVS", "TAGP", "LAI", "NuptakeTotal", "TRA", "NAVAIL", "SM", "RFTRA", "TWSO"]
 
 
-def get_default_crop_features(pcse_env=1):
-    if pcse_env:
+def get_wofost_minimal_crop_features():
+    # See get_titles() for description of variables
+    return ["DVS", "TAGP", "LAI", "NuptakeTotal", "NAVAIL", "SM"]
+
+
+def get_default_crop_features(pcse_env=1, minimal=True):
+    if pcse_env and minimal:
+        crop_features = get_wofost_minimal_crop_features()
+    elif pcse_env:
         crop_features = get_wofost_default_crop_features()
     else:
         crop_features = get_lintul_default_crop_features()

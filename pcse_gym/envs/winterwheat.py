@@ -78,8 +78,18 @@ class WinterWheat(gym.Env):
                                       *args, **kwargs)
 
     def _get_observation_space(self):
-        nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
+        if self.sb3_env.no_weather:
+            nvars = len(self.crop_features)
+        else:
+            nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
         return gym.spaces.Box(0, np.inf, shape=(nvars,))
+
+    def _get_obs_len(self):
+        if self.sb3_env.no_weather:
+            nvars = len(self.crop_features)
+        else:
+            nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
+        return nvars
 
     def step(self, action):
         """
@@ -216,6 +226,14 @@ class WinterWheat(gym.Env):
     def timestep(self):
         return self._timestep
 
+    @property
+    def obs_len(self):
+        return self._get_obs_len()
+
+    @property
+    def act_len(self):
+        return len(self.action_space.shape)
+
 
 class WinterWheatRay(WinterWheat):
     """
@@ -296,7 +314,10 @@ class WinterWheatRay(WinterWheat):
         super().reset(seed=config['seed'])
 
     def _get_observation_space(self):
-        nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
+        if self.sb3_env.no_weather:
+            nvars = len(self.crop_features)
+        else:
+            nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
         return gym.spaces.Box(-np.inf, np.inf, shape=(nvars,))
 
     def render(self, mode="human"):

@@ -229,8 +229,12 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
 
         if variable in cumulative_variables: plot_df = plot_df.apply(np.cumsum, axis=0)
         plot_df.ffill(inplace=True)
-        ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where='post')
-        ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step='post')
+        if variable.startswith("measure"):
+            ax.step(plot_df.index, plot_df.sum(axis=1), 'k-', where='post')
+            ax.fill_between(plot_df.index, plot_df.min(axis=1), plot_df.sum(axis=1), color='g', step='post')
+        else:
+            ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where='post')
+            ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step='post')
 
     ax.axhline(y=0, color='lightgrey', zorder=1)
     ax.margins(x=0)
@@ -349,7 +353,7 @@ def evaluate_policy(
             sync_envs_normalization(policy.get_env(), env)
         if not isinstance(env, VecEnv) or i == 0:
             obs = env.reset()
-        terminated, truncated, state, lstm_state = False, False, None, None
+        terminated, truncated, state = False, False, None
         episode_reward = 0.0
         episode_length = 0
         year = env.get_attr("date")[0].year
@@ -357,6 +361,9 @@ def evaluate_policy(
         action = [amount * 0]
         infos_this_episode = []
         prob, val = None, None
+
+        lstm_state = None
+        episode_starts = np.ones((1,), dtype=bool)
 
         while not terminated or truncated:
             if policy == 'start-dump' and (episode_length == 0):
@@ -371,7 +378,8 @@ def evaluate_policy(
                     # prob = sb_prob
                     # val = sb_val
                 if isinstance(policy, RecurrentPPO):
-                    action, lstm_state = policy.predict(obs, state=lstm_state, deterministic=deterministic)
+                    action, lstm_state = policy.predict(obs, state=lstm_state, episode_start=episode_starts,
+                                                        deterministic=deterministic)
                 if isinstance(policy, DQN):
                     action = policy.predict(obs, deterministic=deterministic)
 
@@ -379,6 +387,7 @@ def evaluate_policy(
             # see: https://github.com/DLR-RM/stable-baselines3/blob/master/docs/guide/vec_envs.rst
             # TODO: add check on function signature
             obs, rew, terminated, info = env.step(action)
+            episode_starts = terminated
             truncated = info[0].pop("TimeLimit.truncated")
 
             reward = env.get_original_reward()
@@ -498,7 +507,7 @@ class EvalCallback(BaseCallback):
     def __init__(self, env_eval=None, train_years=defaults.get_default_train_years(),
                  test_years=defaults.get_default_test_years(),
                  train_locations=defaults.get_default_location(), test_locations=defaults.get_default_location(),
-                 n_eval_episodes=1, eval_freq=1000, pcse_model=1, seed=0, **kwargs):
+                 n_eval_episodes=1, eval_freq=20_000, pcse_model=1, seed=0, **kwargs):
         super(EvalCallback, self).__init__()
         self.test_years = test_years
         self.train_years = train_years
@@ -680,7 +689,10 @@ class EvalCallback(BaseCallback):
                 fig, ax = plt.subplots()
                 plot_variable(results_figure, variable=variable, ax=ax, ylim=get_ylim_dict()[variable],
                               plot_average=True)
-                self.logger.record(f'figures/avg-{variable}', Figure(fig, close=True))
+                if variable.startswith('measure'):
+                    self.logger.record(f'figures/sum-{variable}', Figure(fig, close=True))
+                else:
+                    self.logger.record(f'figures/avg-{variable}', Figure(fig, close=True))
                 plt.close()
             self.logger.dump(step=self.num_timesteps)
 

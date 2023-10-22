@@ -1,6 +1,6 @@
 import gymnasium as gym
 import numpy as np
-from collections import OrderedDict
+from collections import OrderedDict, defaultdict
 from gymnasium import ActionWrapper
 import pcse
 from datetime import timedelta
@@ -103,6 +103,7 @@ class MeasureOrNot:
         self.env = env
         self.feature_ind = []
         self.feature_ind_dict = OrderedDict()
+        self.measure_freq = defaultdict(dict)
         self.get_feature_cost_ind()
 
     def get_feature_cost_ind(self) -> None:
@@ -132,6 +133,7 @@ class MeasureOrNot:
             else:
                 obs[i_obs] = self.get_noise(obs[i_obs], i_obs)
                 measuring_cost[i] = self.get_observation_cost(measurement[i], i_obs)
+            self.set_measure_freq(measurement)
         return obs, measuring_cost
 
     def get_noise(self, obs, index):
@@ -175,6 +177,11 @@ class MeasureOrNot:
                 break
         return key_match
 
+    def get_measure_cost_vector(self):
+        exp_costs = self.exp_costs()
+        vector = [exp_costs.get(k) for k in self.feature_ind_dict if k in exp_costs]
+        return vector
+
     @staticmethod
     def exp_costs():
         return dict(
@@ -202,6 +209,46 @@ class MeasureOrNot:
             NUPTT=2,
             TRAIN=0.5
         )
+
+    @staticmethod
+    def no_costs():
+        return dict(
+            LAI=0,
+            TAGP=0,
+            NAVAIL=0,
+            NuptakeTotal=0,
+            SM=0,
+            TGROWTH=0,
+            TNSOIL=0,
+            NUPTT=0,
+            TRAIN=0
+        )
+
+    def set_measure_freq(self, measurement):
+        date_key = self.get_date_key()
+        loc_key = self.get_loc_key()
+        did = {}
+        for k, v in self.feature_ind_dict.items():
+            for ind, vi in enumerate(self.feature_ind):
+                if vi == v:
+                    did[k] = measurement[ind]
+        self.measure_freq[loc_key][date_key] = did
+
+    def get_year_key(self):
+        year = self.env.date.year
+        return f'{year}'
+
+    def get_loc_key(self):
+        location = self.env.loc
+        return f'{location}'
+
+    def get_date_key(self):
+        date = self.env.date#.strftime('%m-%d')
+        return f'{date}'
+
+    @property
+    def measure_len(self):
+        return len(self.env.po_features)
 
 
 class VariableRecoveryRate(pcse_gym.envs.sb3.StableBaselinesWrapper):
