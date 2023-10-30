@@ -1,13 +1,14 @@
-import gymnasium as gym
-import numpy as np
-from collections import OrderedDict, defaultdict
-from gymnasium import ActionWrapper
-import pcse
 from datetime import timedelta
-import pcse_gym.envs.sb3
-from stable_baselines3.common.vec_env import VecNormalize
-from stable_baselines3.common.running_mean_std import RunningMeanStd
+from collections import OrderedDict, defaultdict
 from copy import deepcopy
+
+import gymnasium as gym
+from gymnasium import ActionWrapper
+import numpy as np
+
+import pcse
+
+import pcse_gym.envs.sb3
 
 
 class ActionConstrainer(ActionWrapper):
@@ -99,12 +100,14 @@ class MeasureOrNot:
     """
     Container to store indexes and index matching logic of the environment observation and the measurement actions
     """
-    def __init__(self, env):
+    def __init__(self, env, extend_obs=False, placeholder_val=-1.11):
         self.env = env
         self.feature_ind = []
         self.feature_ind_dict = OrderedDict()
         self.measure_freq = defaultdict(dict)
         self.get_feature_cost_ind()
+        self.mask = extend_obs
+        self.placeholder = placeholder_val
 
     def get_feature_cost_ind(self) -> None:
         for feature in self.env.po_features:
@@ -119,7 +122,7 @@ class MeasureOrNot:
     def measure_act(self, obs, measurement):
         """
         iterate through feature index from sb3 observation.
-        if a measurement action is 0, observation is 0
+        if a measurement action is 0, observation is ::self.placeholder
         if measure action 2, add a noisy observation
         if measure action 1, give correct observation
         """
@@ -127,14 +130,30 @@ class MeasureOrNot:
 
         for i, i_obs in enumerate(self.feature_ind):
             if not measurement[i]:
-                obs[i_obs] = 0.0
+                obs[i_obs] = self.placeholder
             elif measurement[i] == 1:
                 measuring_cost[i] = self.get_observation_cost(measurement[i], i_obs)
             else:
                 obs[i_obs] = self.get_noise(obs[i_obs], i_obs)
                 measuring_cost[i] = self.get_observation_cost(measurement[i], i_obs)
             self.set_measure_freq(measurement)
+
+        if self.mask:
+            obs = self.extend_observation(obs)
+
         return obs, measuring_cost
+
+    def extend_observation(self, obs):
+        obs_ = deepcopy(obs)
+        trunc_obs = obs[:len(obs)//2]  # np.append(obs, np.zeros(len(obs)))
+        # binary observation vector, explicitly stating if an observation is masked
+        for i, ori_ob in enumerate(trunc_obs):
+            j = len(obs)//2 + i
+            if ori_ob == self.placeholder:
+                obs_[j] = 0
+            else:
+                obs_[j] = 1
+        return obs_
 
     def get_noise(self, obs, index):
         rng = np.random.default_rng()
@@ -284,180 +303,3 @@ def generate_combinations(elements):
         all_combinations.extend(combinations(elements, x))
 
     return all_combinations
-
-
-class VecNormalizePO(VecNormalize):
-    """
-    A wrapper of the normalizing wrapper for an SB3 vectorized environment
-    Overrides the normalization of partially observable crop variables in CropGym
-    """
-    def __init__(self, venv, *args, **kwargs):
-        super(VecNormalizePO, self).__init__(venv, *args, **kwargs)
-        self.obs_rms = RunningMeanStdPO(self.observation_space.shape, index=self.venv.envs[0].unwrapped.sb3_env.index_feature)
-
-    def step_wait(self):
-        """
-        Apply sequence of actions to sequence of environments
-        actions -> (observations, rewards, dones)
-
-        where ``dones`` is a boolean vector indicating whether each element is new.
-        """
-        obs, rewards, dones, infos = self.venv.step_wait()
-        self.old_obs = obs
-        self.old_reward = rewards
-
-        if self.training and self.norm_obs:
-            if isinstance(obs, dict) and isinstance(self.obs_rms, dict):
-                for key in self.obs_rms.keys():
-                    self.obs_rms[key].update(obs[key])
-            else:
-                if self.venv.envs[0].unwrapped.sb3_env.index_feature and self.venv.envs[0].unwrapped.sb3_env.step_check:
-                    self.obs_rms.update_index(self.get_no_measure(), obs)
-                else:
-                    self.obs_rms.update(obs)
-
-        obs = self.normalize_obs(obs)
-
-        if self.training:
-            self._update_reward(rewards)
-        rewards = self.normalize_reward(rewards)
-
-        # Normalize the terminal observations
-        for idx, done in enumerate(dones):
-            if not done:
-                continue
-            if "terminal_observation" in infos[idx]:
-                infos[idx]["terminal_observation"] = self.normalize_obs(infos[idx]["terminal_observation"])
-
-        self.returns[dones] = 0
-        return obs, rewards, dones, infos
-
-    def reset(self):
-        """
-        Reset all environments
-        :return: first observation of the episode
-        """
-        obs = self.venv.reset()
-        self.old_obs = obs
-        self.returns = np.zeros(self.num_envs)
-        if self.training and self.norm_obs:
-            if isinstance(obs, dict) and isinstance(self.obs_rms, dict):
-                for key in self.obs_rms.keys():
-                    self.obs_rms[key].update(obs[key])
-            else:
-                self.obs_rms.update(obs)
-        return self.normalize_obs(obs)
-
-    def normalize_obs(self, obs):
-        """
-        Normalize observations using this VecNormalize's observations statistics.
-        Calling this method does not update statistics.
-        """
-        # Avoid modifying by reference the original object
-        obs_ = deepcopy(obs)
-        if self.norm_obs:
-            if isinstance(obs, dict) and isinstance(self.obs_rms, dict):
-                # Only normalize the specified keys
-                for key in self.norm_obs_keys:
-                    obs_[key] = self._normalize_obs(obs[key], self.obs_rms[key]).astype(np.float32)
-            else:
-                obs_ = self._normalize_obs(obs_, self.obs_rms).astype(np.float32)
-        return obs_
-
-    def get_no_measure(self):
-        index_feature = self.venv.envs[0].unwrapped.sb3_env.index_feature
-        actions = self.venv.unwrapped.actions
-        measure_index = [i for i, e in enumerate(actions[0][1:]) if e == 0]
-        if len(measure_index) > 0:
-            # remove feat. from rms if not measured
-            ind_feat = np.delete(list(index_feature.values()), measure_index)
-        else:
-            ind_feat = []
-        return ind_feat
-
-
-class RunningMeanStdPO(RunningMeanStd):
-    def __init__(self, epsilon=1e-4, shape=(), index=[]):
-        super(RunningMeanStdPO, self).__init__(epsilon=1e-4, shape=())
-        self.obs_shape = shape
-        self.index_po_full = index
-        self.index_po = index
-        self.index_po_dict = {key: 0.0 for key in self.index_po_full}
-        self.index_po_mean = None
-        self.index_po_var = None
-        self.mean = np.zeros(shape, np.float64)
-        self.var = np.ones(shape, np.float64)
-        self.count = epsilon
-
-    def update_index(self, index, arr):
-        self.index_po = index
-        self.update(arr)
-
-    def update_index_value(self):
-        for key, value in zip(self.index_po, self.mean):
-            self.index_po_mean[key] = value
-        for key, value in zip(self.index_po, self.var):
-            self.index_po_var[key] = value
-
-    def update(self, arr: np.ndarray) -> None:
-        if len(self.index_po) > 0:
-            arr = np.array([val for i, val in enumerate(arr[0]) if i in self.index_po])
-            self.mean = np.array([val for i, val in enumerate(self.mean) if i in self.index_po])
-            self.var = np.array([val for i, val in enumerate(self.var) if i in self.index_po])
-        batch_mean = np.mean(arr, axis=0)
-        batch_var = np.var(arr, axis=0)
-        batch_count = arr.shape[0]
-        self.update_from_moments(batch_mean, batch_var, batch_count)
-
-    def update_from_moments(self, batch_mean, batch_var, batch_count):
-        delta = batch_mean - self.mean
-        tot_count = self.count + batch_count
-
-        new_mean = self.mean + delta * batch_count / tot_count
-        m_a = self.var * self.count
-        m_b = batch_var * batch_count
-        m_2 = m_a + m_b + np.square(delta) * self.count * batch_count / (self.count + batch_count)
-        new_var = m_2 / (self.count + batch_count)
-
-        new_count = batch_count + self.count
-
-        self.mean = new_mean
-        self.var = new_var
-        self.count = new_count
-
-        self.update_index_value()
-
-
-
-class ClipNormalizeObservation(gym.wrappers.NormalizeObservation):
-    """
-    Wrapper to add capability of clipping the observation running std.
-    Mimicking SB3 VecNormalize.
-    """
-    def __init__(self, venv, clip, *args, **kwargs):
-        super(ClipNormalizeObservation, self).__init__(venv, *args, **kwargs)
-        self.clip = clip
-
-    def normalize(self, obs):
-        """Normalises the observation using the running mean and variance of the observations."""
-        self.obs_rms.update(obs)
-        return np.clip((obs - self.obs_rms.mean) / np.sqrt(self.obs_rms.var + self.epsilon), -self.clip, self.clip)
-
-
-class ClipNormalizeReward(gym.wrappers.NormalizeReward):
-    """
-    Wrapper to add capability of clipping the observation running std.
-    Mimicking SB3 VecNormalize.
-    """
-
-    def __init__(self, venv, clip, *args, **kwargs):
-        super(ClipNormalizeReward, self).__init__(venv, *args, **kwargs)
-        self.clip = clip
-
-    def normalize(self, obs):
-        """Normalises the observation using the running mean and variance of the observations."""
-        self.obs_rms.update(obs)
-        return np.clip((obs - self.obs_rms.mean) / np.sqrt(self.obs_rms.var + self.epsilon), -self.clip, self.clip)
-
-
-

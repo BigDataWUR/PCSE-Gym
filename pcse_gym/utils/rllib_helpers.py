@@ -237,6 +237,8 @@ class RayEvalCallback(DefaultCallbacks):
             for v in variables:
                 for info_dict in infos_this_episode:
                     episode_info[v].update(info_dict[v])
+            if env.normalize:
+                episode_reward = env.norm.unnormalize_rew(episode_reward)
             episode_rewards.append(episode_reward)
             episode_infos.append(episode_info)
         return episode_rewards, episode_infos

@@ -11,7 +11,7 @@ from scipy.optimize import minimize_scalar
 from bisect import bisect_left
 from typing import Union
 from tqdm import tqdm
-from stable_baselines3 import PPO, DQN
+from stable_baselines3 import PPO, DQN, A2C
 from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv, VecNormalize, sync_envs_normalization
 from stable_baselines3.common import base_class
 from stable_baselines3.common.callbacks import BaseCallback
@@ -204,7 +204,6 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
         gen.send(None)
         return gen.send(_i)
 
-
     for label, results in results_dict.items():
         x, y = zip(*results[0][variable].items())
         x = ([i.timetuple().tm_yday for i in x])
@@ -332,8 +331,9 @@ def evaluate_policy(
     training = True
 
     if isinstance(policy, base_class.BaseAlgorithm) and policy.get_env() is not None:
-        training = policy.get_env().training
-        policy.get_env().training = False
+        if isinstance(env, DummyVecEnv) and not env.envs[0].unwrapped.normalize:
+            training = policy.get_env().training
+            policy.get_env().training = False
     if isinstance(env, VecEnv):
         assert env.num_envs == 1, "You must pass only one environment when using this function"
 
@@ -350,7 +350,8 @@ def evaluate_policy(
     episode_rewards, episode_infos = [], []
     for i in range(n_eval_episodes):
         if isinstance(policy, base_class.BaseAlgorithm):
-            sync_envs_normalization(policy.get_env(), env)
+            if isinstance(env, DummyVecEnv) and not env.envs[0].unwrapped.normalize:
+                sync_envs_normalization(policy.get_env(), env)
         if not isinstance(env, VecEnv) or i == 0:
             obs = env.reset()
         terminated, truncated, state = False, False, None
@@ -377,6 +378,10 @@ def evaluate_policy(
                     # sb_val = sb_values.detach().item()
                     # prob = sb_prob
                     # val = sb_val
+                if isinstance(policy, A2C):
+                    action, state = policy.predict(obs, state=state, episode_start=episode_starts,
+                                                   deterministic=deterministic)
+
                 if isinstance(policy, RecurrentPPO):
                     action, lstm_state = policy.predict(obs, state=lstm_state, episode_start=episode_starts,
                                                         deterministic=deterministic)
@@ -390,7 +395,10 @@ def evaluate_policy(
             episode_starts = terminated
             truncated = info[0].pop("TimeLimit.truncated")
 
-            reward = env.get_original_reward()
+            if isinstance(env, DummyVecEnv) and not env.envs[0].unwrapped.normalize:
+                reward = env.get_original_reward()
+            elif env.envs[0].unwrapped.normalize:
+                reward = env.envs[0].unwrapped.norm.unnormalize_rew(rew)
 
             if prob:
                 action_date = list(info[0]['action'].keys())[0]
@@ -573,8 +581,9 @@ class EvalCallback(BaseCallback):
             tensorboard_logdir = self.logger.dir
             model_path = os.path.join(tensorboard_logdir, f'model-{self.n_calls}')
             self.model.save(model_path)
-            stats_path = os.path.join(tensorboard_logdir, f'env-{self.n_calls}.pkl')
-            self.model.get_env().save(stats_path)
+            if not self.env_eval.normalize:
+                stats_path = os.path.join(tensorboard_logdir, f'env-{self.n_calls}.pkl')
+                self.model.get_env().save(stats_path)
             episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=self.model.get_env())
             if self.pcse_model:
                 variables = ['action', 'TWSO', 'reward']
@@ -635,7 +644,8 @@ class EvalCallback(BaseCallback):
                     env_pcse_evaluation.env_method('overwrite_year', year)
                     env_pcse_evaluation.env_method('overwrite_location', test_location)
                     env_pcse_evaluation.reset()
-                    sync_envs_normalization(self.model.get_env(), env_pcse_evaluation)
+                    if not self.env_eval.normalize:
+                        sync_envs_normalization(self.model.get_env(), env_pcse_evaluation)
                     episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=env_pcse_evaluation)
                     my_key = (year, test_location)
                     reward[my_key] = episode_rewards[0].item()

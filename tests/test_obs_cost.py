@@ -7,6 +7,7 @@ import tests.initialize_env as init_env
 class TestMeasure(unittest.TestCase):
     def setUp(self):
         self.env = init_env.initialize_env_po()
+        self.env_ext = init_env.initialize_env_measure_po_extend()
 
     def test_oc(self):
         self.env.reset()
@@ -35,6 +36,20 @@ class TestMeasure(unittest.TestCase):
             actual.append(a)
         expected = list(np.zeros(3))
         self.assertListEqual(expected, actual)
+
+    def test_mask_obs(self):
+        self.env_ext.reset()
+        action = np.array([0, 1, 0, 0, 0, 1])
+
+        obs, reward, terminated, truncated, info = self.env_ext.step(action)
+
+        obs_obs = obs[:6]
+
+        obs_mask = np.array([1.0, 1.0, 0.0, 1.0, 0.0, 0.0])
+
+        expected_obs = np.append(obs_obs, obs_mask)
+
+        self.assertListEqual(expected_obs.tolist(), obs.tolist())
 
 
 class TestNoisyMeasure(unittest.TestCase):

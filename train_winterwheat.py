@@ -3,14 +3,21 @@ import lib_programname
 import sys
 import os.path
 import time
+
+# For comet use
+use_comet = True
+if use_comet:
+    from comet_ml import Experiment
+    from comet_ml.integration.gymnasium import CometLogger
 import torch.nn as nn
 
 import gymnasium.spaces
 
-from pcse_gym.envs.constraints import ActionConstrainer, VecNormalizePO
+from pcse_gym.envs.constraints import ActionConstrainer
 from pcse_gym.envs.winterwheat import WinterWheat
 from pcse_gym.envs.sb3 import get_policy_kwargs, get_model_kwargs
 from pcse_gym.utils.eval import EvalCallback, determine_and_log_optimum
+from pcse_gym.utils.normalization import VecNormalizePO
 import pcse_gym.utils.defaults as defaults
 
 path_to_program = lib_programname.get_path_executed_script()
@@ -24,14 +31,16 @@ if os.path.join(rootdir, "pcse_gym") not in sys.path:
     sys.path.insert(0, os.path.join(rootdir, "pcse_gym"))
 
 
-def wrapper_vectorized_env(env_pcse_train, flag_po):
+def wrapper_vectorized_env(env_pcse_train, flag_po, normalize=False):
     from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
-    # if flag_po:
-    #     return VecNormalizePO(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
-    #                           clip_obs=10., clip_reward=50., gamma=1)
-    # else:
-    return VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
-                        clip_obs=10., clip_reward=50., gamma=1)
+    if normalize:
+        return DummyVecEnv([lambda: env_pcse_train])
+    if flag_po:
+        return VecNormalizePO(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
+                              clip_obs=10., clip_reward=50., gamma=1)
+    else:
+        return VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
+                            clip_obs=10., clip_reward=50., gamma=1)
 
 
 def train(log_dir, n_steps,
@@ -79,19 +88,20 @@ def train(log_dir, n_steps,
     n_budget = kwargs.get('n_budget', 0)
     framework = kwargs.get('framework', 'sb3')
     no_weather = kwargs.get('no_weather', False)
-
-    # For comet use
-    use_comet = False
+    normalize = kwargs.get('normalize', False)
+    mask_binary = kwargs.get('mask_binary', False)
+    loc_code = kwargs.get('loc_code', None)
 
     match framework:
         case 'sb3':
-            from stable_baselines3 import PPO, DQN
+            from stable_baselines3 import PPO, DQN, A2C
             from stable_baselines3.common.monitor import Monitor
+            from stable_baselines3.common.sb2_compat.rmsprop_tf_like import RMSpropTFLike
 
             print('Using the StableBaselines3 framework')
             print(f'Train model {pcse_model_name} with {agent} algorithm and seed {seed}. Logdir: {log_dir}')
 
-            if agent == 'PPO' or 'RPPO':
+            if agent == 'PPO':
                 hyperparams = {'batch_size': 64, 'n_steps': 2048, 'learning_rate': 0.0003, 'ent_coef': 0.0,
                                'clip_range': 0.3,
                                'n_epochs': 10, 'gae_lambda': 0.95, 'max_grad_norm': 0.5, 'vf_coef': 0.5,
@@ -104,6 +114,33 @@ def train(log_dir, n_steps,
                 hyperparams['policy_kwargs']['net_arch'] = dict(pi=[256, 256], vf=[256, 256])
                 hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
                 hyperparams['policy_kwargs']['ortho_init'] = False
+            if agent == 'RPPO':
+                hyperparams = {'batch_size': 64, 'n_steps': 2048, 'learning_rate': 0.0001, 'ent_coef': 0.0,
+                               'clip_range': 0.4,
+                               'n_epochs': 10, 'gae_lambda': 0.95, 'max_grad_norm': 0.5, 'vf_coef': 0.4,
+                               'policy_kwargs': {},
+                               }
+                if not no_weather:
+                    hyperparams['policy_kwargs'] = get_policy_kwargs(n_crop_features=len(crop_features),
+                                                                     n_weather_features=len(weather_features),
+                                                                     n_action_features=len(action_features))
+                hyperparams['policy_kwargs']['net_arch'] = dict(pi=[256, 256], vf=[256, 256])
+                hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
+                hyperparams['policy_kwargs']['ortho_init'] = False
+            if agent == 'A2C':
+                hyperparams = {'n_steps': 2048, 'learning_rate': 0.002, 'ent_coef': 0.0,
+                               'gae_lambda': 0.9, 'vf_coef': 0.4,  # 'rms_prop_eps': 1e-5, 'normalize_advantage': True,
+                               'policy_kwargs': {},
+                               }
+                if not no_weather:
+                    hyperparams['policy_kwargs'] = get_policy_kwargs(n_crop_features=len(crop_features),
+                                                                     n_weather_features=len(weather_features),
+                                                                     n_action_features=len(action_features))
+                hyperparams['policy_kwargs']['net_arch'] = dict(pi=[256, 256], vf=[256, 256])
+                hyperparams['policy_kwargs']['activation_fn'] = nn.ReLU
+                hyperparams['policy_kwargs']['ortho_init'] = False
+                # hyperparams['policy_kwargs']['optimizer_class'] = RMSpropTFLike
+                # hyperparams['policy_kwargs']['optimizer_kwargs'] = dict(eps=0.00001)
             if agent == 'DQN':
                 hyperparams = {'exploration_fraction': 0.1, 'exploration_initial_eps': 1.0,
                                'exploration_final_eps': 0.01,
@@ -115,22 +152,21 @@ def train(log_dir, n_steps,
                 hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
 
             if use_comet:
-                from comet_ml import Experiment
-                from comet_ml.integration.gymnasium import CometLogger
                 with open(os.path.join(rootdir, 'comet', 'hbja_api_key'), 'r') as f:
                     api_key = f.readline()
                 comet_log = Experiment(
                     api_key=api_key,
-                    project_name="cropGym_obj1",
+                    project_name="cropGym_1",
                     workspace="pcse-gym",
                     log_code=True,
                     log_graph=True,
                     auto_metric_logging=True,
                     auto_histogram_tensorboard_logging=True
                 )
-                comet_log.log_asset_folder(os.path.join(rootdir, 'pcse_gym', 'envs'), log_file_name=True,
-                                           recursive=True)
-                comet_log.log_asset(os.path.join(rootdir, 'pcse_gym', 'utils', 'eval'), file_name='eval.py')
+                comet_log.log_code(folder=os.path.join(rootdir, 'pcse_gym'))
+                # comet_log.log_asset_folder(os.path.join(rootdir, 'pcse_gym', 'envs'), log_file_name=True,
+                #                            recursive=True)
+                # comet_log.log_asset(os.path.join(rootdir, 'pcse_gym', 'utils', 'eval'), file_name='eval.py')
                 comet_log.log_parameters(hyperparams)
 
             env_pcse_train = WinterWheat(crop_features=crop_features, action_features=action_features,
@@ -145,20 +181,24 @@ def train(log_dir, n_steps,
 
             if use_comet and comet_log:
                 env_pcse_train = CometLogger(env_pcse_train, comet_log)
-                comet_log.add_tags(['sb3', agent, seed])
+                comet_log.add_tags(['sb3', agent, seed, loc_code])
 
             match agent:
                 case 'PPO':
-                    env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po)
+                    env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po, normalize)
                     model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
                                 tensorboard_log=log_dir)
                 case 'DQN':
-                    env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po)
+                    env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po, normalize)
                     model = DQN('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
+                                tensorboard_log=log_dir)
+                case 'A2C':
+                    env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po, normalize)
+                    model = A2C('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
                                 tensorboard_log=log_dir)
                 case 'RPPO':
                     from sb3_contrib import RecurrentPPO
-                    env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po)
+                    env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po, normalize)
                     model = RecurrentPPO('MlpLstmPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
                                          tensorboard_log=log_dir)
 
@@ -177,7 +217,14 @@ def train(log_dir, n_steps,
             if action_limit or n_budget > 0:
                 env_pcse_eval = ActionConstrainer(env_pcse_eval, action_limit=action_limit, n_budget=n_budget)
 
-            tb_log_name = f'{tag}-{pcse_model_name}-Ncosts-{costs_nitrogen}-run'
+            tb_log_name = f'{tag}-nsteps-{n_steps}-{agent}-rew-{reward}-lim-act-{action_limit}-budget-{n_budget}'
+            if no_weather:
+                tb_log_name = tb_log_name + '-no_weather'
+            if normalize:
+                tb_log_name = tb_log_name + '-normalize'
+            if mask_binary:
+                tb_log_name = tb_log_name + '-masked'
+            tb_log_name = tb_log_name + '-run'
 
             model.learn(total_timesteps=n_steps,
                         callback=EvalCallback(env_eval=env_pcse_eval, test_years=test_years,
@@ -217,18 +264,19 @@ def train(log_dir, n_steps,
             algo_config = get_algo_config(get_algo(agent), env_config, 'WinterWheatRay')
             modify_algo_config(algo_config, agent)
 
-            algo_config['observation_filter'] = "MeanStdFilter"
+            # algo_config['observation_filter'] = "MeanStdFilter"
 
+            use_comet_ = False
             comet_callback = None
-            if use_comet:
+            if use_comet_:
                 from ray.air.integrations.comet import CometLoggerCallback
                 with open(os.path.join(rootdir, 'comet', 'hbja_api_key'), 'r') as f:
                     api_key = f.readline()
                 comet_callback = [CometLoggerCallback(
                     api_key=api_key,
-                    project_name='cropGym_obj1',
+                    project_name='cropGym_1',
                     workspace="pcse-gym",
-                    tags=['rllib', agent, seed],
+                    tags=['rllib', agent, seed, loc_code],
                     log_code=True,
                     log_graph=True,
                     auto_metric_logging=True,
@@ -294,15 +342,20 @@ if __name__ == '__main__':
     parser.add_argument("--noisy-measure", action='store_true', dest='noisy_measure')
     parser.add_argument("--variable-recovery-rate", action='store_true', dest='vrr')
     parser.add_argument("--no-weather", action='store_true', dest='no_weather')
-    parser.add_argument("--random_feature", action='store_true', dest='random_feature')
-    parser.set_defaults(measure=True, vrr=False, noisy_measure=False, framework='sb3', no_weather=False, random_feature=False)
+    parser.add_argument("--random-feature", action='store_true', dest='random_feature')
+    parser.add_argument("--mask-binary", action='store_true', dest='obs_mask')
+    parser.add_argument("--placeholder-0", action='store_const', const=0.0, dest='placeholder_val')
+    parser.add_argument("--normalize", action='store_true', dest='normalize')
+    parser.set_defaults(measure=True, vrr=False, noisy_measure=False, framework='sb3',
+                        no_weather=False, random_feature=False, obs_mask=False, placeholder_val=-1.11,
+                        normalize=False)
 
     args = parser.parse_args()
 
     if not args.measure and args.noisy_measure:
         parser.error("noisy measure should be used with measure")
-    if args.agent not in ['PPO', 'RPPO', 'DQN', 'GRU', 'PosMLP', 'S4D', 'IndRNN', 'DiffNC', 'ATM']:
-        parser.error("Invalid agent argument. Please choose PPO, RPPO, GRU, IndRNN, DiffNC, PosMLP, ATM, DQN")
+    if args.agent not in ['PPO', 'A2C', 'RPPO', 'DQN', 'GRU', 'PosMLP', 'S4D', 'IndRNN', 'DiffNC', 'ATM']:
+        parser.error("Invalid agent argument. Please choose PPO, A2C, RPPO, GRU, IndRNN, DiffNC, PosMLP, ATM, DQN")
     if args.reward == 'DEP':
         args.vrr = True
     if args.agent in ['GRU', 'PosMLP', 'S4D', 'IndRNN', 'DiffNC']:
@@ -337,7 +390,9 @@ if __name__ == '__main__':
     tag = f'Seed-{args.seed}'
 
     kwargs = {'args_vrr': args.vrr, 'action_limit': args.action_limit, 'noisy_measure': args.noisy_measure,
-              'n_budget': args.n_budget, 'framework': args.framework, 'no_weather': args.no_weather}
+              'n_budget': args.n_budget, 'framework': args.framework, 'no_weather': args.no_weather,
+              'mask_binary': args.obs_mask, 'placeholder_val': args.placeholder_val, 'normalize': args.normalize,
+              'loc_code': args.location}
     if not args.measure:
         action_spaces = gymnasium.spaces.Discrete(7)
     else:

@@ -1,11 +1,12 @@
+import os
 import math
+from collections import defaultdict
+
+import lib_programname
+import numpy as np
 
 from pcse.db.nasapower import NASAPowerWeatherDataProvider
 import matplotlib.pyplot as plt
-from collections import defaultdict
-import numpy as np
-import os
-import lib_programname
 
 NL_loc_ext = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
 LT_loc_ext = [(55.0, 23.5), (55.0, 24.0), (55.5, 23.5)]
@@ -222,18 +223,21 @@ def filter_years(weather_data, start_year, end_year):
     return filtered
 
 
-w_data = wdp.export()
-plot_weather_data_weekly(w_data, ['IRRAD'], 1990, 2022, save=True)
-plot_weather_data_weekly(w_data, ['RAIN'], 1990, 2022, save=True)
-plot_weather_data_weekly(w_data, ['TMIN', 'TEMP', 'TMAX'], 1990, 2022, save=True)
+def get_plots(weather_data=wdp):
+    w_data = weather_data.export()
+    plot_weather_data_weekly(w_data, ['IRRAD'], 1990, 2022, save=True)
+    plot_weather_data_weekly(w_data, ['RAIN'], 1990, 2022, save=True)
+    plot_weather_data_weekly(w_data, ['TMIN', 'TEMP', 'TMAX'], 1990, 2022, save=True)
 
-plot_yearly_extremes(w_data, 'IRRAD', 1990, 2022, save=True)
-plot_yearly_extremes(w_data, 'RAIN', 1990, 2022, save=True)
-plot_yearly_extremes(w_data, 'TMIN', 1990, 2022, save=True)
-plot_yearly_extremes(w_data, 'TEMP', 1990, 2022, save=True)
+    plot_yearly_extremes(w_data, 'IRRAD', 1990, 2022, save=True)
+    plot_yearly_extremes(w_data, 'RAIN', 1990, 2022, save=True)
+    plot_yearly_extremes(w_data, 'TMIN', 1990, 2022, save=True)
+    plot_yearly_extremes(w_data, 'TEMP', 1990, 2022, save=True)
 
-plot_extreme_years_histogram(w_data, 'IRRAD', 1990, 2022, save=True)
-plot_extreme_years_histogram(w_data, 'RAIN', 1990, 2022, save=True)
-plot_extreme_years_histogram(w_data, 'TMIN', 1990, 2022, save=True)
-plot_extreme_years_histogram(w_data, 'TEMP', 1990, 2022, save=True)
+    plot_extreme_years_histogram(w_data, 'IRRAD', 1990, 2022, save=True)
+    plot_extreme_years_histogram(w_data, 'RAIN', 1990, 2022, save=True)
+    plot_extreme_years_histogram(w_data, 'TMIN', 1990, 2022, save=True)
+    plot_extreme_years_histogram(w_data, 'TEMP', 1990, 2022, save=True)
+
+
 

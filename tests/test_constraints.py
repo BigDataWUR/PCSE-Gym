@@ -2,6 +2,8 @@ import unittest
 import numpy as np
 
 import tests.initialize_env as init_env
+from pcse_gym.utils.normalization import RunningMeanStdPO, VecNormalizePO
+from stable_baselines3.common.vec_env import DummyVecEnv
 
 
 class TestRecoveryRate(unittest.TestCase):
@@ -37,7 +39,7 @@ class ActionLimit(unittest.TestCase):
 
         loop = 16
         hist = []
-        #for action
+        # for action
         for i in range(loop):
             action = np.array([1, 1, 0, 0, 0, 1])
             check = self.env_meas.action(action)
@@ -56,7 +58,7 @@ class ActionLimit(unittest.TestCase):
 
         loop = 16
         hist = []
-        #for action
+        # for action
         for i in range(loop):
             action = np.array(1)
             check = self.env_no_meas.action(action)

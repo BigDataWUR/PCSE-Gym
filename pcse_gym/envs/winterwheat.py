@@ -5,6 +5,7 @@ import numpy as np
 import pcse_gym.envs.common_env as common_env
 import pcse_gym.utils.defaults as defaults
 import pcse_gym.utils.process_pcse_output as process_pcse
+from pcse_gym.utils.normalization import NormalizeMeasureObservations
 from .constraints import MeasureOrNot, VariableRecoveryRate
 from .sb3 import ZeroNitrogenEnvStorage, StableBaselinesWrapper
 from .rewards import Rewards
@@ -37,6 +38,10 @@ class WinterWheat(gym.Env):
         self._timestep = timestep
         self.reward_function = reward
         self.po_features = kwargs.get('po_features', [])
+        self.mask_binary = kwargs.get('mask_binary', False)
+        self.placeholder_val = kwargs.get('placeholder_val', -1.11)
+        self.no_weather = kwargs.get('no_weather', False)
+        self.normalize = kwargs.get('normalize', False)
 
         if self.reward_function != 'GRO':
             self._env_baseline = self._initialize_sb_wrapper(seed, *args, **kwargs)
@@ -61,7 +66,12 @@ class WinterWheat(gym.Env):
             self.ane = self.rewards.ContainerANE(self.timestep)
 
         if self.po_features:
-            self.__measure = MeasureOrNot(self.sb3_env)
+            self.__measure = MeasureOrNot(self.sb3_env, extend_obs=self.mask_binary,
+                                          placeholder_val=self.placeholder_val)
+
+        if self.normalize:
+            self._norm = NormalizeMeasureObservations(self.crop_features, self.measure_features.feature_ind,
+                                                      self.no_weather, self.locations, self.mask_binary)
 
         super().reset(seed=seed)
 
@@ -78,17 +88,16 @@ class WinterWheat(gym.Env):
                                       *args, **kwargs)
 
     def _get_observation_space(self):
-        if self.sb3_env.no_weather:
-            nvars = len(self.crop_features)
-        else:
-            nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
-        return gym.spaces.Box(0, np.inf, shape=(nvars,))
+        nvars = self._get_obs_len()
+        return gym.spaces.Box(-3, np.inf, shape=(nvars,))
 
     def _get_obs_len(self):
         if self.sb3_env.no_weather:
             nvars = len(self.crop_features)
         else:
-            nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
+            nvars = len(self.crop_features) + len(self.weather_features) * self.timestep
+        if self.mask_binary:  # TODO: test with weather features
+            nvars = nvars * 2
         return nvars
 
     def step(self, action):
@@ -110,6 +119,13 @@ class WinterWheat(gym.Env):
             if 'moving_ANE' not in info.keys():
                 info['moving_ANE'] = {}
             info['moving_ANE'][self.date] = self.ane.moving_ane
+
+        if self.normalize:
+            measure = None
+            if isinstance(action, np.ndarray):
+                measure = action[1:]
+            obs = self.norm.normalize_measure_obs(obs, measure)
+            reward = self.norm.normalize_rew(reward)
 
         return obs, reward, terminated, truncated, info
 
@@ -207,6 +223,10 @@ class WinterWheat(gym.Env):
         return self.__measure
 
     @property
+    def norm(self):
+        return self._norm
+
+    @property
     def sb3_env(self):
         return self._env
 
@@ -267,6 +287,10 @@ class WinterWheatRay(WinterWheat):
         self.reward_function = config['reward']
         self.po_features = config['kwargs'].get('po_features', [])
         self.pcse_model = config['pcse_model']
+        self.mask_binary = config['kwargs'].get('mask_binary', False)
+        self.placeholder_val = config['kwargs'].get('placeholder_val', -1.11)
+        self.no_weather = config['kwargs'].get('no_weather', False)
+        self.normalize = config['kwargs'].get('normalize', False)
 
         if self.reward_function != 'GRO':
             self._env_baseline = StableBaselinesWrapper(crop_features=self.crop_features,
@@ -308,17 +332,16 @@ class WinterWheatRay(WinterWheat):
         if self.reward_function == 'ANE':
             self.ane = self.rewards.ContainerANE(self.timestep)
 
+
         if self.po_features:
-            self.__measure = MeasureOrNot(self.sb3_env)
+            self.__measure = MeasureOrNot(self.sb3_env, extend_obs=self.mask_binary,
+                                          placeholder_val=self.placeholder_val)
+
+        if self.normalize:
+            self._norm = NormalizeMeasureObservations(self.crop_features, self.measure_features.feature_ind,
+                                                      self.no_weather, self.locations, self.mask_binary)
 
         super().reset(seed=config['seed'])
-
-    def _get_observation_space(self):
-        if self.sb3_env.no_weather:
-            nvars = len(self.crop_features)
-        else:
-            nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
-        return gym.spaces.Box(-np.inf, np.inf, shape=(nvars,))
 
     def render(self, mode="human"):
         pass

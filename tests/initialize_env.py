@@ -23,15 +23,17 @@ def get_action_space(nitrogen_levels=7, po_features=[]):
     return space_return
 
 
-def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_default_crop_features(pcse_env=1),
+def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_default_crop_features(pcse_env=1, minimal=True),
                    costs_nitrogen=10, reward='DEF', nitrogen_levels=7, action_multiplier=1.0, add_random=False,
                    years=defaults.get_default_train_years(), locations=defaults.get_default_location(), args_vrr=False,
-                   action_limit=0, noisy_measure=False, n_budget=0):
+                   action_limit=0, noisy_measure=False, n_budget=0, no_weather=False, mask_binary=False,
+                   placeholder_val=-1.11, normalize=False):
     if add_random:
         po_features.append('random'), crop_features.append('random')
     action_space = get_action_space(nitrogen_levels=nitrogen_levels, po_features=po_features)
     kwargs = dict(po_features=po_features, args_measure=po_features is not None, args_vrr=args_vrr,
-                  action_limit=action_limit, noisy_measure=noisy_measure, n_budget=n_budget)
+                  action_limit=action_limit, noisy_measure=noisy_measure, n_budget=n_budget, no_weather=no_weather,
+                  mask_binary=mask_binary, placeholder_val=placeholder_val, normalize=normalize)
     env_return = WinterWheat(crop_features=crop_features,
                              costs_nitrogen=costs_nitrogen,
                              years=years,
@@ -46,7 +48,7 @@ def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_defaul
 
 
 def initialize_env_po():
-    return initialize_env(po_features=get_po_features())
+    return initialize_env(po_features=get_po_features(), placeholder_val=0.0)
 
 
 def initialize_env_po_noisy():
@@ -88,9 +90,22 @@ def initialize_env_action_limit_budget_measure(limit, budget):
     env = ActionConstrainer(env, action_limit=limit, n_budget=budget)
     return env
 
+
 def initialize_env_reward_dep():
     return initialize_env(reward='DEP', args_vrr=True)
 
 
 def initialize_env_reward_ane():
     return initialize_env(reward='ANE')
+
+
+def initialize_env_measure_po_extend():
+    return initialize_env(po_features=get_po_features(), mask_binary=True, no_weather=True)
+
+
+def initialize_env_measure_po_normalize():
+    return initialize_env(po_features=get_po_features(), normalize=True, no_weather=True)
+
+
+def initialize_env_measure_po_normalize_extend():
+    return initialize_env(po_features=get_po_features(), normalize=True, mask_binary=True, no_weather=True)

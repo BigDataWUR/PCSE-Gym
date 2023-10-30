@@ -145,6 +145,9 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         self.crop_features = crop_features
         self.weather_features = weather_features
         self.action_features = action_features
+        self.step_check = False
+        self.no_weather = kwargs.get('no_weather', False)
+        self.mask_binary = kwargs.get('mask_binary', False)
         super().__init__(timestep=timestep, years=years, location=location, *args, **kwargs)
         self.action_space = action_space
         self.action_multiplier = action_multiplier
@@ -155,8 +158,6 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         for i, feature in enumerate(self.crop_features):
             if feature in self.po_features:
                 self.index_feature[feature] = i
-        self.step_check = False
-        self.no_weather = kwargs.get('no_weather', False)
 
         super().reset(seed=seed)
 
@@ -164,8 +165,10 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         if self.no_weather:
             nvars = len(self.crop_features)
         else:
-            nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
-        return gym.spaces.Box(0, np.inf, shape=(nvars,))
+            nvars = len(self.crop_features) + len(self.weather_features) * self.timestep
+        if self.mask_binary:
+            nvars = nvars * 2
+        return gym.spaces.Box(-2, np.inf, shape=(nvars,))
 
     def _apply_action(self, action):
         amount = action * self.action_multiplier
@@ -221,8 +224,8 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         obs = super().reset(seed=seed)
         if isinstance(obs, tuple):
             obs = obs[0]
-        obs['actions'] = {'cumulative_nitrogen': 0.0}
-        obs['actions'] = {'cumulative_measurement': 0.0}
+        # obs['actions'] = {'cumulative_nitrogen': 0.0}
+        # obs['actions'] = {'cumulative_measurement': 0.0}
         return self._observation(obs)
 
     def _observation(self, observation):
@@ -241,12 +244,12 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
                 obs[i] = observation['crop_model'][feature][-1]
 
         if not self.no_weather:
-            for i, feature in enumerate(self.action_features):
-                j = len(self.crop_features) + i
-                obs[j] = observation['actions'][feature]
+            # for i, feature in enumerate(self.action_features):
+            #     j = len(self.crop_features) + i
+            #     obs[j] = observation['actions'][feature]
             for d in range(self.timestep):
                 for i, feature in enumerate(self.weather_features):
-                    j = d * len(self.weather_features) + len(self.crop_features) + len(self.action_features) + i
+                    j = d * len(self.weather_features) + len(self.crop_features) + i
                     obs[j] = observation['weather'][feature][d]
         return obs
 
