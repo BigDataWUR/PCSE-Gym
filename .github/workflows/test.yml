@@ -20,7 +20,7 @@ jobs:
           cd /tmp/pcse && git switch develop_WOFOST_v8_1 && git apply --ignore-space-change --ignore-whitespace ${GITHUB_WORKSPACE}/notebooks/nitrogen-winterwheat/pcse-lintul3.patch && pip install --quiet -e . && cd ${GITHUB_WORKSPACE}
           git clone https://github.com/hbja/popgym.git /tmp/popgym && cd /tmp/popgym && pip install ".[baselines]" && cd ${GITHUB_WORKSPACE}
           pip install stable_baselines3 sb3-contrib
-          pip install gymnasium==0.29.1 lib_programname tensorboard scipy tqdm pandas numpy
+          pip install gymnasium==0.28.1 lib_programname tensorboard scipy tqdm pandas numpy
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
