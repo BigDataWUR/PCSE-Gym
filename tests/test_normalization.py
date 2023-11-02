@@ -110,10 +110,10 @@ class MeasureNormalizations(unittest.TestCase):
         action = np.array([5, 0, 0, 0, 0, 0])
         _, rew, _, _, _ = self.env.step(action)
         # expected_rew = -action[0] * self.env.costs_nitrogen/self.env.norm.reward_div
-        self.assertEqual(-50 / 400, rew)
+        self.assertEqual(-50 / self.env.norm.reward_div, rew)
         action = np.array([3, 1, 0, 0, 0, 1])
         obs, rew, _, _, _ = self.env.step(action)
         # _, cost = self.env.measure_features.measure_act(obs, action[1:])
         # cost = sum(cost)
         # expected_rew = (-action[0] * self.env.costs_nitrogen - cost) / self.env.norm.reward_div
-        self.assertEqual(-38 / 400, rew)
+        self.assertEqual(-38 / self.env.norm.reward_div, rew)

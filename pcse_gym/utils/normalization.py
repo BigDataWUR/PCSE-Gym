@@ -21,18 +21,18 @@ class VecNormalizePO(VecNormalize):
         self.mask = None
 
     def _normalize_obs(self, obs, obs_rms):
-        # ori_obs = deepcopy(obs)
+        ori_obs = deepcopy(obs)
         if self.extend and len(obs) == 1: # and len(obs) == self.obs_len * 2:
             obs_ = obs[0][:int(len(obs[0]) // 2)]
             self.mask = obs[0][int(len(obs[0]) // 2):]
             obs = np.array([obs_])
         if self.venv.envs[0].unwrapped.sb3_env.index_feature and self.venv.envs[0].unwrapped.sb3_env.step_check:
-            index_feature = self.venv.envs[0].unwrapped.sb3_env.index_feature
+            index_feature = self.venv.envs[0].unwrapped.measure_features.feature_ind
             actions = self.venv.unwrapped.actions
             norm = super()._normalize_obs(obs, obs_rms)
             if len(norm) == 1:
                 norm = norm[0]
-            for ind, act in zip(index_feature.values(), actions[1:]):
+            for ind, act in zip(index_feature, actions[1:]):
                 if act == 0:
                     norm[ind] = 0.0  # temporarily set normalized value as the mean of the rms
             if self.extend: # and len(obs) == self.obs_len * 2:
@@ -42,7 +42,7 @@ class VecNormalizePO(VecNormalize):
             return super()._normalize_obs(obs, obs_rms)
 
     def _unnormalize_obs(self, obs, obs_rms):
-        ori_obs = deepcopy(obs)
+        # ori_obs = deepcopy(obs)
         if self.extend and len(obs) == 1: # and len(obs) == self.obs_len * 2:
             obs_ = obs[0][:int(len(obs[0]) // 2)]
             self.mask = obs[0][int(len(obs[0]) // 2):]
@@ -129,11 +129,32 @@ class ClipNormalizeReward(gym.wrappers.NormalizeReward):
 
 
 class NormalizeMeasureObservations:
-    def __init__(self, crop_features, index_measure, no_weather=False, loc=(52, 5.5), mask_binary=False,
-                 placeholder=-1.11):
+    '''
+    A class that normalizes in the step() method of PCSE-Gym
+
+    :param crop_features: the crop features chosen from the environment
+    :param index_measure: index of the crop features relative to the observations, taken from the measure or not class
+    :param loc: tuple or list of tuples of location coordinate
+    :param mask_binary: boolean of masked observations
+    :param placeholder: unique placeholder for identifying a masked observation
+    :param reward_div: WIP, normalize reward by dividing the max reward
+
+    '''
+    def __init__(self,
+                 crop_features,
+                 index_measure,
+                 /,
+                 no_weather=False,
+                 loc=(52, 5.5),
+                 mask_binary=False,
+                 placeholder=-1.11,
+                 reward_div=600,
+                 is_clipped=False):
         self.mask = mask_binary
         self.no_weather = no_weather
         self.crop_features = crop_features
+        self.is_clipped = is_clipped
+
 
         assert self.crop_features == ["DVS", "TAGP", "LAI", "NuptakeTotal", "NAVAIL", "SM"]
 
@@ -142,15 +163,15 @@ class NormalizeMeasureObservations:
 
         self.loc = [loc] if isinstance(loc, tuple) else loc
 
-        if (52, 5.5) in loc:
+        loc_str = None
+        if (52, 5.5) or (51.5, 5) or (52.5, 6.0) in loc:
             loc_str = 'NL'
-        elif (55.0, 23.5) in loc:
+        elif (55.0, 23.5) or (55.0, 24.0) or (55.5, 23.5) in loc:
             loc_str = 'LT'
-        else:
-            loc_str = 'NL'
+
         self.fixed_means = np.array(self.means_vector(loc_str))
         self.fixed_std = np.array(self.std_vector(loc_str))
-        self.reward_div = 400
+        self.reward_div = reward_div
 
     def normalize_measure_obs(self, obs, measure):
         obs_ = deepcopy(obs)
@@ -160,19 +181,20 @@ class NormalizeMeasureObservations:
             norm = self._normalize_obs(obs_)
             norm = np.array([0.0 if not m else norm_val for m, norm_val in zip(mask, norm)])
             norm = np.append(norm, mask)
-            return norm
         else:
             norm = self._normalize_obs(obs_)
             if measure is not None:
                 for i, m in zip(self.index_measure, measure):
                     if not m:
                         norm[i] = 0.0
-            return
+        if self.is_clipped:
+            norm = np.clip(norm, -1, 1)
+        return norm
 
     def _normalize_obs(self, obs):
         if isinstance(obs, list):
             obs = np.array(obs)
-        return (obs - self.fixed_means) / self.fixed_std
+        return (obs - self.fixed_means) / (self.fixed_std - 1e-8)
 
     def unnormalize_measure_obs(self, obs):
         obs_ = deepcopy(obs)
@@ -186,7 +208,7 @@ class NormalizeMeasureObservations:
             return self._unnormalize_obs(obs_)
 
     def _unnormalize_obs(self, obs):
-        return (obs * self.fixed_std) + self.fixed_means
+        return obs * (self.fixed_std + 1e-8) + self.fixed_means
 
     def normalize_rew(self, reward):
         return reward/self.reward_div

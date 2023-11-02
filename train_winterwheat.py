@@ -102,9 +102,9 @@ def train(log_dir, n_steps,
             print(f'Train model {pcse_model_name} with {agent} algorithm and seed {seed}. Logdir: {log_dir}')
 
             if agent == 'PPO':
-                hyperparams = {'batch_size': 64, 'n_steps': 2048, 'learning_rate': 0.0003, 'ent_coef': 0.0,
+                hyperparams = {'batch_size': 64, 'n_steps': 2048, 'learning_rate': 0.0002, 'ent_coef': 0.0,
                                'clip_range': 0.3,
-                               'n_epochs': 10, 'gae_lambda': 0.95, 'max_grad_norm': 0.5, 'vf_coef': 0.5,
+                               'n_epochs': 10, 'gae_lambda': 0.95, 'max_grad_norm': 0.5, 'vf_coef': 0.4,
                                'policy_kwargs': {},
                                }
                 if not no_weather:
@@ -137,7 +137,7 @@ def train(log_dir, n_steps,
                                                                      n_weather_features=len(weather_features),
                                                                      n_action_features=len(action_features))
                 hyperparams['policy_kwargs']['net_arch'] = dict(pi=[256, 256], vf=[256, 256])
-                hyperparams['policy_kwargs']['activation_fn'] = nn.ReLU
+                hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
                 hyperparams['policy_kwargs']['ortho_init'] = False
                 # hyperparams['policy_kwargs']['optimizer_class'] = RMSpropTFLike
                 # hyperparams['policy_kwargs']['optimizer_kwargs'] = dict(eps=0.00001)
@@ -176,8 +176,8 @@ def train(log_dir, n_steps,
                                          reward=reward, **get_model_kwargs(pcse_model, train_locations), **kwargs)
 
             env_pcse_train = Monitor(env_pcse_train)
-            if action_limit or n_budget > 0:
-                env_pcse_train = ActionConstrainer(env_pcse_train, action_limit=action_limit, n_budget=n_budget)
+
+            env_pcse_train = ActionConstrainer(env_pcse_train, action_limit=action_limit, n_budget=n_budget)
 
             if use_comet and comet_log:
                 env_pcse_train = CometLogger(env_pcse_train, comet_log)
@@ -217,7 +217,7 @@ def train(log_dir, n_steps,
             if action_limit or n_budget > 0:
                 env_pcse_eval = ActionConstrainer(env_pcse_eval, action_limit=action_limit, n_budget=n_budget)
 
-            tb_log_name = f'{tag}-nsteps-{n_steps}-{agent}-rew-{reward}-lim-act-{action_limit}-budget-{n_budget}'
+            tb_log_name = f'{tag}-{loc_code}-nsteps-{n_steps}-{agent}-rew-{reward}-lim-act-{action_limit}-budget-{n_budget}'
             if no_weather:
                 tb_log_name = tb_log_name + '-no_weather'
             if normalize:

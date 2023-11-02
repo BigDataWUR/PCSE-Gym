@@ -71,7 +71,8 @@ class WinterWheat(gym.Env):
 
         if self.normalize:
             self._norm = NormalizeMeasureObservations(self.crop_features, self.measure_features.feature_ind,
-                                                      self.no_weather, self.locations, self.mask_binary)
+                                                      no_weather=self.no_weather, loc=self.locations,
+                                                      mask_binary=self.mask_binary, reward_div=600, is_clipped=True)
 
         super().reset(seed=seed)
 
@@ -339,7 +340,8 @@ class WinterWheatRay(WinterWheat):
 
         if self.normalize:
             self._norm = NormalizeMeasureObservations(self.crop_features, self.measure_features.feature_ind,
-                                                      self.no_weather, self.locations, self.mask_binary)
+                                                      no_weather=self.no_weather, loc=self.locations,
+                                                      mask_binary=self.mask_binary, reward_div=600, is_clipped=True)
 
         super().reset(seed=config['seed'])
 
