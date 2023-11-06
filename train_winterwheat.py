@@ -181,7 +181,7 @@ def train(log_dir, n_steps,
 
             if use_comet and comet_log:
                 env_pcse_train = CometLogger(env_pcse_train, comet_log)
-                comet_log.add_tags(['sb3', agent, seed, loc_code])
+                comet_log.add_tags(['sb3', agent, seed, loc_code, reward])
 
             match agent:
                 case 'PPO':
@@ -224,6 +224,8 @@ def train(log_dir, n_steps,
                 tb_log_name = tb_log_name + '-normalize'
             if mask_binary:
                 tb_log_name = tb_log_name + '-masked'
+            if use_comet:
+                comet_log.set_name(tb_log_name)
             tb_log_name = tb_log_name + '-run'
 
             model.learn(total_timesteps=n_steps,
@@ -379,7 +381,7 @@ if __name__ == '__main__':
     elif args.location == "LT":
         """Lithuania"""
         train_locations = [(55.0, 23.5), (55.0, 24.0), (55.5, 23.5)]
-        test_locations = [(52, 5.5), (55.0, 23.5)]
+        test_locations = [(46.0, 25.0), (55.0, 23.5)]  # Romania
     else:
         parser.error("--location arg should be either LT or NL")
 

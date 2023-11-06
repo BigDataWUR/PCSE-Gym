@@ -150,6 +150,7 @@ def get_algo_config(model, env_config, env="WinterWheatRay"):
         "model": {
             "max_seq_len": bptt_size,
             "custom_model": model,
+            # "kl_coeff": 0.3,
             "custom_model_config": {
                 ## Generally will be replaced
                 # The input and output sizes of the MLP feeding the memory model

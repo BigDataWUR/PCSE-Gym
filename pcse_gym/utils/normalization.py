@@ -87,7 +87,10 @@ class RunningMeanStdPO(RunningMeanStd):
         if self.extend:  # and len(arr[0]) == self.obs_len * 2:
             arr_ = arr[0][:int(len(arr[0])//2)]
             arr = np.array([arr_])
+        # sanity check
+        #
         mask = arr[0] == self.placeholder
+        arr = np.invert(arr)
         for i, m in enumerate(mask):
             if m:
                 arr[0][i] = self.mean[i]
@@ -155,22 +158,21 @@ class NormalizeMeasureObservations:
         self.crop_features = crop_features
         self.is_clipped = is_clipped
 
-
         assert self.crop_features == ["DVS", "TAGP", "LAI", "NuptakeTotal", "NAVAIL", "SM"]
 
         self.index_measure = index_measure
         self.placeholder = placeholder
 
-        self.loc = [loc] if isinstance(loc, tuple) else loc
+        # self.loc = [loc] if isinstance(loc, tuple) else loc
 
-        loc_str = None
-        if (52, 5.5) or (51.5, 5) or (52.5, 6.0) in loc:
-            loc_str = 'NL'
-        elif (55.0, 23.5) or (55.0, 24.0) or (55.5, 23.5) in loc:
-            loc_str = 'LT'
+        # loc_str = None
+        # if (52, 5.5) in loc or (51.5, 5) in loc or (52.5, 6.0) in loc:
+        #     loc_str = 'NL'
+        # elif (55.0, 23.5) in loc or (55.0, 24.0) in loc or (55.5, 23.5) in loc:
+        #     loc_str = 'LT'
 
-        self.fixed_means = np.array(self.means_vector(loc_str))
-        self.fixed_std = np.array(self.std_vector(loc_str))
+        self.fixed_means = np.array(self.means_vector(loc))
+        self.fixed_std = np.array(self.std_vector(loc))
         self.reward_div = reward_div
 
     def normalize_measure_obs(self, obs, measure):
@@ -254,7 +256,7 @@ class NormalizeMeasureObservations:
             case 'LT', False:
                 return lt
             case _:
-                return nl
+                raise Exception('Location error! Normalization not implemented for loc')
 
     def std_vector(self, loc):
         nl = [0.5728143239654657,
@@ -294,4 +296,58 @@ class NormalizeMeasureObservations:
             case 'LT', False:
                 return lt
             case _:
-                return nl
+                raise Exception('Location error! Normalization not implemented for loc')
+
+
+class RunningReward:
+    '''
+    A class that stores the running mean statistics of the reward normalization
+    '''
+    def __init__(self):
+        self.mean = 0
+        self.n = 0
+        self.var = 1
+        self.epsilon = 1e-8
+
+    def update(self, x):
+        self.n += 1
+        delta = x - self.mean
+        self.mean += delta / self.n
+        delta_after = x - self.mean
+        self.var += delta * delta_after
+
+    def variance(self, sample_population=True):
+        if self.n < 2:
+            return 1
+        if sample_population:
+            return self.var / (self.n - 1)
+        return self.var / self.n
+
+    def stddev(self, sample=True):
+        return np.sqrt(self.variance(sample_population=sample))
+
+    def normalize(self, reward):
+        return (reward - self.mean) / (self.stddev() + self.epsilon)
+
+    def unnormalize(self, reward):
+        return reward * (self.stddev() + self.mean)
+
+
+class MinMaxReward:
+    def __init__(self):
+        self.reward_min = float('inf')
+        self.reward_max = float('-inf')
+
+    def update_min_max(self, reward):
+        self.reward_min = min(self.reward_min, reward)
+        self.reward_max = max(self.reward_max, reward)
+
+    def normalize(self, reward):
+        if self.reward_max == self.reward_min:
+            return reward
+        return (reward - self.reward_min) / (self.reward_max - self.reward_min)
+
+    def unnormalize(self, reward):
+        return reward * (self.reward_max - self.reward_min) + self.reward_min
+
+

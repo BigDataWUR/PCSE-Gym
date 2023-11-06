@@ -398,6 +398,8 @@ def evaluate_policy(
             if isinstance(env, DummyVecEnv) and not env.envs[0].unwrapped.normalize:
                 reward = env.get_original_reward()
             elif env.envs[0].unwrapped.normalize:
+                # reward = env.envs[0].unwrapped.norm_rew.unnormalize(rew)
+                # reward = rew * np.sqrt(env.envs[0].unwrapped.norm_rew.var + 1e-8)
                 reward = env.envs[0].unwrapped.norm.unnormalize_rew(rew)
 
             if prob:
@@ -672,9 +674,12 @@ class EvalCallback(BaseCallback):
                 self.logger.record(f'eval/nitrogen-median-train', compute_median(fertilizer, train_keys))
 
             if self.pcse_model:
-                variables = ['DVS', 'action', 'TWSO', 'reward', 'NAVAIL',
+                variables = ['DVS', 'action', 'TWSO', 'reward',
                              'NuptakeTotal', 'fertilizer', 'val']
-                if self.po_features: variables.append('measure')
+                if self.po_features:
+                    variables.append('measure')
+                    for p in self.po_features:
+                        variables.append(p)
                 if self.env_eval.reward_function == 'ANE': variables.append('moving_ANE')
             else:
                 variables = ['action', 'WSO', 'reward', 'TNSOIL', 'val']

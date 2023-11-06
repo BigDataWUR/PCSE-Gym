@@ -5,7 +5,7 @@ import numpy as np
 import pcse_gym.envs.common_env as common_env
 import pcse_gym.utils.defaults as defaults
 import pcse_gym.utils.process_pcse_output as process_pcse
-from pcse_gym.utils.normalization import NormalizeMeasureObservations
+from pcse_gym.utils.normalization import NormalizeMeasureObservations, RunningReward, MinMaxReward
 from .constraints import MeasureOrNot, VariableRecoveryRate
 from .sb3 import ZeroNitrogenEnvStorage, StableBaselinesWrapper
 from .rewards import Rewards
@@ -70,9 +70,11 @@ class WinterWheat(gym.Env):
                                           placeholder_val=self.placeholder_val)
 
         if self.normalize:
+            self.loc_code = kwargs.get('loc_code', None)
             self._norm = NormalizeMeasureObservations(self.crop_features, self.measure_features.feature_ind,
-                                                      no_weather=self.no_weather, loc=self.locations,
+                                                      no_weather=self.no_weather, loc=self.loc_code,
                                                       mask_binary=self.mask_binary, reward_div=600, is_clipped=True)
+            self._rew_norm = MinMaxReward()
 
         super().reset(seed=seed)
 
@@ -122,10 +124,15 @@ class WinterWheat(gym.Env):
             info['moving_ANE'][self.date] = self.ane.moving_ane
 
         if self.normalize:
+            # observations
             measure = None
             if isinstance(action, np.ndarray):
                 measure = action[1:]
             obs = self.norm.normalize_measure_obs(obs, measure)
+
+            # rewards
+            # self.norm_rew.update_min_max(reward)
+            # reward = self.norm_rew.normalize(reward)
             reward = self.norm.normalize_rew(reward)
 
         return obs, reward, terminated, truncated, info
@@ -214,6 +221,9 @@ class WinterWheat(gym.Env):
         # TODO: check whether info should/could be filled
         info = {}
 
+        if self.normalize:
+            obs = self.norm.normalize_measure_obs(obs, None)
+
         return obs, info
 
     def render(self, mode="human"):
@@ -226,6 +236,10 @@ class WinterWheat(gym.Env):
     @property
     def norm(self):
         return self._norm
+
+    @property
+    def norm_rew(self):
+        return self._rew_norm
 
     @property
     def sb3_env(self):
@@ -339,9 +353,11 @@ class WinterWheatRay(WinterWheat):
                                           placeholder_val=self.placeholder_val)
 
         if self.normalize:
+            # from stable_baselines3.common.running_mean_std import RunningMeanStd
             self._norm = NormalizeMeasureObservations(self.crop_features, self.measure_features.feature_ind,
                                                       no_weather=self.no_weather, loc=self.locations,
                                                       mask_binary=self.mask_binary, reward_div=600, is_clipped=True)
+            self._rew_norm = MinMaxReward()
 
         super().reset(seed=config['seed'])
 
