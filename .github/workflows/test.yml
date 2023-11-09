@@ -18,7 +18,7 @@ jobs:
           pip uninstall -y --quiet pcse
           git clone https://github.com/ajwdewit/pcse.git /tmp/pcse
           cd /tmp/pcse && git switch develop_WOFOST_v8_1 && git apply --ignore-space-change --ignore-whitespace ${GITHUB_WORKSPACE}/notebooks/nitrogen-winterwheat/pcse-lintul3.patch && pip install --quiet -e . && cd ${GITHUB_WORKSPACE}
-          pip install stable_baselines3==2.1.0 sb3-contrib gymnasium lib_programname tensorboard scipy tqdm pandas numpy
+          pip install stable_baselines3 sb3-contrib gymnasium lib_programname tensorboard scipy tqdm pandas numpy
       - name: Lint with flake8
         run: |
           # stop the build if there are Python syntax errors or undefined names
