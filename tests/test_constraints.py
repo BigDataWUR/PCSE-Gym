@@ -100,3 +100,37 @@ class ActionLimit(unittest.TestCase):
         actions_expected = [5, 5, 5, 3, 0, 0]
 
         self.assertListEqual(actions_hist, actions_expected)
+
+
+class TestStartType(unittest.TestCase):
+    def setUp(self):
+        self.env = init_env.initialize_env_sow()
+        self.env2 = init_env.initialize_env_emergence()
+
+    def test_sow_start(self):
+        self.env.reset()
+
+        year = [2012]
+        self.env.overwrite_year(year)
+        self.env.reset()
+        self.assertEqual(year[0] - 1, int(self.env.date.year))
+
+        year = [2016]
+        self.env.overwrite_year(year)
+        self.env.reset()
+        self.assertEqual(year[0] - 1, int(self.env.date.year))
+
+    def test_emergence_start(self):
+        self.env2.reset()
+
+        year = [1990]
+        self.env2.overwrite_year(year)
+        self.env2.reset()
+        self.assertEqual(year[0], int(self.env2.date.year))
+
+        year = [2000]
+        self.env2.overwrite_year(year)
+        self.env2.reset()
+        self.assertEqual(year[0], int(self.env2.date.year))
+
+

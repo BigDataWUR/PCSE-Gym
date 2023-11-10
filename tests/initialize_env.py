@@ -27,7 +27,7 @@ def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_defaul
                    costs_nitrogen=10, reward='DEF', nitrogen_levels=7, action_multiplier=1.0, add_random=False,
                    years=defaults.get_default_train_years(), locations=defaults.get_default_location(), args_vrr=False,
                    action_limit=0, noisy_measure=False, n_budget=0, no_weather=False, mask_binary=False,
-                   placeholder_val=-1.11, normalize=False, loc_code='NL', cost_measure='real'):
+                   placeholder_val=-1.11, normalize=False, loc_code='NL', cost_measure='real', start_type='emergence'):
     if add_random:
         po_features.append('random'), crop_features.append('random')
     action_space = get_action_space(nitrogen_levels=nitrogen_levels, po_features=po_features)
@@ -42,7 +42,7 @@ def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_defaul
                              action_space=action_space,
                              action_multiplier=action_multiplier,
                              reward=reward,
-                             **get_model_kwargs(pcse_env, locations),
+                             **get_model_kwargs(pcse_env, locations, start_type=start_type),
                              **kwargs)
 
     return env_return
@@ -117,3 +117,9 @@ def initialize_env_measure_no_cost():
 
 def initialize_env_measure_same_cost():
     return initialize_env(po_features=get_po_features(), cost_measure='same')
+
+def initialize_env_sow():
+    return initialize_env(start_type='sowing')
+
+def initialize_env_emergence():
+    return initialize_env(start_type='emergence')

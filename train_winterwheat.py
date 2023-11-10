@@ -173,7 +173,9 @@ def train(log_dir, n_steps,
                                          weather_features=weather_features,
                                          costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
                                          action_space=action_space, action_multiplier=1.0, seed=seed,
-                                         reward=reward, **get_model_kwargs(pcse_model, train_locations), **kwargs)
+                                         reward=reward, **get_model_kwargs(pcse_model, train_locations,
+                                                                           start_type=kwargs.get('start_type', 'sowing')),
+                                         **kwargs)
 
             env_pcse_train = Monitor(env_pcse_train)
 
@@ -213,7 +215,8 @@ def train(log_dir, n_steps,
                                         weather_features=weather_features,
                                         costs_nitrogen=costs_nitrogen, years=test_years, locations=test_locations,
                                         action_space=action_space, action_multiplier=1.0, reward=reward,
-                                        **get_model_kwargs(pcse_model, train_locations), **kwargs, seed=seed)
+                                        **get_model_kwargs(pcse_model, train_locations, start_type=kwargs.get('start_type', 'sowing')),
+                                        **kwargs, seed=seed)
             if action_limit or n_budget > 0:
                 env_pcse_eval = ActionConstrainer(env_pcse_eval, action_limit=action_limit, n_budget=n_budget)
 
@@ -254,7 +257,8 @@ def train(log_dir, n_steps,
                                                   eval_locations=test_locations, action_space=action_space,
                                                   action_multiplier=1.0, seed=seed,
                                                   reward=reward, pcse_model=pcse_model,
-                                                  **get_model_kwargs(pcse_model, train_locations),
+                                                  **get_model_kwargs(pcse_model, train_locations,
+                                                                     start_type=kwargs.get('start_type', 'sowing')),
                                                   **kwargs)
 
             def trial_str_creator(trial):
@@ -350,6 +354,7 @@ if __name__ == '__main__':
     parser.add_argument("--placeholder-0", action='store_const', const=0.0, dest='placeholder_val')
     parser.add_argument("--normalize", action='store_true', dest='normalize')
     parser.add_argument("--cost-measure", type=str, default='real', dest='cost_measure', help='real, no, or same')
+    parser.add_argument("--start-type", type=str, default='sowing', dest='start_type', help='sowing or emergence')
     parser.set_defaults(measure=True, vrr=False, noisy_measure=False, framework='sb3',
                         no_weather=False, random_feature=False, obs_mask=False, placeholder_val=-1.11,
                         normalize=False)
@@ -396,7 +401,7 @@ if __name__ == '__main__':
     kwargs = {'args_vrr': args.vrr, 'action_limit': args.action_limit, 'noisy_measure': args.noisy_measure,
               'n_budget': args.n_budget, 'framework': args.framework, 'no_weather': args.no_weather,
               'mask_binary': args.obs_mask, 'placeholder_val': args.placeholder_val, 'normalize': args.normalize,
-              'loc_code': args.location, 'cost_measure': args.cost_measure}
+              'loc_code': args.location, 'cost_measure': args.cost_measure, 'start_type': args.start_type}
     if not args.measure:
         action_spaces = gymnasium.spaces.Discrete(7)
     else:

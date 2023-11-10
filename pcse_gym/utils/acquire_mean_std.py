@@ -40,9 +40,9 @@ def gather_mean_and_std(env, locations, years, episodes=30):
 
 years = [*range(1985, 2022)]
 # NL
-# locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
+locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
 # LT
-locations = [(55.0, 23.5), (55.0, 24.0), (55.5, 23.5), (52, 5.5), (51.5, 5), (52.5, 6.0)]
+# locations = [(55.0, 23.5), (55.0, 24.0), (55.5, 23.5)]
 
 no_weather = False
 
@@ -54,11 +54,11 @@ env = WinterWheat(crop_features=defaults.get_default_crop_features(pcse_env=1, m
                   locations=locations,
                   action_space=gym.spaces.Discrete(7),
                   action_multiplier=1,
-                  reward='DEF',
+                  reward='GRO',
                   args_measure=False,
                   po_features=[],
                   no_weather=no_weather,
-                  **get_model_kwargs(1, locations))
+                  **get_model_kwargs(1, locations, start_type='sowing'))
 
 means, std_devs = gather_mean_and_std(env, locations, years, 100)
 
