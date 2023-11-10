@@ -8,6 +8,8 @@ class TestMeasure(unittest.TestCase):
     def setUp(self):
         self.env = init_env.initialize_env_po()
         self.env_ext = init_env.initialize_env_measure_po_extend()
+        self.env_no_cost = init_env.initialize_env_measure_no_cost()
+        self.env_same_cost = init_env.initialize_env_measure_same_cost()
 
     def test_oc(self):
         self.env.reset()
@@ -21,6 +23,38 @@ class TestMeasure(unittest.TestCase):
             cost.append(self.env.measure_features.get_observation_cost(m,f))
 
         _, measurement_cost = self.env.measure_features.measure_act(obs, measure)
+
+        self.assertListEqual(cost, list(measurement_cost))
+
+    def test_no_oc(self):
+
+        self.env_no_cost.reset()
+
+        obs = np.ones(30)
+
+        measure = [1, 1, 1, 1, 1]
+
+        cost = []
+        for m, f in zip(measure, self.env_no_cost.measure_features.feature_ind):
+            cost.append(self.env_no_cost.measure_features.get_observation_cost(m, f))
+
+        _, measurement_cost = self.env_no_cost.measure_features.measure_act(obs, measure)
+
+        self.assertListEqual(cost, list(measurement_cost))
+
+    def test_same_oc(self):
+
+        self.env_same_cost.reset()
+
+        obs = np.ones(30)
+
+        measure = [1, 1, 1, 1, 1]
+
+        cost = []
+        for m, f in zip(measure, self.env_same_cost.measure_features.feature_ind):
+            cost.append(self.env_same_cost.measure_features.get_observation_cost(m, f))
+
+        _, measurement_cost = self.env_same_cost.measure_features.measure_act(obs, measure)
 
         self.assertListEqual(cost, list(measurement_cost))
 

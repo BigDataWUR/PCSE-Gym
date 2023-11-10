@@ -128,7 +128,7 @@ def train(log_dir, n_steps,
                 hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
                 hyperparams['policy_kwargs']['ortho_init'] = False
             if agent == 'A2C':
-                hyperparams = {'n_steps': 2048, 'learning_rate': 0.002, 'ent_coef': 0.0,
+                hyperparams = {'n_steps': 2048, 'learning_rate': 0.0002, 'ent_coef': 0.0,
                                'gae_lambda': 0.9, 'vf_coef': 0.4,  # 'rms_prop_eps': 1e-5, 'normalize_advantage': True,
                                'policy_kwargs': {},
                                }
@@ -225,7 +225,8 @@ def train(log_dir, n_steps,
             if mask_binary:
                 tb_log_name = tb_log_name + '-masked'
             if use_comet:
-                comet_log.set_name(tb_log_name)
+                comet_log.set_name(f'{tag}-{loc_code}-{n_steps}-{agent}-{reward}-{"normalize" if normalize else ""}-'
+                                   f'{"mask_binary" if mask_binary else ""}')
             tb_log_name = tb_log_name + '-run'
 
             model.learn(total_timesteps=n_steps,
@@ -348,6 +349,7 @@ if __name__ == '__main__':
     parser.add_argument("--mask-binary", action='store_true', dest='obs_mask')
     parser.add_argument("--placeholder-0", action='store_const', const=0.0, dest='placeholder_val')
     parser.add_argument("--normalize", action='store_true', dest='normalize')
+    parser.add_argument("--cost-measure", type=str, default='real', dest='cost_measure', help='real, no, or same')
     parser.set_defaults(measure=True, vrr=False, noisy_measure=False, framework='sb3',
                         no_weather=False, random_feature=False, obs_mask=False, placeholder_val=-1.11,
                         normalize=False)
@@ -394,7 +396,7 @@ if __name__ == '__main__':
     kwargs = {'args_vrr': args.vrr, 'action_limit': args.action_limit, 'noisy_measure': args.noisy_measure,
               'n_budget': args.n_budget, 'framework': args.framework, 'no_weather': args.no_weather,
               'mask_binary': args.obs_mask, 'placeholder_val': args.placeholder_val, 'normalize': args.normalize,
-              'loc_code': args.location}
+              'loc_code': args.location, 'cost_measure': args.cost_measure}
     if not args.measure:
         action_spaces = gymnasium.spaces.Discrete(7)
     else:
@@ -402,7 +404,6 @@ if __name__ == '__main__':
             po_features = ['TAGP', 'LAI', 'NAVAIL', 'NuptakeTotal', 'SM']
             if args.random_feature:
                 po_features.append('random')
-            if 'random' in po_features:
                 crop_features.append('random')
         else:
             po_features = ['TGROWTH', 'LAI', 'TNSOIL', 'NUPTT', 'TRAIN']

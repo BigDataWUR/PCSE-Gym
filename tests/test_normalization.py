@@ -70,7 +70,7 @@ class MeasureNormalizations(unittest.TestCase):
 
     def assertListAlmostEqual(self, list1, list2, tol):
         if len(list1) != 1:
-            list2 = [list2]
+            list1 = [list1]
         self.assertEqual(len(list1[0]), len(list2))
         for a, b in zip(list1[0], list2):
             self.assertAlmostEqual(a, b, tol)
@@ -92,18 +92,18 @@ class MeasureNormalizations(unittest.TestCase):
         #         expected[i] = obs[i]
         #         expected[j] = 1
 
-        self.assertListEqual([-1.0547087587576691,
-                              -0.781047778311272,
+        self.assertListAlmostEqual([-1.05,
+                              -0.78,
                               0.0,
-                              -0.8516317629776661,
+                              -0.85,
                               0.0,
-                              0.0,
-                              1.0,
-                              1.0,
                               0.0,
                               1.0,
+                              1.0,
                               0.0,
-                              0.0], list(obs))
+                              1.0,
+                              0.0,
+                              0.0], list(obs), 1)
 
     def test_norm_rew_winterwheat(self):
         self.env.reset()

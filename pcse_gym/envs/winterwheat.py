@@ -42,6 +42,7 @@ class WinterWheat(gym.Env):
         self.placeholder_val = kwargs.get('placeholder_val', -1.11)
         self.no_weather = kwargs.get('no_weather', False)
         self.normalize = kwargs.get('normalize', False)
+        self.cost_measure = kwargs.get('cost_measure', 'real')
 
         if self.reward_function != 'GRO':
             self._env_baseline = self._initialize_sb_wrapper(seed, *args, **kwargs)
@@ -72,9 +73,10 @@ class WinterWheat(gym.Env):
         if self.normalize:
             self.loc_code = kwargs.get('loc_code', None)
             self._norm = NormalizeMeasureObservations(self.crop_features, self.measure_features.feature_ind,
+                                                      has_random=True if 'random' in self.crop_features else False,
                                                       no_weather=self.no_weather, loc=self.loc_code,
-                                                      mask_binary=self.mask_binary, reward_div=600, is_clipped=True)
-            self._rew_norm = MinMaxReward()
+                                                      mask_binary=self.mask_binary, reward_div=600, is_clipped=False)
+            # self._rew_norm = MinMaxReward()
 
         super().reset(seed=seed)
 
@@ -130,9 +132,6 @@ class WinterWheat(gym.Env):
                 measure = action[1:]
             obs = self.norm.normalize_measure_obs(obs, measure)
 
-            # rewards
-            # self.norm_rew.update_min_max(reward)
-            # reward = self.norm_rew.normalize(reward)
             reward = self.norm.normalize_rew(reward)
 
         return obs, reward, terminated, truncated, info
@@ -306,6 +305,7 @@ class WinterWheatRay(WinterWheat):
         self.placeholder_val = config['kwargs'].get('placeholder_val', -1.11)
         self.no_weather = config['kwargs'].get('no_weather', False)
         self.normalize = config['kwargs'].get('normalize', False)
+        self.cost_measure = config['kwargs'].get('cost_measure', 'real')
 
         if self.reward_function != 'GRO':
             self._env_baseline = StableBaselinesWrapper(crop_features=self.crop_features,
@@ -354,10 +354,12 @@ class WinterWheatRay(WinterWheat):
 
         if self.normalize:
             # from stable_baselines3.common.running_mean_std import RunningMeanStd
+            self.loc_code = config['kwargs'].get('loc_code', None)
             self._norm = NormalizeMeasureObservations(self.crop_features, self.measure_features.feature_ind,
-                                                      no_weather=self.no_weather, loc=self.locations,
-                                                      mask_binary=self.mask_binary, reward_div=600, is_clipped=True)
-            self._rew_norm = MinMaxReward()
+                                                      has_random=True if 'random' in self.crop_features else False,
+                                                      no_weather=self.no_weather, loc=self.loc_code,
+                                                      mask_binary=self.mask_binary, reward_div=600, is_clipped=False)
+            # self._rew_norm = MinMaxReward()
 
         super().reset(seed=config['seed'])
 

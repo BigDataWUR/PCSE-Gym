@@ -675,7 +675,7 @@ class EvalCallback(BaseCallback):
 
             if self.pcse_model:
                 variables = ['DVS', 'action', 'TWSO', 'reward',
-                             'NuptakeTotal', 'fertilizer', 'val']
+                             'fertilizer', 'val']
                 if self.po_features:
                     variables.append('measure')
                     for p in self.po_features:

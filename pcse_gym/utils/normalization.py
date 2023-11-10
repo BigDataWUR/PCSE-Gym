@@ -90,7 +90,7 @@ class RunningMeanStdPO(RunningMeanStd):
         # sanity check
         #
         mask = arr[0] == self.placeholder
-        arr = np.invert(arr)
+        # mask = np.invert(mask)
         for i, m in enumerate(mask):
             if m:
                 arr[0][i] = self.mean[i]
@@ -147,6 +147,7 @@ class NormalizeMeasureObservations:
                  crop_features,
                  index_measure,
                  /,
+                 has_random=False,
                  no_weather=False,
                  loc=(52, 5.5),
                  mask_binary=False,
@@ -157,8 +158,12 @@ class NormalizeMeasureObservations:
         self.no_weather = no_weather
         self.crop_features = crop_features
         self.is_clipped = is_clipped
+        self.has_random = has_random
 
-        assert self.crop_features == ["DVS", "TAGP", "LAI", "NuptakeTotal", "NAVAIL", "SM"]
+        if not self.has_random:
+            assert self.crop_features == ["DVS", "TAGP", "LAI", "NuptakeTotal", "NAVAIL", "SM"]
+        else:
+            assert self.crop_features == ["DVS", "TAGP", "LAI", "NuptakeTotal", "NAVAIL", "SM", "random"]
 
         self.index_measure = index_measure
         self.placeholder = placeholder
@@ -171,8 +176,8 @@ class NormalizeMeasureObservations:
         # elif (55.0, 23.5) in loc or (55.0, 24.0) in loc or (55.5, 23.5) in loc:
         #     loc_str = 'LT'
 
-        self.fixed_means = np.array(self.means_vector(loc))
-        self.fixed_std = np.array(self.std_vector(loc))
+        self.fixed_means = np.array(self.get_fixed_vals(loc, 'means'))
+        self.fixed_std = np.array(self.get_fixed_vals(loc, 'std'))
         self.reward_div = reward_div
 
     def normalize_measure_obs(self, obs, measure):
@@ -218,53 +223,73 @@ class NormalizeMeasureObservations:
     def unnormalize_rew(self, reward):
         return reward*self.reward_div
 
-    def means_vector(self, loc):
-        nl = [0.6246465476467645,
-              4865.136421503844,
-              1.234561809311616,
-              150.7396483914316,
-              161.29929450042695,
-              0.27243507521622345,
-              1.21883597e+07, 4.95082017e+00, 1.90003949e-01,
-              1.22270535e+07, 4.90367558e+00, 1.95953827e-01,
-              1.23226094e+07, 4.91493013e+00, 2.00468408e-01,
-              1.21937849e+07, 5.04890948e+00, 2.12458688e-01,
-              1.24103797e+07, 5.08396719e+00, 2.08391555e-01,
-              1.25560207e+07, 5.19116343e+00, 2.00330194e-01,
-              1.26053463e+07, 5.34218712e+00, 2.03171324e-01]
-        lt = [0.33344140142967654,
-              2675.772872654855,
-              1.092753787112243,
-              57.55634087558257,
-              387.7470016444115,
-              0.30791477941701645,
-              9.75607378e+06, 4.36845453e-01, 2.12145007e-01,
-              9.83234895e+06, 5.56896332e-01, 1.99204579e-01,
-              9.95673097e+06, 5.62800509e-01, 1.91617766e-01,
-              1.00325419e+07, 5.50421878e-01, 2.10531906e-01,
-              1.00911787e+07, 5.02440110e-01, 1.96787789e-01,
-              9.92729065e+06, 5.40256519e-01, 1.95853933e-01,
-              9.93554166e+06, 5.95882976e-01, 2.01239347e-01]
+    def get_fixed_vals(self, loc, which):
+        if which == 'means':
+            vals = self.get_means_vector(loc)
+        elif which == 'std':
+            vals = self.get_std_vector(loc)
+        else:
+            raise Exception(f'Error! {which} not a valid choice')
 
-        match loc, self.no_weather:
-            case 'NL', True:
-                return nl[:len(self.crop_features)]
-            case 'NL', False:
-                return nl
-            case 'LT', True:
-                return lt[:len(self.crop_features)]
-            case 'LT', False:
-                return lt
+        match self.no_weather, self.has_random:
+            case True, True:
+                return vals[:len(self.crop_features)]
+            case True, False:
+                return vals[:len(self.crop_features)]
+            case False, True:
+                return vals
+            case False, False:
+                ind = len(self.crop_features) + 1
+                del vals[ind]
+                return vals
             case _:
-                raise Exception('Location error! Normalization not implemented for loc')
+                raise Exception(f'Location error! Normalization not implemented for {loc}')
 
-    def std_vector(self, loc):
-        nl = [0.5728143239654657,
+    @staticmethod
+    def get_means_vector(loc):
+        if loc == 'NL':
+            return   [0.6246465476467645,
+                      4865.136421503844,
+                      1.234561809311616,
+                      150.7396483914316,
+                      161.29929450042695,
+                      0.27243507521622345,
+                      0.0,
+                      1.21883597e+07, 4.95082017e+00, 1.90003949e-01,
+                      1.22270535e+07, 4.90367558e+00, 1.95953827e-01,
+                      1.23226094e+07, 4.91493013e+00, 2.00468408e-01,
+                      1.21937849e+07, 5.04890948e+00, 2.12458688e-01,
+                      1.24103797e+07, 5.08396719e+00, 2.08391555e-01,
+                      1.25560207e+07, 5.19116343e+00, 2.00330194e-01,
+                      1.26053463e+07, 5.34218712e+00, 2.03171324e-01]
+        elif loc == 'LT':
+            return [0.33344140142967654,
+                      2675.772872654855,
+                      1.092753787112243,
+                      57.55634087558257,
+                      387.7470016444115,
+                      0.30791477941701645,
+                      0.0,
+                      9.75607378e+06, 4.36845453e-01, 2.12145007e-01,
+                      9.83234895e+06, 5.56896332e-01, 1.99204579e-01,
+                      9.95673097e+06, 5.62800509e-01, 1.91617766e-01,
+                      1.00325419e+07, 5.50421878e-01, 2.10531906e-01,
+                      1.00911787e+07, 5.02440110e-01, 1.96787789e-01,
+                      9.92729065e+06, 5.40256519e-01, 1.95853933e-01,
+                      9.93554166e+06, 5.95882976e-01, 2.01239347e-01]
+        else:
+            raise Exception(f'Error! "{loc}" not a valid choice!')
+
+    @staticmethod
+    def get_std_vector(loc):
+        if loc == 'NL':
+            return  [0.5728143239654657,
               6177.7736977069735,
               1.5758559066832276,
               177.0009703071452,
               91.93445733139745,
               0.0341784277318637,
+              10.0,
               1.21883597e+07, 4.95082017e+00, 1.90003949e-01,
               1.22270535e+07, 4.90367558e+00, 1.95953827e-01,
               1.23226094e+07, 4.91493013e+00, 2.00468408e-01,
@@ -272,12 +297,14 @@ class NormalizeMeasureObservations:
               1.24103797e+07, 5.08396719e+00, 2.08391555e-01,
               1.25560207e+07, 5.19116343e+00, 2.00330194e-01,
               1.26053463e+07, 5.34218712e+00, 2.03171324e-01]
-        lt = [0.5577426661192912,
+        elif loc == 'LT':
+            return [0.5577426661192912,
               5390.806038545118,
               1.8315136788380577,
               109.21366379879503,
               204.46094641439367,
               0.021277502711722556,
+              10.0,
               8.33064223e+06, 8.43375544e+00, 3.59799387e-01,
               8.35175786e+06, 8.38202910e+00, 3.10559526e-01,
               8.55516035e+06, 8.23049704e+00, 3.17290068e-01,
@@ -285,18 +312,8 @@ class NormalizeMeasureObservations:
               8.51462773e+06, 8.36266632e+00, 3.22802387e-01,
               8.31931600e+06, 8.54765225e+00, 3.30367139e-01,
               8.36117416e+06, 8.61383742e+00, 3.40634577e-01]
-
-        match loc, self.no_weather:
-            case 'NL', True:
-                return nl[:len(self.crop_features)]
-            case 'NL', False:
-                return nl
-            case 'LT', True:
-                return lt[:len(self.crop_features)]
-            case 'LT', False:
-                return lt
-            case _:
-                raise Exception('Location error! Normalization not implemented for loc')
+        else:
+            raise Exception(f'Error! "{loc}" not a valid choice!')
 
 
 class RunningReward:

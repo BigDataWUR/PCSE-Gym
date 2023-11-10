@@ -182,7 +182,7 @@ class MeasureOrNot:
     def list_of_costs(self, cost):
         match cost:
             case 1:
-                return self.exp_costs()
+                return self.get_cost_function_coef()
             case 2:
                 return self.cheap_costs()
             case _:
@@ -240,8 +240,34 @@ class MeasureOrNot:
             TGROWTH=0,
             TNSOIL=0,
             NUPTT=0,
-            TRAIN=0
+            TRAIN=0,
+            random=0,
         )
+
+    @staticmethod
+    def same_costs(cost=3):
+        return dict(
+            LAI=cost,
+            TAGP=cost,
+            NAVAIL=cost,
+            NuptakeTotal=cost,
+            SM=cost,
+            TGROWTH=cost,
+            TNSOIL=cost,
+            NUPTT=cost,
+            TRAIN=cost,
+            random=cost
+        )
+
+    def get_cost_function_coef(self):
+        if self.env.cost_measure == 'real':
+            return self.exp_costs()
+        elif self.env.cost_measure == 'no':
+            return self.no_costs()
+        elif self.env.cost_measure == 'same':
+            return self.same_costs()
+        else:
+            raise Exception(f"Error! {self.env.cost_measure} not a valid choice")
 
     def set_measure_freq(self, measurement):
         date_key = self.get_date_key()

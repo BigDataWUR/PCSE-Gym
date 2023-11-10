@@ -179,6 +179,8 @@ def get_algo_config(model, env_config, env="WinterWheatRay"):
         "train_batch_size": bptt_size * 8,  # size has to be (rollout_fragment_length*num_num_rollout_workers*
         # num_envs_per_worker)
 
+        'lr': 0.0001,
+
         # You probably don't want to change these values
         "rollout_fragment_length": bptt_size,
         "framework": "torch",
@@ -377,9 +379,12 @@ class RayEvalCallback(DefaultCallbacks):
                               eval.compute_median(fertilizer, test_keys), result["timesteps_total"])
 
         if env_pcse_evaluation.pcse_model:
-            variables = ['DVS', 'action', 'TWSO', 'reward', 'NAVAIL',
-                         'NuptakeTotal', 'fertilizer', 'val']
-            if env_pcse_evaluation.po_features: variables.append('measure')
+            variables = ['DVS', 'action', 'TWSO', 'reward',
+                         'fertilizer', 'val']
+            if env_pcse_evaluation.po_features:
+                variables.append('measure')
+                for p in env_pcse_evaluation.po_features:
+                    variables.append(p)
             if env_pcse_evaluation.reward_function == 'ANE': variables.append('moving_ANE')
         else:
             variables = ['action', 'WSO', 'reward', 'TNSOIL', 'val']

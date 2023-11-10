@@ -46,7 +46,7 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
         self.n_timeseries = n_timeseries
         self.n_scalars = n_scalars
         self.n_timesteps = n_timesteps
-        super(CustomFeatureExtractor, self).__init__(gym.spaces.Box(0, np.inf, shape=(n_timeseries + n_scalars,)),
+        super(CustomFeatureExtractor, self).__init__(gym.spaces.Box(-2, np.inf, shape=(n_timeseries + n_scalars,)),
                                                      features_dim=n_timeseries + n_scalars)
 
         self.avg_timeseries = nn.Sequential(
@@ -155,6 +155,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         self.po_features = kwargs.get('po_features', [])
         self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, self.costs_nitrogen)
         self.index_feature = OrderedDict()
+        self.cost_measure = kwargs.get('cost_measure', 'real')
         for i, feature in enumerate(self.crop_features):
             if feature in self.po_features:
                 self.index_feature[feature] = i
@@ -239,7 +240,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
 
         for i, feature in enumerate(self.crop_features):
             if feature == 'random':
-                obs[i] = np.random.default_rng().uniform(0, 10000)
+                obs[i] = np.random.default_rng().normal(0, 10)
             else:
                 obs[i] = observation['crop_model'][feature][-1]
 
