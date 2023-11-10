@@ -395,6 +395,8 @@ def evaluate_policy(
             episode_starts = terminated
             truncated = info[0].pop("TimeLimit.truncated")
 
+            if isinstance(env, VecNormalize):
+                reward = env.get_original_reward()
             if isinstance(env, DummyVecEnv) and not env.envs[0].unwrapped.normalize:
                 reward = env.get_original_reward()
             elif env.envs[0].unwrapped.normalize:
