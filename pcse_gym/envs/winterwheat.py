@@ -6,7 +6,8 @@ import pcse_gym.envs.common_env as common_env
 import pcse_gym.utils.defaults as defaults
 import pcse_gym.utils.process_pcse_output as process_pcse
 from pcse_gym.utils.normalization import NormalizeMeasureObservations, RunningReward, MinMaxReward
-from .constraints import MeasureOrNot, VariableRecoveryRate
+from .constraints import VariableRecoveryRate
+from .measure import MeasureOrNot
 from .sb3 import ZeroNitrogenEnvStorage, StableBaselinesWrapper
 from .rewards import Rewards
 
@@ -75,6 +76,7 @@ class WinterWheat(gym.Env):
             self._norm = NormalizeMeasureObservations(self.crop_features, self.measure_features.feature_ind,
                                                       has_random=True if 'random' in self.crop_features else False,
                                                       no_weather=self.no_weather, loc=self.loc_code,
+                                                      start_type=kwargs.get('start_type', 'sowing'),
                                                       mask_binary=self.mask_binary, reward_div=600, is_clipped=False)
             # self._rew_norm = MinMaxReward()
 
@@ -358,6 +360,7 @@ class WinterWheatRay(WinterWheat):
             self._norm = NormalizeMeasureObservations(self.crop_features, self.measure_features.feature_ind,
                                                       has_random=True if 'random' in self.crop_features else False,
                                                       no_weather=self.no_weather, loc=self.loc_code,
+                                                      start_type=config['kwargs'].get('start_type', 'sowing'),
                                                       mask_binary=self.mask_binary, reward_div=600, is_clipped=False)
             # self._rew_norm = MinMaxReward()
 

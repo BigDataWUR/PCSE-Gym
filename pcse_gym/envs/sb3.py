@@ -46,7 +46,7 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
         self.n_timeseries = n_timeseries
         self.n_scalars = n_scalars
         self.n_timesteps = n_timesteps
-        super(CustomFeatureExtractor, self).__init__(gym.spaces.Box(-2, np.inf, shape=(n_timeseries + n_scalars,)),
+        super(CustomFeatureExtractor, self).__init__(gym.spaces.Box(-10, np.inf, shape=(n_timeseries + n_scalars,)),
                                                      features_dim=n_timeseries + n_scalars)
 
         self.avg_timeseries = nn.Sequential(
@@ -73,7 +73,7 @@ def get_policy_kwargs(n_crop_features=len(defaults.get_wofost_default_crop_featu
     policy_kwargs = dict(
         features_extractor_class=CustomFeatureExtractor,
         features_extractor_kwargs=dict(n_timeseries=n_weather_features,
-                                       n_scalars=n_crop_features + n_action_features,
+                                       n_scalars=n_crop_features,
                                        n_timesteps=n_timesteps),
     )
     return policy_kwargs

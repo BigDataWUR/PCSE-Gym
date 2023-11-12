@@ -34,7 +34,7 @@ def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_defaul
     kwargs = dict(po_features=po_features, args_measure=po_features is not None, args_vrr=args_vrr,
                   action_limit=action_limit, noisy_measure=noisy_measure, n_budget=n_budget, no_weather=no_weather,
                   mask_binary=mask_binary, placeholder_val=placeholder_val, normalize=normalize, loc_code=loc_code,
-                  cost_measure=cost_measure)
+                  cost_measure=cost_measure, start_type=start_type)
     env_return = WinterWheat(crop_features=crop_features,
                              costs_nitrogen=costs_nitrogen,
                              years=years,
@@ -109,7 +109,8 @@ def initialize_env_measure_po_normalize():
 
 
 def initialize_env_measure_po_normalize_extend():
-    return initialize_env(po_features=get_po_features(), normalize=True, mask_binary=True, no_weather=True)
+    return initialize_env(po_features=get_po_features(), normalize=True, mask_binary=True, no_weather=True,
+                          start_type='emergence')
 
 
 def initialize_env_measure_no_cost():
