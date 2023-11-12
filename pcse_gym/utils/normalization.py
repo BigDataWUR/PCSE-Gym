@@ -245,8 +245,6 @@ class NormalizeMeasureObservations:
                 ind = len(self.crop_features) + 1
                 del vals[ind]
                 return vals
-            case _:
-                raise Exception(f'Location error! Normalization not implemented for {loc}')
 
     def get_means_vector(self):
         match self.loc, self.start_type:
