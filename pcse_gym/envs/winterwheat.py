@@ -96,7 +96,7 @@ class WinterWheat(gym.Env):
 
     def _get_observation_space(self):
         nvars = self._get_obs_len()
-        return gym.spaces.Box(-3, np.inf, shape=(nvars,))
+        return gym.spaces.Box(-10, np.inf, shape=(nvars,))
 
     def _get_obs_len(self):
         if self.sb3_env.no_weather:
@@ -104,7 +104,7 @@ class WinterWheat(gym.Env):
         else:
             nvars = len(self.crop_features) + len(self.weather_features) * self.timestep
         if self.mask_binary:  # TODO: test with weather features
-            nvars = nvars * 2
+            nvars = nvars + len(self.po_features)
         return nvars
 
     def step(self, action):

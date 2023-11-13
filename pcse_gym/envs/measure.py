@@ -16,6 +16,7 @@ class MeasureOrNot:
         self.get_feature_cost_ind()
         self.mask = extend_obs
         self.placeholder = placeholder_val
+        self.sorted = sorted(list(self.feature_ind))
 
     def get_feature_cost_ind(self) -> None:
         for feature in self.env.po_features:
@@ -53,10 +54,10 @@ class MeasureOrNot:
 
     def extend_observation(self, obs):
         obs_ = deepcopy(obs)
-        trunc_obs = obs[:len(obs)//2]  # np.append(obs, np.zeros(len(obs)))
+        trunc_obs = obs[:-len(self.feature_ind)]  # np.append(obs, np.zeros(len(obs)))
         # binary observation vector, explicitly stating if an observation is masked
-        for i, ori_ob in enumerate(trunc_obs):
-            j = len(obs)//2 + i
+        for i, (ori_ob, ind_sort) in enumerate(zip(trunc_obs[min(self.sorted):], self.sorted)):
+            j = len(trunc_obs) + i
             if ori_ob == self.placeholder:
                 obs_[j] = 0
             else:

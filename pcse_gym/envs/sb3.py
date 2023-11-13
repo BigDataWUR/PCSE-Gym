@@ -42,12 +42,20 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
     Processes input features: average pool timeseries (weather) and concat with scalars (crop features)
     """
 
-    def __init__(self, observation_space: gym.spaces.Box, n_timeseries, n_scalars, n_timesteps=7):
+    def __init__(self, observation_space: gym.spaces.Box, n_timeseries, n_scalars, n_timesteps=7, n_po_features=5, mask_binary=False):
         self.n_timeseries = n_timeseries
         self.n_scalars = n_scalars
         self.n_timesteps = n_timesteps
-        super(CustomFeatureExtractor, self).__init__(gym.spaces.Box(-10, np.inf, shape=(n_timeseries + n_scalars,)),
-                                                     features_dim=n_timeseries + n_scalars)
+        self.mask_binary = mask_binary
+        self.n_po_features = n_po_features
+        if self.mask_binary:
+            shape = (n_timeseries + n_scalars + n_po_features,)
+            features_dim = n_timeseries + n_scalars + n_po_features
+        else:
+            shape = (n_timeseries + n_scalars,)
+            features_dim = n_timeseries + n_scalars
+        super(CustomFeatureExtractor, self).__init__(gym.spaces.Box(-10, np.inf, shape=shape),
+                                                     features_dim=features_dim)
 
         self.avg_timeseries = nn.Sequential(
             nn.AvgPool1d(kernel_size=self.n_timesteps)
@@ -58,23 +66,34 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
         batch_size = observations.shape[0]
         scalars, timeseries = observations[:, 0:self.n_scalars], \
                               observations[:, self.n_scalars:]
+        mask = None
+        if self.mask_binary:
+            mask = timeseries[:, -self.n_po_features:]
+            timeseries = timeseries[:, :-self.n_po_features]
         reshaped = timeseries.reshape(batch_size, self.n_timesteps, self.n_timeseries).permute(0, 2, 1)
         x1 = self.avg_timeseries(reshaped)
         x1 = th.squeeze(x1, 2)
-        x = th.cat((x1, scalars), dim=1)
+        if self.mask_binary:
+            x = th.cat((scalars, x1, mask), dim=1)
+        else:
+            x = th.cat((x1, scalars), dim=1)
         return x
 
 
 def get_policy_kwargs(n_crop_features=len(defaults.get_wofost_default_crop_features()),
                       n_weather_features=len(defaults.get_default_weather_features()),
                       n_action_features=len(defaults.get_default_action_features()),
+                      n_po_features=len(defaults.get_wofost_default_po_features()),
+                      mask_binary=False,
                       n_timesteps=7):
     # Integration with BaseModel from Stable Baselines3
     policy_kwargs = dict(
         features_extractor_class=CustomFeatureExtractor,
         features_extractor_kwargs=dict(n_timeseries=n_weather_features,
                                        n_scalars=n_crop_features,
-                                       n_timesteps=n_timesteps),
+                                       n_timesteps=n_timesteps,
+                                       n_po_features=n_po_features,
+                                       mask_binary=mask_binary),
     )
     return policy_kwargs
 
@@ -150,11 +169,11 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         self.step_check = False
         self.no_weather = kwargs.get('no_weather', False)
         self.mask_binary = kwargs.get('mask_binary', False)
+        self.po_features = kwargs.get('po_features', [])
         super().__init__(timestep=timestep, years=years, location=location, *args, **kwargs)
         self.action_space = action_space
         self.action_multiplier = action_multiplier
         self.args_vrr = kwargs.get('args_vrr', None)
-        self.po_features = kwargs.get('po_features', [])
         self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, self.costs_nitrogen)
         self.index_feature = OrderedDict()
         self.cost_measure = kwargs.get('cost_measure', 'real')
@@ -170,8 +189,8 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         else:
             nvars = len(self.crop_features) + len(self.weather_features) * self.timestep
         if self.mask_binary:
-            nvars = nvars * 2
-        return gym.spaces.Box(-2, np.inf, shape=(nvars,))
+            nvars = nvars + len(self.po_features)
+        return gym.spaces.Box(-10, np.inf, shape=(nvars,))
 
     def _apply_action(self, action):
         amount = action * self.action_multiplier

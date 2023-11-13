@@ -79,7 +79,7 @@ class TestMeasure(unittest.TestCase):
 
         obs_obs = obs[:6]
 
-        obs_mask = np.array([1.0, 1.0, 0.0, 1.0, 0.0, 0.0])
+        obs_mask = np.array([1.0, 0.0, 1.0, 0.0, 0.0])
 
         expected_obs = np.append(obs_obs, obs_mask)
 

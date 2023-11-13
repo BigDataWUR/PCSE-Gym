@@ -186,10 +186,18 @@ class NormalizeMeasureObservations:
     def normalize_measure_obs(self, obs, measure):
         obs_ = deepcopy(obs)
         if self.mask:
-            obs_ = obs[:int(len(obs) // 2)]
-            mask = obs[int(len(obs) // 2):]
+            obs_ = obs[:-len(self.index_measure)]
+            mask = obs[-len(self.index_measure):]
             norm = self._normalize_obs(obs_)
-            norm = np.array([0.0 if not m else norm_val for m, norm_val in zip(mask, norm)])
+
+            # norm = np.array([0.0 if not m else norm_val for m, norm_val in zip(mask, norm[1:6])])
+            # norm_ = []
+            for m, i in zip(mask, sorted(self.index_measure)):
+                if not m:
+                    norm[i] = 0.0
+                else:
+                    pass
+
             norm = np.append(norm, mask)
         else:
             norm = self._normalize_obs(obs_)

@@ -110,7 +110,9 @@ def train(log_dir, n_steps,
                 if not no_weather:
                     hyperparams['policy_kwargs'] = get_policy_kwargs(n_crop_features=len(crop_features),
                                                                      n_weather_features=len(weather_features),
-                                                                     n_action_features=len(action_features))
+                                                                     n_action_features=len(action_features),
+                                                                     n_po_features=len(po_features),
+                                                                     mask_binary=mask_binary)
                 hyperparams['policy_kwargs']['net_arch'] = dict(pi=[256, 256], vf=[256, 256])
                 hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
                 hyperparams['policy_kwargs']['ortho_init'] = False
@@ -123,7 +125,9 @@ def train(log_dir, n_steps,
                 if not no_weather:
                     hyperparams['policy_kwargs'] = get_policy_kwargs(n_crop_features=len(crop_features),
                                                                      n_weather_features=len(weather_features),
-                                                                     n_action_features=len(action_features))
+                                                                     n_action_features=len(action_features),
+                                                                     n_po_features=len(po_features),
+                                                                     mask_binary=mask_binary)
                 hyperparams['policy_kwargs']['net_arch'] = dict(pi=[256, 256], vf=[256, 256])
                 hyperparams['policy_kwargs']['activation_fn'] = nn.Tanh
                 hyperparams['policy_kwargs']['ortho_init'] = False

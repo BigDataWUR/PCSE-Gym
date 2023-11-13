@@ -99,7 +99,6 @@ class MeasureNormalizations(unittest.TestCase):
                               0.0,
                               0.0,
                               1.0,
-                              1.0,
                               0.0,
                               1.0,
                               0.0,
