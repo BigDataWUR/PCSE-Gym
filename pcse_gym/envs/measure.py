@@ -17,6 +17,7 @@ class MeasureOrNot:
         self.mask = extend_obs
         self.placeholder = placeholder_val
         self.sorted = sorted(list(self.feature_ind))
+        self.rng = np.random.default_rng(seed=self.env.seed)
 
     def get_feature_cost_ind(self) -> None:
         for feature in self.env.po_features:
@@ -65,21 +66,20 @@ class MeasureOrNot:
         return obs_
 
     def get_noise(self, obs, index):
-        rng = np.random.default_rng()
         feature = self.get_match(index)
         match feature:
             case 'LAI':
-                obs = rng.normal(obs, 0.4)
+                obs = self.rng.normal(obs, 0.4)
             case 'SM':
-                obs = rng.normal(obs, 0.2)
+                obs = self.rng.normal(obs, 0.2)
             case 'NAVAIL':
-                obs = rng.normal(obs, 5)
+                obs = self.rng.normal(obs, 5)
             case 'NuptakeTotal':
-                obs = rng.normal(obs, 5)
+                obs = self.rng.normal(obs, 5)
             case 'TAGP':
-                obs = rng.normal(obs, 2)
+                obs = self.rng.normal(obs, 2)
             case _:
-                obs = rng.normal(obs, 1)
+                obs = self.rng.normal(obs, 1)
         return obs
 
     def get_observation_cost(self, price, ind):
@@ -105,7 +105,7 @@ class MeasureOrNot:
                 break
         return key_match
 
-    def get_measure_cost_vector(self):
+    def get_measure_cost_vector(self):  # not used
         exp_costs = self.exp_costs()
         vector = [exp_costs.get(k) for k in self.feature_ind_dict if k in exp_costs]
         return vector

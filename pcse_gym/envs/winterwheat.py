@@ -2,6 +2,8 @@ import datetime
 import gymnasium as gym
 import numpy as np
 
+import pcse
+
 import pcse_gym.envs.common_env as common_env
 import pcse_gym.utils.defaults as defaults
 import pcse_gym.utils.process_pcse_output as process_pcse
@@ -44,6 +46,15 @@ class WinterWheat(gym.Env):
         self.no_weather = kwargs.get('no_weather', False)
         self.normalize = kwargs.get('normalize', False)
         self.cost_measure = kwargs.get('cost_measure', 'real')
+        self.random_init = kwargs.get('random_init', False)
+        self.seed = seed
+        self.list_wav_nav = None
+        if self.random_init:
+            self.eval_wav = None
+            self.eval_nav = None
+            self.list_wav_nav = [self.eval_wav, self.eval_nav]
+        self.rng = np.random.default_rng(seed=seed)
+
 
         if self.reward_function != 'GRO':
             self._env_baseline = self._initialize_sb_wrapper(seed, *args, **kwargs)
@@ -112,12 +123,16 @@ class WinterWheat(gym.Env):
         Computes customized reward and populates info
         """
 
+        # advance one step of the PCSEEngine wrapper and apply action(s)
         obs, _, terminated, truncated, info = self.sb3_env.step(action)
 
+        # grab output of PCSE
         output = self.sb3_env.model.get_output()
 
+        # process output to get observation, reward and growth of winterwheat
         obs, reward, growth = self.process_output(action, output, obs)
 
+        # fill in infos
         if 'reward' not in info.keys(): info['reward'] = {}
         info['reward'][self.date] = reward
         if 'growth' not in info.keys(): info['growth'] = {}
@@ -127,8 +142,8 @@ class WinterWheat(gym.Env):
                 info['moving_ANE'] = {}
             info['moving_ANE'][self.date] = self.ane.moving_ane
 
+        # normalize observations and reward if not using VecNormalize wrapper
         if self.normalize:
-            # observations
             measure = None
             if isinstance(action, np.ndarray):
                 measure = action[1:]
@@ -202,7 +217,20 @@ class WinterWheat(gym.Env):
         self.locations = location
         self.set_location(location)
 
-    def reset(self, seed=None, options=()):
+    def overwrite_initial_conditions(self):
+        # method to overwrite a random initial condition for every call of reset()
+        wav = np.clip(self.rng.normal(30, 30), 0.0, 100.0)
+        nav = np.clip(self.rng.normal(20, 30), 0.00,100.0)
+        self.eval_wav = wav
+        self.eval_nav = nav
+        site_parameters=pcse.util.WOFOST80SiteDataProvider(WAV=wav, NAVAILI=nav, PAVAILI=50, KAVAILI=100)
+        return site_parameters
+
+    def reset(self, seed=None, options=None, **kwargs):
+        site_params = None
+        if self.random_init:
+            site_params = self.overwrite_initial_conditions()
+
         if isinstance(self.years, list):
             year = self.np_random.choice(self.years)
             if self.reward_function != 'GRO':
@@ -216,8 +244,8 @@ class WinterWheat(gym.Env):
         if self.reward_function == 'ANE':
             self.ane.reset()
         if self.reward_function != 'GRO':
-            self.baseline_env.reset(seed=seed)
-        obs = self.sb3_env.reset(seed=seed)
+            self.baseline_env.reset(seed=seed, options=site_params)
+        obs = self.sb3_env.reset(seed=seed, options=site_params)
 
         # TODO: check whether info should/could be filled
         info = {}
@@ -233,6 +261,14 @@ class WinterWheat(gym.Env):
     @property
     def measure_features(self):
         return self.__measure
+
+    @property
+    def model(self):
+        return self.sb3_env.model
+
+    @model.setter
+    def model(self, model):
+        self.sb3_env.model = model
 
     @property
     def norm(self):
@@ -288,107 +324,6 @@ class WinterWheatRay(WinterWheat):
                                              years=config['years'], locations=config['locations'],
                                              action_space=config['action_space'],
                                              action_multiplier=config['action_multiplier'],
-                                             reward=config['reward'], args=config['args'],
-                                             kwargs=config['kwargs'])
-
-        self.crop_features = config['crop_features']
-        self.action_features = config['action_features']
-        self.weather_features = config['weather_features']
-        self.costs_nitrogen = config['costs_nitrogen']
-        self.years = [config['years']] if isinstance(config['years'], int) else config['years']
-        self.locations = [config['locations']] if isinstance(config['locations'], tuple) else config['locations']
-        self.action_multiplier = config['action_multiplier']
-        self.action_space = config['action_space']
-        self._timestep = config['timestep']
-        self.reward_function = config['reward']
-        self.po_features = config['kwargs'].get('po_features', [])
+                                             reward=config['reward'], *config['args'],
+                                             **config['kwargs'])
         self.pcse_model = config['pcse_model']
-        self.mask_binary = config['kwargs'].get('mask_binary', False)
-        self.placeholder_val = config['kwargs'].get('placeholder_val', -1.11)
-        self.no_weather = config['kwargs'].get('no_weather', False)
-        self.normalize = config['kwargs'].get('normalize', False)
-        self.cost_measure = config['kwargs'].get('cost_measure', 'real')
-
-        if self.reward_function != 'GRO':
-            self._env_baseline = StableBaselinesWrapper(crop_features=self.crop_features,
-                                                        action_features=self.action_features,
-                                                        weather_features=self.weather_features,
-                                                        costs_nitrogen=self.costs_nitrogen,
-                                                        timestep=self.timestep,
-                                                        years=self.years[0], location=self.locations[0],
-                                                        action_space=self.action_space,
-                                                        action_multiplier=self.action_multiplier,
-                                                        seed=config['seed'],
-                                                        *config['args'], **config['kwargs'])
-        self._env = StableBaselinesWrapper(crop_features=self.crop_features,
-                                           action_features=self.action_features,
-                                           weather_features=self.weather_features,
-                                           costs_nitrogen=self.costs_nitrogen,
-                                           timestep=self.timestep,
-                                           years=self.years[0], location=self.locations[0],
-                                           action_space=self.action_space,
-                                           action_multiplier=self.action_multiplier,
-                                           seed=config['seed'],
-                                           *config['args'], **config['kwargs'])
-
-        self.args_vrr = config['kwargs'].get('args_vrr')
-        if self.args_vrr:
-            self._env = VariableRecoveryRate(self._env)
-
-        self.observation_space = self._get_observation_space()
-        self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
-
-        if self.reward_function == 'DEP':
-            assert self.args_vrr, "To use 'DEP' as a reward function," \
-                                  "--variable-recovery-rate must be set as true"
-            vrr = self._env.recovery_penalty()
-            self.rewards = Rewards(config['kwargs'].get('reward_var'), self.timestep, config['costs_nitrogen'], vrr)
-        else:
-            self.rewards = Rewards(config['kwargs'].get('reward_var'), self.timestep, config['costs_nitrogen'])
-
-        if self.reward_function == 'ANE':
-            self.ane = self.rewards.ContainerANE(self.timestep)
-
-
-        if self.po_features:
-            self.__measure = MeasureOrNot(self.sb3_env, extend_obs=self.mask_binary,
-                                          placeholder_val=self.placeholder_val)
-
-        if self.normalize:
-            # from stable_baselines3.common.running_mean_std import RunningMeanStd
-            self.loc_code = config['kwargs'].get('loc_code', None)
-            self._norm = NormalizeMeasureObservations(self.crop_features, self.measure_features.feature_ind,
-                                                      has_random=True if 'random' in self.crop_features else False,
-                                                      no_weather=self.no_weather, loc=self.loc_code,
-                                                      start_type=config['kwargs'].get('start_type', 'sowing'),
-                                                      mask_binary=self.mask_binary, reward_div=600, is_clipped=False)
-            # self._rew_norm = MinMaxReward()
-
-        super().reset(seed=config['seed'])
-
-    def render(self, mode="human"):
-        pass
-
-    @property
-    def measure_features(self):
-        return self.__measure
-
-    @property
-    def sb3_env(self):
-        return self._env
-
-    @property
-    def baseline_env(self):
-        return self._env_baseline
-
-    @property
-    def date(self) -> datetime.date:
-        return self.sb3_env.model.day
-
-    @property
-    def loc(self) -> datetime.date:
-        return self.sb3_env.loc
-
-    @property
-    def timestep(self):
-        return self._timestep

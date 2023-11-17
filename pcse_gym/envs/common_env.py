@@ -196,6 +196,7 @@ class PCSEEnv(gym.Env):
         # Store the crop/soil/site parameters
         self._crop_params = crop_parameters
         self._site_params = site_parameters
+        self._site_params_ = site_parameters
         self._soil_params = soil_parameters
 
         # Agent will have no access to weather
@@ -228,7 +229,11 @@ class PCSEEnv(gym.Env):
         # Define Gym action space
         self.action_space = self._get_action_space()
 
-    def _init_pcse_model(self, *args, **kwargs) -> Engine:
+    def _init_pcse_model(self, options=None, *args, **kwargs) -> Engine:
+
+        # Inject different initial condition every episode if it specified in args
+        if options is not None:
+            self._site_params = options
 
         # Combine the config files in a single PCSE ParameterProvider object
         self._parameter_provider = pcse.base.ParameterProvider(cropdata=self._crop_params,
@@ -471,7 +476,7 @@ class PCSEEnv(gym.Env):
         info = dict()
 
         # Create a PCSE engine / crop growth model
-        self._model = self._init_pcse_model()
+        self._model = self._init_pcse_model(options)
         output = self._model.get_output()[-self._timestep:]
         o = self._get_observation(output)
         info['date'] = self.date

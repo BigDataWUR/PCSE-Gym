@@ -3,6 +3,7 @@ import lib_programname
 import sys
 import os.path
 import time
+import json
 
 # For comet use
 use_comet = True
@@ -41,6 +42,15 @@ def wrapper_vectorized_env(env_pcse_train, flag_po, normalize=False):
     else:
         return VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
                             clip_obs=10., clip_reward=50., gamma=1)
+
+def get_json_config(n_steps, crop_features, weather_features, train_years, test_years, train_locations, test_locations,
+                    action_space, pcse_model, agent, reward, seed, costs_nitrogen, kwargs):
+    return dict(
+        n_steps=n_steps,crop_features=crop_features,weather_features=weather_features,
+        train_years=train_years,test_years=test_years,train_locations=train_locations,
+        test_locations=test_locations,action_space=action_space,pcse_model=pcse_model,agent=agent,reward=reward,
+        seed=seed,costs_nitrogen=costs_nitrogen,kwargs=kwargs
+    )
 
 
 def train(log_dir, n_steps,
@@ -91,6 +101,7 @@ def train(log_dir, n_steps,
     normalize = kwargs.get('normalize', False)
     mask_binary = kwargs.get('mask_binary', False)
     loc_code = kwargs.get('loc_code', None)
+    random_init = kwargs.get('random_init', False)
 
     match framework:
         case 'sb3':
@@ -231,10 +242,20 @@ def train(log_dir, n_steps,
                 tb_log_name = tb_log_name + '-normalize'
             if mask_binary:
                 tb_log_name = tb_log_name + '-masked'
+            if random_init:
+                tb_log_name = tb_log_name + '-random-init'
             if use_comet:
                 comet_log.set_name(f'{tag}-{loc_code}-{n_steps}-{agent}-{reward}-{"normalize" if normalize else ""}-'
                                    f'{"mask_binary" if mask_binary else ""}')
             tb_log_name = tb_log_name + '-run'
+
+            # json_config = get_json_config(n_steps, crop_features, weather_features, train_years, test_years,
+            #                               train_locations, test_locations, action_space, pcse_model, agent,
+            #                               reward, seed, costs_nitrogen, kwargs)
+            json_config = locals()
+
+            print(json_config)
+
 
             model.learn(total_timesteps=n_steps,
                         callback=EvalCallback(env_eval=env_pcse_eval, test_years=test_years,
@@ -242,6 +263,13 @@ def train(log_dir, n_steps,
                                               test_locations=test_locations, seed=seed, pcse_model=pcse_model,
                                               **kwargs),
                         tb_log_name=tb_log_name)
+
+            # from stable_baselines3.common.utils import get_latest_run_id
+            # latest_run_id = get_latest_run_id(log_dir, tb_log_name)
+            # tb_log_name = f'{tb_log_name}_{latest_run_id}'
+            #
+            # with open(os.path.join(log_dir, tb_log_name, 'config_of_run.json'), 'w') as f:
+            #     json.dump(json_config, f)
 
         case 'rllib':
             import ray
@@ -349,6 +377,7 @@ if __name__ == '__main__':
                                                                      "decides when to measure"
                                                                      "certain crop features")
     parser.add_argument("-l", "--location", type=str, default="NL", help="location to train the agent. NL or LT.")
+    parser.add_argument("--random-init", action='store_true', dest='random_init')
     parser.add_argument("--no-measure", action='store_false', dest='measure')
     parser.add_argument("--noisy-measure", action='store_true', dest='noisy_measure')
     parser.add_argument("--variable-recovery-rate", action='store_true', dest='vrr')
@@ -361,7 +390,7 @@ if __name__ == '__main__':
     parser.add_argument("--start-type", type=str, default='sowing', dest='start_type', help='sowing or emergence')
     parser.set_defaults(measure=True, vrr=False, noisy_measure=False, framework='sb3',
                         no_weather=False, random_feature=False, obs_mask=False, placeholder_val=-1.11,
-                        normalize=False)
+                        normalize=False, random_init=False)
 
     args = parser.parse_args()
 
@@ -405,7 +434,8 @@ if __name__ == '__main__':
     kwargs = {'args_vrr': args.vrr, 'action_limit': args.action_limit, 'noisy_measure': args.noisy_measure,
               'n_budget': args.n_budget, 'framework': args.framework, 'no_weather': args.no_weather,
               'mask_binary': args.obs_mask, 'placeholder_val': args.placeholder_val, 'normalize': args.normalize,
-              'loc_code': args.location, 'cost_measure': args.cost_measure, 'start_type': args.start_type}
+              'loc_code': args.location, 'cost_measure': args.cost_measure, 'start_type': args.start_type,
+              'random_init': args.random_init}
     if not args.measure:
         action_spaces = gymnasium.spaces.Discrete(7)
     else:

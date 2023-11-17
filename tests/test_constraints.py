@@ -1,6 +1,7 @@
 import unittest
 import numpy as np
 
+import pcse.util
 import tests.initialize_env as init_env
 from pcse_gym.utils.normalization import RunningMeanStdPO, VecNormalizePO
 from stable_baselines3.common.vec_env import DummyVecEnv
@@ -132,5 +133,21 @@ class TestStartType(unittest.TestCase):
         self.env2.overwrite_year(year)
         self.env2.reset()
         self.assertEqual(year[0], int(self.env2.date.year))
+
+
+class TestEnvFeatures(unittest.TestCase):
+    import pcse
+    def setUp(self):
+        self.env = init_env.initialize_env_random_init()
+
+    def test_different_initial_conditions(self):
+        site_params = pcse.util.WOFOST80SiteDataProvider(WAV=10, NAVAILI=10, PAVAILI=50, KAVAILI=100)
+        self.assertEqual(site_params, self.env.sb3_env.model.parameterprovider._sitedata)
+        self.env.reset()
+        self.assertNotEqual(site_params, self.env.sb3_env.model.parameterprovider._sitedata)
+
+
+
+
 
 

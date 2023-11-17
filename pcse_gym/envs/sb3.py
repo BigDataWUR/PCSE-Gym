@@ -170,6 +170,8 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         self.no_weather = kwargs.get('no_weather', False)
         self.mask_binary = kwargs.get('mask_binary', False)
         self.po_features = kwargs.get('po_features', [])
+        self.seed = seed
+        self.rng = np.random.default_rng(seed=seed)
         super().__init__(timestep=timestep, years=years, location=location, *args, **kwargs)
         self.action_space = action_space
         self.action_multiplier = action_multiplier
@@ -243,7 +245,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
 
     def reset(self, seed=None, return_info=False, options=None):
         self.step_check = False
-        obs = super().reset(seed=seed)
+        obs = super().reset(seed=seed, options=options)
         if isinstance(obs, tuple):
             obs = obs[0]
         # obs['actions'] = {'cumulative_nitrogen': 0.0}
@@ -261,7 +263,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
 
         for i, feature in enumerate(self.crop_features):
             if feature == 'random':
-                obs[i] = np.random.default_rng().normal(0, 10)
+                obs[i] = self.rng.normal(0, 10)
             else:
                 obs[i] = observation['crop_model'][feature][-1]
 
