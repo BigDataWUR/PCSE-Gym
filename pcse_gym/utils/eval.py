@@ -225,13 +225,18 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
             dataframes_list.append(df)
 
         plot_df = pd.concat(dataframes_list, axis=1)
-
+        plot_df.sort_index(inplace=True)
         if variable in cumulative_variables: plot_df = plot_df.apply(np.cumsum, axis=0)
-        plot_df.ffill(inplace=True)
         if variable.startswith("measure"):
+            plot_df.ffill(inplace=True)
             ax.step(plot_df.index, plot_df.sum(axis=1), 'k-', where='post')
             ax.fill_between(plot_df.index, plot_df.min(axis=1), plot_df.sum(axis=1), color='g', step='post')
+        elif variable == 'action':
+            plot_df.fillna(0, inplace=True)
+            ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where='post')
+            ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step='post')
         else:
+            plot_df.ffill(axis=0, inplace=True)
             ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where='post')
             ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step='post')
 
@@ -590,7 +595,7 @@ class EvalCallback(BaseCallback):
                 self.model.get_env().save(stats_path)
             episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=self.model.get_env())
             if self.pcse_model:
-                variables = ['action', 'TWSO', 'reward']
+                variables = ['action', 'TWSO', 'reward', 'IDWST']
                 if self.po_features: variables.append('measure')
                 cumulative = ['action', 'reward']
             else:
@@ -677,7 +682,7 @@ class EvalCallback(BaseCallback):
 
             if self.pcse_model:
                 variables = ['DVS', 'action', 'TWSO', 'reward',
-                             'fertilizer', 'val']
+                             'fertilizer', 'val', 'IDWST']
                 if self.po_features:
                     variables.append('measure')
                     for p in self.po_features:

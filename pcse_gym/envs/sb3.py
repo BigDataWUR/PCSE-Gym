@@ -104,7 +104,7 @@ def get_config_dir():
     return config_dir
 
 
-def get_wofost_kwargs(config_dir=get_config_dir(), soil_file='ec3.CAB', agro_file='wheat_cropcalendar.yaml'):
+def get_wofost_kwargs(config_dir=get_config_dir(), soil_file='ec3.CAB', agro_file='wheat_cropcalendar_sow.yaml'):
     wofost_kwargs = dict(
         model_config=os.path.join(config_dir, 'Wofost81_NWLP_FD.conf'),
         agro_config=os.path.join(config_dir, 'agro', agro_file),
