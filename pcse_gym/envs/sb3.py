@@ -8,6 +8,8 @@ import torch as th
 import torch.nn as nn
 import pcse
 import numpy as np
+import yaml
+from pathlib import Path
 
 import pcse_gym.envs.common_env as common_env
 import pcse_gym.utils.defaults as defaults
@@ -133,12 +135,16 @@ def get_model_kwargs(pcse_model, loc=defaults.get_default_location(), start_type
         loc = [loc]
     if (55.0, 23.5) in loc:
         soil_file = 'babtai_lt.CAB'
+        if start_type == 'sowing':
+            agro_file = 'wheat_cropcalendar_sow_lt.yaml'
+        else:
+            agro_file = 'wheat_cropcalendar_emergence_lt.yaml'
     else:
         soil_file = 'ec3.CAB'
-    if start_type == 'sowing':
-        agro_file = 'wheat_cropcalendar_sow.yaml'
-    else:
-        agro_file = 'wheat_cropcalendar_emergence.yaml'
+        if start_type == 'sowing':
+            agro_file = 'wheat_cropcalendar_sow_nl.yaml'
+        else:
+            agro_file = 'wheat_cropcalendar_emergence_nl.yaml'
 
     if pcse_model == 0:
         return get_lintul_kwargs()
