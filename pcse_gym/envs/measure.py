@@ -8,8 +8,9 @@ class MeasureOrNot:
     """
     Container to store indexes and index matching logic of the environment observation and the measurement actions
     """
-    def __init__(self, env, extend_obs=False, placeholder_val=-1.11, cost_multiplier=1):
+    def __init__(self, env, extend_obs=False, placeholder_val=-1.11, cost_multiplier=1, measure_all_flag=False):
         self.env = env
+        self.measure_all = measure_all_flag
         self.feature_ind = []
         self.feature_ind_dict = OrderedDict()
         self.measure_freq = defaultdict(dict)
@@ -40,19 +41,36 @@ class MeasureOrNot:
         """
         measuring_cost = np.zeros(len(measurement))
 
-        for i, i_obs in enumerate(self.feature_ind):
-            if not measurement[i]:
-                obs[i_obs] = self.placeholder
-            elif measurement[i] == 1:
-                measuring_cost[i] = self.get_observation_cost(measurement[i], i_obs)
-            else:
-                obs[i_obs] = self.get_noise(obs[i_obs], i_obs)
-                measuring_cost[i] = self.get_observation_cost(measurement[i], i_obs)
-            self.set_measure_freq(measurement)
+        # check flag for either selective measuring or non-selective measuring
+        match self.measure_all:
+            case False:  # for selective measuring
+                obs, measuring_cost = self.selective_measure(measurement, measuring_cost, obs)
+            case True:  # for non-selective measuring
+                obs, measuring_cost = self.non_selective_measure(measurement, measuring_cost, obs)
 
         if self.mask:
             obs = self.extend_observation(obs)
 
+        return obs, measuring_cost
+
+    def selective_measure(self, measurement, measuring_cost, obs):
+        for i, i_obs in enumerate(self.feature_ind):
+            if not measurement[i]:  # if not measuring, assign placeholder
+                obs[i_obs] = self.placeholder
+            elif measurement[i] == 1:  # if measuring, add cost
+                measuring_cost[i] = self.get_observation_cost(measurement[i], i_obs)
+            else:  # if noisy measuring, add noise and cost
+                obs[i_obs] = self.get_noise(obs[i_obs], i_obs)
+                measuring_cost[i] = self.get_observation_cost(measurement[i], i_obs)
+            self.set_measure_freq(measurement)
+        return obs, measuring_cost
+
+    def non_selective_measure(self, measurement, measuring_cost, obs):
+        if not measurement:
+            for i, i_obs in enumerate(self.feature_ind):
+                obs[i_obs] = self.placeholder
+        else:
+            measuring_cost = self.get_all_obs_cost(measurement, measuring_cost)
         return obs, measuring_cost
 
     def extend_observation(self, obs):
@@ -83,6 +101,13 @@ class MeasureOrNot:
             case _:
                 obs = self.rng.normal(obs, 1)
         return obs
+
+    def get_all_obs_cost(self, price, measurement_cost):
+        costs = self.list_of_costs(price)
+        for key, val in costs.items():
+            if key in self.env.po_features:
+                measurement_cost[0] += val
+        return measurement_cost
 
     def get_observation_cost(self, price, ind):
         costs = self.list_of_costs(price)

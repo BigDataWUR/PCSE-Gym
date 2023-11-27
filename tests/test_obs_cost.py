@@ -154,6 +154,39 @@ class TestNoMeasure(unittest.TestCase):
         self.assertEqual(expected, actual)
 
 
+class TestNonSelective(unittest.TestCase):
+    def setUp(self):
+        self.env = init_env.initialize_env_non_selective()
+
+    def test_cost(self):
+
+        self.env.reset()
+        action = np.array([0, 1])
+        _, reward, _, _, _ = self.env.step(action)
+
+        expected = -15
+
+        self.assertEqual(expected, reward)
+
+        action = np.array([4, 1])
+        obs, reward, terminated, truncated, info = self.env.step(action)
+
+        expected = -40 - 15
+
+        self.assertEqual(expected, reward)
+
+    def test_obs(self):
+
+        self.env.reset()
+        action = np.array([5, 0])
+        obs, reward, _, _, _ = self.env.step(action)
+
+        expected = np.empty(5)
+        expected.fill(-1.11)
+
+        self.assertListEqual(list(expected), list(obs[1:6]))
+
+
 class TestRandomFeature(unittest.TestCase):
     def setUp(self):
         self.env = init_env.initialize_env_random()

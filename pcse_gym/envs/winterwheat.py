@@ -81,7 +81,8 @@ class WinterWheat(gym.Env):
 
         if self.po_features:
             self.__measure = MeasureOrNot(self.sb3_env, extend_obs=self.mask_binary,
-                                          placeholder_val=self.placeholder_val, cost_multiplier=self.measure_cost_multiplier)
+                                          placeholder_val=self.placeholder_val, cost_multiplier=self.measure_cost_multiplier,
+                                          measure_all_flag=kwargs.get("measure_all", False))
 
         if self.normalize:
             self.loc_code = kwargs.get('loc_code', None)

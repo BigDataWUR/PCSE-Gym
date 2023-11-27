@@ -14,9 +14,12 @@ def get_po_features(pcse_env=1):
     return po_features
 
 
-def get_action_space(nitrogen_levels=7, po_features=[]):
+def get_action_space(nitrogen_levels=7, po_features=[], measure_all=False):
     if po_features:
-        a_shape = [nitrogen_levels] + [2] * len(po_features)
+        if not measure_all:
+            a_shape = [nitrogen_levels] + [2] * len(po_features)
+        else:
+            a_shape = [nitrogen_levels] + [2]
         space_return = gym.spaces.MultiDiscrete(a_shape)
     else:
         space_return = gym.spaces.Discrete(nitrogen_levels)
@@ -28,14 +31,15 @@ def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_defaul
                    years=defaults.get_default_train_years(), locations=defaults.get_default_location(), args_vrr=False,
                    action_limit=0, noisy_measure=False, n_budget=0, no_weather=False, mask_binary=False,
                    placeholder_val=-1.11, normalize=False, loc_code='NL', cost_measure='real', start_type='emergence',
-                   random_init=False, m_multiplier=1):
+                   random_init=False, m_multiplier=1, measure_all=False):
     if add_random:
         po_features.append('random'), crop_features.append('random')
-    action_space = get_action_space(nitrogen_levels=nitrogen_levels, po_features=po_features)
+    action_space = get_action_space(nitrogen_levels=nitrogen_levels, po_features=po_features, measure_all=measure_all)
     kwargs = dict(po_features=po_features, args_measure=po_features is not None, args_vrr=args_vrr,
                   action_limit=action_limit, noisy_measure=noisy_measure, n_budget=n_budget, no_weather=no_weather,
                   mask_binary=mask_binary, placeholder_val=placeholder_val, normalize=normalize, loc_code=loc_code,
-                  cost_measure=cost_measure, start_type=start_type, random_init=random_init, m_multiplier=m_multiplier)
+                  cost_measure=cost_measure, start_type=start_type, random_init=random_init, m_multiplier=m_multiplier,
+                  measure_all=measure_all)
     env_return = WinterWheat(crop_features=crop_features,
                              costs_nitrogen=costs_nitrogen,
                              years=years,
@@ -131,3 +135,6 @@ def initialize_env_random_init():
 
 def initialize_env_multiplier():
     return initialize_env(po_features=get_po_features(), m_multiplier=10)
+
+def initialize_env_non_selective():
+    return initialize_env(po_features=get_po_features(), measure_all=True)

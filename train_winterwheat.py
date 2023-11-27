@@ -389,12 +389,14 @@ if __name__ == '__main__':
     parser.add_argument("--cost-measure", type=str, default='real', dest='cost_measure', help='real, no, or same')
     parser.add_argument("--start-type", type=str, default='sowing', dest='start_type', help='sowing or emergence')
     parser.add_argument("--measure-cost-multiplier", type=int, default=1, dest='m_multiplier', help="multiplier for the measuring cost")
+    parser.add_argument("--measure-all", action='store_true', dest='measure_all')
     parser.set_defaults(measure=True, vrr=False, noisy_measure=False, framework='sb3',
                         no_weather=False, random_feature=False, obs_mask=False, placeholder_val=-1.11,
-                        normalize=False, random_init=False, m_multiplier=1)
+                        normalize=False, random_init=False, m_multiplier=1, measure_all=False)
 
     args = parser.parse_args()
 
+    # making sure everything is compatible with the user choices
     if not args.measure and args.noisy_measure:
         parser.error("noisy measure should be used with measure")
     if args.agent not in ['PPO', 'A2C', 'RPPO', 'DQN', 'GRU', 'PosMLP', 'S4D', 'IndRNN', 'DiffNC', 'ATM']:
@@ -407,14 +409,17 @@ if __name__ == '__main__':
         args.framework = 'ACNO-MDP'
     pcse_model_name = "LINTUL" if not args.environment else "WOFOST"
 
+    # directory where the model is saved
     print(rootdir)
     log_dir = os.path.join(rootdir, 'tensorboard_logs', f'{pcse_model_name}_experiments')
     print(f'train for {args.nsteps} steps with costs_nitrogen={args.costs_nitrogen} (seed={args.seed})')
 
+    # define training and testing years
     all_years = [*range(1990, 2022)]
     train_years = [year for year in all_years if year % 2 == 1]
     test_years = [year for year in all_years if year % 2 == 0]
 
+    # define training and testing locations
     if args.location == "NL":
         """The Netherlands"""
         train_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
@@ -426,19 +431,23 @@ if __name__ == '__main__':
     else:
         parser.error("--location arg should be either LT or NL")
 
+    # define the crop, weather and (maybe) action features used in training
     crop_features = defaults.get_default_crop_features(pcse_env=args.environment, minimal=True)
     weather_features = defaults.get_default_weather_features()
     action_features = defaults.get_default_action_features()
 
     tag = f'Seed-{args.seed}'
 
+    # define key word arguments
     kwargs = {'args_vrr': args.vrr, 'action_limit': args.action_limit, 'noisy_measure': args.noisy_measure,
               'n_budget': args.n_budget, 'framework': args.framework, 'no_weather': args.no_weather,
               'mask_binary': args.obs_mask, 'placeholder_val': args.placeholder_val, 'normalize': args.normalize,
               'loc_code': args.location, 'cost_measure': args.cost_measure, 'start_type': args.start_type,
-              'random_init': args.random_init, 'm_multiplier': args.m_multiplier}
+              'random_init': args.random_init, 'm_multiplier': args.m_multiplier, 'measure_all': args.measure_all}
+
+    # define MeasureOrNot environment if specified
     if not args.measure:
-        action_spaces = gymnasium.spaces.Discrete(7)
+        action_spaces = gymnasium.spaces.Discrete(7)  # 7 levels of fertilizing
     else:
         if args.environment:
             po_features = ['TAGP', 'LAI', 'NAVAIL', 'NuptakeTotal', 'SM']
@@ -453,7 +462,10 @@ if __name__ == '__main__':
             m_shape = 2
         else:
             m_shape = 3
-        a_shape = [7] + [m_shape] * len(po_features)
+        if args.measure_all:
+            a_shape = [7] + [m_shape]
+        else:
+            a_shape = [7] + [m_shape] * len(po_features)
         action_spaces = gymnasium.spaces.MultiDiscrete(a_shape)
 
     train(log_dir, train_years=train_years, test_years=test_years,
