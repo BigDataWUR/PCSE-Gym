@@ -47,6 +47,7 @@ class WinterWheat(gym.Env):
         self.normalize = kwargs.get('normalize', False)
         self.cost_measure = kwargs.get('cost_measure', 'real')
         self.random_init = kwargs.get('random_init', False)
+        self.measure_cost_multiplier = kwargs.get('m_multiplier', 1)
         self.seed = seed
         self.list_wav_nav = None
         if self.random_init:
@@ -80,7 +81,7 @@ class WinterWheat(gym.Env):
 
         if self.po_features:
             self.__measure = MeasureOrNot(self.sb3_env, extend_obs=self.mask_binary,
-                                          placeholder_val=self.placeholder_val)
+                                          placeholder_val=self.placeholder_val, cost_multiplier=self.measure_cost_multiplier)
 
         if self.normalize:
             self.loc_code = kwargs.get('loc_code', None)
@@ -148,8 +149,8 @@ class WinterWheat(gym.Env):
             if isinstance(action, np.ndarray):
                 measure = action[1:]
             obs = self.norm.normalize_measure_obs(obs, measure)
-
-            reward = self.norm.normalize_rew(reward)
+            self.norm.update_running_rew(reward)
+            reward = self.norm.normalize_reward(reward)
 
         return obs, reward, terminated, truncated, info
 

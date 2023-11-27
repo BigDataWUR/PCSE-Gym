@@ -149,6 +149,7 @@ def get_model_kwargs(pcse_model, loc=defaults.get_default_location(), start_type
     if pcse_model == 0:
         return get_lintul_kwargs()
     elif pcse_model == 1:
+        print(f'using agro file {agro_file} and soil file {soil_file}')
         return get_wofost_kwargs(soil_file=soil_file, agro_file=agro_file)
     else:
         raise Exception("Choose 0 or 1 for the environment")
@@ -237,7 +238,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
 
         start_date = process_pcse.get_start_date(pcse_output, self.timestep)
         info = update_info(info, 'action', start_date, action)
-        info = update_info(info, 'fertilizer', start_date, amount)
+        info = update_info(info, 'fertilizer', start_date, amount*10 if 'TWSO' in pcse_output[0].keys() else amount)
         info = update_info(info, 'reward', self.date, reward)
         if measure is not None:
             info = update_info(info, 'measure', start_date, measure)

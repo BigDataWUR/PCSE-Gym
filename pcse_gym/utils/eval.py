@@ -32,13 +32,19 @@ def get_cumulative_variables():
     return ['fertilizer', 'reward']
 
 
-def get_ylim_dict():
+def get_ylim_dict(n=32):
     def def_value():
         return None
 
     ylim = defaultdict(def_value)
     ylim['WSO'] = [0, 1000]
     ylim['TWSO'] = [0, 15000]
+    ylim['measure_SM'] = [0, n]
+    ylim['measure_TAGP'] = [0, n]
+    ylim['measure_random'] = [0, n]
+    ylim['measure_LAI'] = [0, n]
+    ylim['measure_NuptakeTotal'] = [0, n]
+    ylim['measure_SM'] = [0, n]
     return ylim
 
 
@@ -93,7 +99,7 @@ def get_titles():
     return_dict["RNuptake"] = ("Total nitrogen uptake", "kgN/ha")
     return_dict["TRA"] = ("Transpiration", "cm/day")
     return_dict["NAVAIL"] = ("Total soil inorganic nitrogen", "kgN/ha")
-    return_dict["SM"] = ("Volumatric soul moisture content", "-")
+    return_dict["SM"] = ("Volumetric soil moisture content", "-")
     return_dict["RFTRA"] = ("Transpiration reduction factor", "-")
     return_dict["TRUNOF"] = ("Total runoff", "mm")
     return_dict["TAGBM"] = ("Total aboveground biomass", "kg/ha")
@@ -407,7 +413,8 @@ def evaluate_policy(
             elif env.envs[0].unwrapped.normalize:
                 # reward = env.envs[0].unwrapped.norm_rew.unnormalize(rew)
                 # reward = rew * np.sqrt(env.envs[0].unwrapped.norm_rew.var + 1e-8)
-                reward = env.envs[0].unwrapped.norm.unnormalize_rew(rew)
+                # reward = env.envs[0].unwrapped.norm.unnormalize_rew(rew)
+                reward = env.envs[0].unwrapped.norm.unnormalize_reward(rew)
 
             if prob:
                 action_date = list(info[0]['action'].keys())[0]
@@ -646,6 +653,7 @@ class EvalCallback(BaseCallback):
                                                norm_obs=True, norm_reward=True,
                                                clip_obs=10., clip_reward=50., gamma=1)
             env_pcse_evaluation.training = False
+            n_year_loc = (len(self.get_years(log_training)) + len(self.get_locations(log_training)))
 
             print("evaluating environment with learned policy...")
             for year in tqdm(self.get_years(log_training)):
@@ -704,12 +712,12 @@ class EvalCallback(BaseCallback):
                 plot_individual = False
                 if plot_individual:
                     fig, ax = plt.subplots()
-                    plot_variable(results_figure, variable=variable, ax=ax, ylim=get_ylim_dict()[variable])
+                    plot_variable(results_figure, variable=variable, ax=ax, ylim=get_ylim_dict(n_year_loc)[variable])
                     self.logger.record(f'figures/{variable}', Figure(fig, close=True))
                     plt.close()
 
                 fig, ax = plt.subplots()
-                plot_variable(results_figure, variable=variable, ax=ax, ylim=get_ylim_dict()[variable],
+                plot_variable(results_figure, variable=variable, ax=ax, ylim=get_ylim_dict(n_year_loc)[variable],
                               plot_average=True)
                 if variable.startswith('measure'):
                     self.logger.record(f'figures/sum-{variable}', Figure(fig, close=True))

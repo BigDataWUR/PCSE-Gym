@@ -362,7 +362,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument("-s", "--seed", type=int, default=0, help="Set seed")
     parser.add_argument("-n", "--nsteps", type=int, default=400000, help="Number of steps")
-    parser.add_argument("-c", "--costs_nitrogen", type=float, default=10.0, help="Costs for nitrogen")
+    parser.add_argument("-c", "--costs-nitrogen", type=float, default=10.0, help="Costs for nitrogen")
     parser.add_argument("-e", "--environment", type=int, default=1,
                         help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
     parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, GRU,"
@@ -388,9 +388,10 @@ if __name__ == '__main__':
     parser.add_argument("--normalize", action='store_true', dest='normalize')
     parser.add_argument("--cost-measure", type=str, default='real', dest='cost_measure', help='real, no, or same')
     parser.add_argument("--start-type", type=str, default='sowing', dest='start_type', help='sowing or emergence')
+    parser.add_argument("--measure-cost-multiplier", type=int, default=1, dest='m_multiplier', help="multiplier for the measuring cost")
     parser.set_defaults(measure=True, vrr=False, noisy_measure=False, framework='sb3',
                         no_weather=False, random_feature=False, obs_mask=False, placeholder_val=-1.11,
-                        normalize=False, random_init=False)
+                        normalize=False, random_init=False, m_multiplier=1)
 
     args = parser.parse_args()
 
@@ -435,7 +436,7 @@ if __name__ == '__main__':
               'n_budget': args.n_budget, 'framework': args.framework, 'no_weather': args.no_weather,
               'mask_binary': args.obs_mask, 'placeholder_val': args.placeholder_val, 'normalize': args.normalize,
               'loc_code': args.location, 'cost_measure': args.cost_measure, 'start_type': args.start_type,
-              'random_init': args.random_init}
+              'random_init': args.random_init, 'm_multiplier': args.m_multiplier}
     if not args.measure:
         action_spaces = gymnasium.spaces.Discrete(7)
     else:

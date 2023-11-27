@@ -10,6 +10,7 @@ class TestMeasure(unittest.TestCase):
         self.env_ext = init_env.initialize_env_measure_po_extend()
         self.env_no_cost = init_env.initialize_env_measure_no_cost()
         self.env_same_cost = init_env.initialize_env_measure_same_cost()
+        self.env_multiplier = init_env.initialize_env_multiplier()
 
     def test_oc(self):
         self.env.reset()
@@ -84,6 +85,14 @@ class TestMeasure(unittest.TestCase):
         expected_obs = np.append(obs_obs, obs_mask)
 
         self.assertListEqual(expected_obs.tolist(), obs.tolist())
+
+    def test_obs_cost_multiplier(self):
+        self.env_multiplier.reset()
+        action = np.array([0, 1, 1, 1, 1, 1])
+
+        _, reward, _, _, _ = self.env_multiplier.step(action)
+
+        self.assertEqual( -150, reward)
 
 
 class TestNoisyMeasure(unittest.TestCase):

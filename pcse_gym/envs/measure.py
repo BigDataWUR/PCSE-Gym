@@ -8,16 +8,18 @@ class MeasureOrNot:
     """
     Container to store indexes and index matching logic of the environment observation and the measurement actions
     """
-    def __init__(self, env, extend_obs=False, placeholder_val=-1.11):
+    def __init__(self, env, extend_obs=False, placeholder_val=-1.11, cost_multiplier=1):
         self.env = env
         self.feature_ind = []
         self.feature_ind_dict = OrderedDict()
         self.measure_freq = defaultdict(dict)
         self.get_feature_cost_ind()
         self.mask = extend_obs
+        self.cost_multiplier = cost_multiplier
         self.placeholder = placeholder_val
         self.sorted = sorted(list(self.feature_ind))
         self.rng = np.random.default_rng(seed=self.env.seed)
+        self.other_cost = 2
 
     def get_feature_cost_ind(self) -> None:
         for feature in self.env.po_features:
@@ -85,8 +87,8 @@ class MeasureOrNot:
     def get_observation_cost(self, price, ind):
         costs = self.list_of_costs(price)
         key_cost = self.get_match(ind)
-        value_cost = costs.get(key_cost, 1)
-        return value_cost
+        value_cost = costs.get(key_cost, self.other_cost)
+        return value_cost * self.cost_multiplier
 
     def list_of_costs(self, cost):
         match cost:
@@ -153,8 +155,8 @@ class MeasureOrNot:
             random=0,
         )
 
-    @staticmethod
-    def same_costs(cost=3):
+    def same_costs(self):
+        cost = self.other_cost
         return dict(
             LAI=cost,
             TAGP=cost,

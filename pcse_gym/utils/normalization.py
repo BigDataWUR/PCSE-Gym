@@ -154,7 +154,8 @@ class NormalizeMeasureObservations:
                  mask_binary=False,
                  placeholder=-1.11,
                  reward_div=600,
-                 is_clipped=False):
+                 is_clipped=False,
+                 decay_rate=0.95):
         self.mask = mask_binary
         self.no_weather = no_weather
         self.crop_features = crop_features
@@ -171,17 +172,14 @@ class NormalizeMeasureObservations:
         self.index_measure = index_measure
         self.placeholder = placeholder
 
-        # self.loc = [loc] if isinstance(loc, tuple) else loc
-
-        # loc_str = None
-        # if (52, 5.5) in loc or (51.5, 5) in loc or (52.5, 6.0) in loc:
-        #     loc_str = 'NL'
-        # elif (55.0, 23.5) in loc or (55.0, 24.0) in loc or (55.5, 23.5) in loc:
-        #     loc_str = 'LT'
-
         self.fixed_means = np.array(self.get_fixed_vals('means'))
         self.fixed_std = np.array(self.get_fixed_vals('std'))
+
         self.reward_div = reward_div
+
+        self.run_rew_min = None
+        self.run_rew_max = None
+        self.decay_rate = decay_rate
 
     def normalize_measure_obs(self, obs, measure):
         obs_ = deepcopy(obs)
@@ -233,6 +231,29 @@ class NormalizeMeasureObservations:
 
     def unnormalize_rew(self, reward):
         return reward*self.reward_div
+
+    def update_running_rew(self, reward):
+        # Initialize running min and max if they are None
+        if self.run_rew_min is None or self.run_rew_max is None:
+            self.run_rew_min = reward
+            self.run_rew_max = reward
+
+        self.run_rew_min = self.decay_rate * self.run_rew_min + (1 - self.decay_rate) * min(reward, self.run_rew_min)
+        self.run_rew_max = self.decay_rate * self.run_rew_max + (1 - self.decay_rate) * max(reward, self.run_rew_max)
+
+    def normalize_reward(self, reward):
+
+        if self.run_rew_max == self.run_rew_min:
+            return 0.0
+
+        normalized = (reward - self.run_rew_min) / (self.run_rew_max - self.run_rew_min)
+        return 2 * normalized - 1
+
+    def unnormalize_reward(self, reward):
+
+        reward = (reward + 1) / 2
+
+        return reward * (self.run_rew_max - self.run_rew_min) + self.run_rew_min
 
     def get_fixed_vals(self, which):
         if which == 'means':
