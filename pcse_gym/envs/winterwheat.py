@@ -49,6 +49,7 @@ class WinterWheat(gym.Env):
         self.random_init = kwargs.get('random_init', False)
         self.measure_cost_multiplier = kwargs.get('m_multiplier', 1)
         self.seed = seed
+        self.measure_all = kwargs.get('measure_all', False)
         self.list_wav_nav = None
         if self.random_init:
             self.eval_wav = None
@@ -82,7 +83,7 @@ class WinterWheat(gym.Env):
         if self.po_features:
             self.__measure = MeasureOrNot(self.sb3_env, extend_obs=self.mask_binary,
                                           placeholder_val=self.placeholder_val, cost_multiplier=self.measure_cost_multiplier,
-                                          measure_all_flag=kwargs.get("measure_all", False))
+                                          measure_all_flag=self.measure_all)
 
         if self.normalize:
             self.loc_code = kwargs.get('loc_code', None)

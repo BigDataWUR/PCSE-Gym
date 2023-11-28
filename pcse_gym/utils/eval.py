@@ -45,6 +45,7 @@ def get_ylim_dict(n=32):
     ylim['measure_LAI'] = [0, n]
     ylim['measure_NuptakeTotal'] = [0, n]
     ylim['measure_SM'] = [0, n]
+    ylim['measure'] = [0, n]
     return ylim
 
 
@@ -514,6 +515,15 @@ def get_measure_graphs(episode_infos):
     return episode_infos
 
 
+def get_measure_graph(episode_infos):
+    measure_graph = {}
+    for date, measurement in episode_infos[0]['measure'].items():
+        measurement = measurement[0]
+        measure_graph[date] = measurement
+    episode_infos[0]['measure'] = measure_graph
+    return episode_infos
+
+
 class EvalCallback(BaseCallback):
     """
     Callback for evaluating an agent. Writes the following to tensorboard:
@@ -612,8 +622,11 @@ class EvalCallback(BaseCallback):
 
             '''logic for measure graph'''
             if 'measure' in variables:
-                variables, cumulative = self.replace_measure_variable(variables, cumulative)
-                episode_infos = get_measure_graphs(episode_infos)
+                if not self.env_eval.measure_all:
+                    variables, cumulative = self.replace_measure_variable(variables, cumulative)
+                    episode_infos = get_measure_graphs(episode_infos)
+                else:
+                    episode_infos = get_measure_graph(episode_infos)
 
             for i, variable in enumerate(variables):
                 n_timepoints = len(episode_infos[0][variable])
@@ -700,7 +713,7 @@ class EvalCallback(BaseCallback):
                 variables = ['action', 'WSO', 'reward', 'TNSOIL', 'val']
                 if self.po_features: variables.append('measure')
 
-            if 'measure' in variables:
+            if 'measure' in variables and not self.env_eval.measure_all:
                 variables = self.replace_measure_variable(variables)
 
             keys_figure = [(a, b) for a in self.test_years for b in self.test_locations]

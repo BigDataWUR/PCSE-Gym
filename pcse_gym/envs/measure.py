@@ -70,7 +70,7 @@ class MeasureOrNot:
             for i, i_obs in enumerate(self.feature_ind):
                 obs[i_obs] = self.placeholder
         else:
-            measuring_cost = self.get_all_obs_cost(measurement, measuring_cost)
+            measuring_cost[0] = 1
         return obs, measuring_cost
 
     def extend_observation(self, obs):
