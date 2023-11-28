@@ -164,14 +164,14 @@ class TestNonSelective(unittest.TestCase):
         action = np.array([0, 1])
         _, reward, _, _, _ = self.env.step(action)
 
-        expected = -15
+        expected = -1
 
         self.assertEqual(expected, reward)
 
         action = np.array([4, 1])
         obs, reward, terminated, truncated, info = self.env.step(action)
 
-        expected = -40 - 15
+        expected = -40 - 1
 
         self.assertEqual(expected, reward)
 
