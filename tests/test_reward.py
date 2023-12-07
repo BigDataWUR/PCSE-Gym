@@ -13,11 +13,7 @@ class Rewards(unittest.TestCase):
         self.env.reset()
         action = np.array([4])
         _, reward, _, _, _ = self.env.step(action)
-        recovery_rate = self.env.sb3_env.recovery_penalty()
-        amount = action[0] * self.env.action_multiplier
-        recovered_n = amount * recovery_rate
-        unrecovered_n = (amount - recovered_n) * 2
-        expected_reward = -4 - unrecovered_n - 50
+        expected_reward = -40 - 10
 
         self.assertEqual(expected_reward, reward)
 
@@ -28,11 +24,7 @@ class Rewards(unittest.TestCase):
         _, reward, _, _, _ = self.env.step(action)
         _, reward, _, _, _ = self.env.step(action)
         _, reward, _, _, _ = self.env.step(action)
-        recovery_rate = self.env.sb3_env.recovery_penalty()
-        amount = action[0] * self.env.action_multiplier
-        recovered_n = amount * recovery_rate
-        unrecovered_n = (amount - recovered_n) * 2
-        expected_reward = 0 - unrecovered_n
+        expected_reward = 0
 
         self.assertEqual(expected_reward, reward)
 

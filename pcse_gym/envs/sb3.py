@@ -129,7 +129,6 @@ def get_lintul_kwargs(config_dir=get_config_dir()):
 
 
 def get_model_kwargs(pcse_model, loc=defaults.get_default_location(), start_type='sowing'):
-    # TODO: site params?
     # TODO: possibly tidy up
     if not isinstance(loc, list):
         loc = [loc]
@@ -140,7 +139,7 @@ def get_model_kwargs(pcse_model, loc=defaults.get_default_location(), start_type
         else:
             agro_file = 'wheat_cropcalendar_emergence_lt.yaml'
     else:
-        soil_file = 'ec3.CAB'
+        soil_file = 'ec2.CAB'
         if start_type == 'sowing':
             agro_file = 'wheat_cropcalendar_sow_nl.yaml'
         else:

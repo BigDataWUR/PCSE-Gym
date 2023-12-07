@@ -368,7 +368,7 @@ if __name__ == '__main__':
     parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, GRU,"
                                                                        "IndRNN, DiffNC, PosMLP, ATM or DQN")
     parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, DEP, GRO, or ANE")
-    parser.add_argument("-b", "--n_budget", type=int, default=0, help="Nitrogen budget. kg/ha")
+    parser.add_argument("-b", "--n-budget", type=int, default=0, help="Nitrogen budget. kg/ha")
     parser.add_argument("--action_limit", type=int, default=0, help="Limit fertilization frequency."
                                                                     "Recommended 4 times")
     parser.add_argument("-m", "--measure", action='store_true', help="--measure or --no-measure."

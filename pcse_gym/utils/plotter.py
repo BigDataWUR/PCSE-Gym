@@ -267,3 +267,97 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
         ax.legend()
         ax.get_legend().set_visible(False)
     return ax
+
+
+def plot_var_vs_freq(results_dict, variable='measure_LAI', ax=None, ylim=None,
+                     put_legend=True, n_year_loc=32):
+    dataframes_list = []
+    for label, results in results_dict.items():
+        df = pd.DataFrame.from_dict(results[0][variable], orient='index', columns=[label])
+        dataframes_list.append(df)
+
+    plot_measure = pd.concat(dataframes_list, axis=1)
+    plot_measure = plot_measure.sum(axis=1)
+
+    variable = variable.replace("measure_", "")
+
+    dataframes_list = []
+    for label, results in results_dict.items():
+        df = pd.DataFrame.from_dict(results[0][variable], orient='index', columns=[label])
+        dataframes_list.append(df)
+
+    plot_var = pd.concat(dataframes_list, axis=1)
+    plot_var = plot_var.std(ddof=0, axis=1)
+
+    plot_df = pd.concat([plot_measure, plot_var], axis=1)
+    plot_df.dropna(inplace=True)
+    plot_df = plot_df.rename(columns={0: 'measure', 1: 'variance'})
+
+    ax.scatter(plot_df['measure'], plot_df['variance'], c='green', alpha=0.5, linewidths=1, edgecolors='black')
+
+    ax.set_title(f'measuring actions vs variance for {variable}')
+
+    ax.set_xticks(np.arange(0, n_year_loc + 1))
+    ax.set_xlabel(f'measuring frequency across years and locations')
+
+    ax.set_ylabel(f'variance across years and locations')
+
+    return ax
+
+
+def plot_var_vs_freq_box(results_dict, variable='measure_LAI', ax=None, ylim=None,
+                  put_legend=True, n_year_loc=32):
+
+    dataframes_list = []
+    for label, results in results_dict.items():
+        df = pd.DataFrame.from_dict(results[0][variable], orient='index', columns=[label])
+        df.index = df.index.map(lambda d: d.strftime('%m-%d'))
+        dataframes_list.append(df)
+
+    plot_measure = pd.concat(dataframes_list, axis=1)
+    plot_measure = plot_measure.sum(axis=1)
+
+    variable = variable.replace("measure_","")
+
+    dataframes_list = []
+    for label, results in results_dict.items():
+        df = pd.DataFrame.from_dict(results[0][variable], orient='index', columns=[label])
+        df.index = df.index.map(lambda d: d.strftime('%m-%d'))
+        dataframes_list.append(df)
+
+    plot_var = pd.concat(dataframes_list, axis=1)
+
+    plot_df = pd.concat([plot_measure, plot_var], axis=1)
+   # plot_df.dropna(inplace=True)
+    plot_df = plot_df.rename(columns={0:'measure'})
+
+    col1_values = range(int(max(plot_df['measure']))+1)
+
+    # Initialize a dictionary to hold boxplot data
+    boxplot_data = {i: [] for i in col1_values}
+
+    for col in plot_df.columns[1:]:
+        for val in col1_values:
+            matched_data = plot_df[plot_df['measure'] == val][col].dropna()
+            if not matched_data.empty:
+                boxplot_data[val].extend(matched_data)
+
+    bp = ax.boxplot(boxplot_data.values(), patch_artist=True, positions=list(boxplot_data.keys()))
+
+    colors = plt.cm.viridis(np.linspace(0, 1, len(boxplot_data)))
+
+    for patch, color in zip(bp['boxes'], colors):
+        patch.set_facecolor(color)
+
+    for flier in bp['fliers']:
+        flier.set(marker='o', color='black', alpha=0.5)
+
+    ax.grid(True, linestyle='--', alpha=0.7)
+    ax.set_title(f'measuring actions for {variable}')
+
+    ax.set_xticks(list(boxplot_data.keys()))
+    ax.set_xlabel(f'measuring frequency across years and locations')
+
+    ax.set_ylabel(f'variance across years and locations')
+
+    return ax

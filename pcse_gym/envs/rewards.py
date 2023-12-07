@@ -1,6 +1,9 @@
 import pcse_gym.utils.process_pcse_output as process_pcse
 
 
+def reward_functions_without_baseline():
+    return ['GRO', 'DEP']
+
 class Rewards:
     def __init__(self, reward_var, timestep, costs_nitrogen=10.0, vrr=0.7):
         self.reward_var = reward_var
@@ -29,27 +32,26 @@ class Rewards:
         return reward, growth
 
     # TODO reward based on cost if deploying in the field, to be tested; WIP
-    def deployment_reward(self, output, output_baseline, amount, vrr):
+    def deployment_reward(self, output, amount, vrr=None):
         """
         reward function that mirrors a realistic (financial) cost of DT deployment in a field
-        one unit of reward/cost equals roughly $1
+        one unit of reward equals the price of 1kg of wheat yield
         """
-        recovered_fertilizer = amount * vrr
-        unrecovered_fertilizer = (amount - recovered_fertilizer) * self.various_costs()['environmental']
+        # recovered_fertilizer = amount * vrr
+        # unrecovered_fertilizer = (amount - recovered_fertilizer) * self.various_costs()['environmental']
         if amount == 0:
             cost_deployment = 0
         else:
-            cost_deployment = self.various_costs()['deployment']
+            cost_deployment = self.various_costs()['to_the_field']
 
         growth = process_pcse.compute_growth_storage_organ(output, self.timestep)
-        growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep)
-        benefits = growth - growth_baseline
-        fertilizer_price = self.various_costs()['fertilizer'] * amount
-        costs = fertilizer_price + unrecovered_fertilizer + cost_deployment
-        reward = benefits - costs
+        # growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep)
+        # fertilizer_price = self.various_costs()['fertilizer'] * amount
+        costs = (self.costs_nitrogen * amount) + cost_deployment
+        reward = growth - costs
         return reward, growth
 
-    # agronomic nitrogen use efficiency (See Vanlauwe et al, 2011)
+    # agronomic nitrogen use efficiency (ee Vanlauwe et al, 2011)
     def ane_reward(self, ane_obj, output, output_baseline, amount):
         # agronomic nitrogen use efficiency
         reward, growth = ane_obj.reward(output, output_baseline, amount)
@@ -84,7 +86,7 @@ class Rewards:
     @staticmethod
     def various_costs():
         return dict(
-            deployment=50,
+            to_the_field=10,
             fertilizer=1,
             environmental=2
         )
