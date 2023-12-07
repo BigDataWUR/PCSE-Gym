@@ -12,6 +12,7 @@ from .constraints import VariableRecoveryRate
 from .measure import MeasureOrNot
 from .sb3 import ZeroNitrogenEnvStorage, StableBaselinesWrapper
 from .rewards import Rewards
+from .rewards import reward_functions_without_baseline
 
 
 class WinterWheat(gym.Env):
@@ -58,7 +59,7 @@ class WinterWheat(gym.Env):
         self.rng = np.random.default_rng(seed=seed)
 
 
-        if self.reward_function != 'GRO':
+        if self.reward_function not in reward_functions_without_baseline():
             self._env_baseline = self._initialize_sb_wrapper(seed, *args, **kwargs)
         self._env = self._initialize_sb_wrapper(seed, *args, **kwargs)
 
@@ -69,13 +70,7 @@ class WinterWheat(gym.Env):
         self.observation_space = self._get_observation_space()
         self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
 
-        if self.reward_function == 'DEP':
-            assert self.args_vrr, "To use 'DEP' as a reward function," \
-                                  "--variable-recovery-rate must be set as true"
-            vrr = self._env.recovery_penalty()
-            self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, costs_nitrogen, vrr)
-        else:
-            self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, costs_nitrogen)
+        self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, costs_nitrogen)
 
         if self.reward_function == 'ANE':
             self.ane = self.rewards.ContainerANE(self.timestep)
@@ -176,7 +171,7 @@ class WinterWheat(gym.Env):
 
     def get_reward_and_growth(self, output, amount):
         output_baseline = []
-        if self.reward_function != 'GRO':
+        if self.reward_function not in reward_functions_without_baseline():
             zero_nitrogen_results = self.zero_nitrogen_env_storage.get_episode_output(self.baseline_env)
             # convert zero_nitrogen_results to pcse_output
             var_name = process_pcse.get_name_storage_organ(zero_nitrogen_results.keys())
@@ -197,20 +192,19 @@ class WinterWheat(gym.Env):
             case 'GRO':
                 return self.rewards.growth_storage_organ(output, amount)
             case 'DEP':
-                vrr = self.sb3_env.recovery_penalty()
-                return self.rewards.deployment_reward(output, output_baseline, amount, vrr)
+                return self.rewards.deployment_reward(output, amount)
             case _:
                 return self.rewards.default_winterwheat_reward(output, output_baseline, amount)
 
     def overwrite_year(self, year):
         self.years = year
-        if self.reward_function != 'GRO':
+        if self.reward_function not in reward_functions_without_baseline():
             self.baseline_env.agro_management = common_env.replace_years(
                 self.baseline_env.agro_management, year)
         self.sb3_env.agro_management = common_env.replace_years(self.sb3_env.agro_management, year)
 
     def set_location(self, location):
-        if self.reward_function != 'GRO':
+        if self.reward_function not in reward_functions_without_baseline():
             self.baseline_env.loc = location
             self.baseline_env.weather_data_provider = common_env.get_weather_data_provider(location)
         self.sb3_env.loc = location
@@ -222,8 +216,8 @@ class WinterWheat(gym.Env):
 
     def overwrite_initial_conditions(self):
         # method to overwrite a random initial condition for every call of reset()
-        wav = np.clip(self.rng.normal(30, 30), 0.0, 100.0)
-        nav = np.clip(self.rng.normal(20, 30), 0.00,100.0)
+        wav = np.clip(self.rng.normal(15, 15), 0.0, 100.0)
+        nav = np.clip(self.rng.normal(15, 15), 0.00,100.0)
         self.eval_wav = wav
         self.eval_nav = nav
         site_parameters=pcse.util.WOFOST80SiteDataProvider(WAV=wav, NAVAILI=nav, PAVAILI=50, KAVAILI=100)
@@ -236,7 +230,7 @@ class WinterWheat(gym.Env):
 
         if isinstance(self.years, list):
             year = self.np_random.choice(self.years)
-            if self.reward_function != 'GRO':
+            if self.reward_function not in reward_functions_without_baseline():
                 self.baseline_env.agro_management = common_env.replace_years(
                     self.baseline_env.agro_management, year)
             self.sb3_env.agro_management = common_env.replace_years(self.sb3_env.agro_management, year)
@@ -246,7 +240,7 @@ class WinterWheat(gym.Env):
             self.set_location(location)
         if self.reward_function == 'ANE':
             self.ane.reset()
-        if self.reward_function != 'GRO':
+        if self.reward_function not in reward_functions_without_baseline():
             self.baseline_env.reset(seed=seed, options=site_params)
         obs = self.sb3_env.reset(seed=seed, options=site_params)
 

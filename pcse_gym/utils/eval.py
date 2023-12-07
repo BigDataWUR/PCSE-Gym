@@ -18,7 +18,8 @@ from stable_baselines3.common.logger import Figure
 from sb3_contrib import RecurrentPPO
 import pcse_gym.utils.defaults as defaults
 from pcse_gym.utils.process_pcse_output import get_dict_lintul_wofost
-from utils.plotter import plot_variable, plot_year_loc_heatmap
+from utils.plotter import (plot_variable, plot_var_vs_freq,
+                           plot_var_vs_freq_box, plot_year_loc_heatmap)
 
 
 def compute_median(results_dict: dict, filter_list=None):
@@ -35,6 +36,9 @@ def get_cumulative_variables():
 def get_ylim_dict(n=32):
     def def_value():
         return None
+
+    if n == 0:
+        n = 32
 
     ylim = defaultdict(def_value)
     ylim['WSO'] = [0, 1000]
@@ -502,7 +506,10 @@ class EvalCallback(BaseCallback):
                     self.logger.record(f'eval/reward-{my_key}', reward[my_key])
                     self.logger.record(f'eval/nitrogen-{my_key}', fertilizer[my_key])
                     result_model[my_key] = episode_infos
-                    n_year_loc += 1
+                    if log_training:
+                        n_year_loc = 0
+                    else:
+                        n_year_loc += 1
 
             for test_location in list(set(self.test_locations)):
                 test_keys = [(a, test_location) for a in self.test_years]
@@ -556,6 +563,13 @@ class EvalCallback(BaseCallback):
                 else:
                     self.logger.record(f'figures/avg-{variable}', Figure(fig, close=True))
                 plt.close()
+
+                # measure frequency vs variance
+                if variable.startswith('measure_') and n_year_loc != 0:
+                    fig, ax = plt.subplots()
+                    plot_var_vs_freq_box(results_figure, variable=variable, ax=ax, n_year_loc=n_year_loc)
+                    self.logger.record(f'figures/var-freq-{variable}', Figure(fig, close=True))
+                    plt.close()
             #
             # # create heatmap plot
             # if self.po_features:
