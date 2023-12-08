@@ -401,8 +401,6 @@ if __name__ == '__main__':
         parser.error("noisy measure should be used with measure")
     if args.agent not in ['PPO', 'A2C', 'RPPO', 'DQN', 'GRU', 'PosMLP', 'S4D', 'IndRNN', 'DiffNC', 'ATM']:
         parser.error("Invalid agent argument. Please choose PPO, A2C, RPPO, GRU, IndRNN, DiffNC, PosMLP, ATM, DQN")
-    if args.reward == 'DEP':
-        args.vrr = True
     if args.agent in ['GRU', 'PosMLP', 'S4D', 'IndRNN', 'DiffNC']:
         args.framework = 'rllib'
     elif args.agent in ['ATM']:

@@ -308,6 +308,8 @@ def plot_var_vs_freq(results_dict, variable='measure_LAI', ax=None, ylim=None,
 def plot_var_vs_freq_box(results_dict, variable='measure_LAI', ax=None, ylim=None,
                   put_legend=True, n_year_loc=32):
 
+    titles = get_titles()
+
     dataframes_list = []
     for label, results in results_dict.items():
         df = pd.DataFrame.from_dict(results[0][variable], orient='index', columns=[label])
@@ -353,11 +355,13 @@ def plot_var_vs_freq_box(results_dict, variable='measure_LAI', ax=None, ylim=Non
         flier.set(marker='o', color='black', alpha=0.5)
 
     ax.grid(True, linestyle='--', alpha=0.7)
+
+    name, unit = titles[variable]
     ax.set_title(f'measuring actions for {variable}')
 
-    ax.set_xticks(list(boxplot_data.keys()))
-    ax.set_xlabel(f'measuring frequency across years and locations')
+    ax.set_xticklabels(list(boxplot_data.keys()), rotation=315, fontsize=7)
+    ax.set_xlabel(f'measuring frequency')
 
-    ax.set_ylabel(f'variance across years and locations')
+    ax.set_ylabel(f'{variable} [{unit}] variance across years and locations')
 
     return ax

@@ -140,7 +140,7 @@ def compute_average(results_dict: dict, filter_list=None):
     return sum(filtered_results) / len(filtered_results)
 
 
-def evaluate_policy(
+def  evaluate_policy(
         policy,
         env: Union[gym.Env, VecEnv],
         n_eval_episodes: int = 1,
