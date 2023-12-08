@@ -63,6 +63,10 @@ class WinterWheat(gym.Env):
             self._env_baseline = self._initialize_sb_wrapper(seed, *args, **kwargs)
         self._env = self._initialize_sb_wrapper(seed, *args, **kwargs)
 
+        self.args_vrr = kwargs.get('args_vrr')
+        if self.args_vrr:
+            self._env = VariableRecoveryRate(self._env)
+
         self.observation_space = self._get_observation_space()
         self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
 
