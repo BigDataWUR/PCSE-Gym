@@ -271,7 +271,7 @@ class NormalizeMeasureObservations:
             case False, True:
                 return vals
             case False, False:
-                ind = len(self.crop_features) + 1
+                ind = len(self.crop_features)
                 del vals[ind]
                 return vals
 
