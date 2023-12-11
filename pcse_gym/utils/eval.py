@@ -10,6 +10,7 @@ from scipy.optimize import minimize_scalar
 from bisect import bisect_left
 from typing import Union
 from tqdm import tqdm
+import pickle
 from stable_baselines3 import PPO, DQN, A2C
 from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv, VecNormalize, sync_envs_normalization
 from stable_baselines3.common import base_class
@@ -362,7 +363,7 @@ class EvalCallback(BaseCallback):
     def __init__(self, env_eval=None, train_years=defaults.get_default_train_years(),
                  test_years=defaults.get_default_test_years(),
                  train_locations=defaults.get_default_location(), test_locations=defaults.get_default_location(),
-                 n_eval_episodes=1, eval_freq=20_000, pcse_model=1, seed=0, **kwargs):
+                 n_eval_episodes=1, eval_freq=20_000, pcse_model=1, seed=0, comet_experiment=None, **kwargs):
         super(EvalCallback, self).__init__()
         self.test_years = test_years
         self.train_years = train_years
@@ -373,6 +374,7 @@ class EvalCallback(BaseCallback):
         self.pcse_model = pcse_model
         self.seed = seed
         self.env_eval = env_eval
+        self.comet_experiment = comet_experiment
         self.po_features = kwargs.get('po_features')
 
         def def_value(): return 0
@@ -544,6 +546,16 @@ class EvalCallback(BaseCallback):
             keys_figure = [(a, b) for a in self.test_years for b in self.test_locations]
             results_figure = {filter_key: result_model[filter_key] for filter_key in keys_figure}
 
+            # pickle info for creating figures
+            dir = self.logger.get_dir()
+            with open(os.path.join(dir, f'infos_{self.num_timesteps}.pkl'), 'wb') as f:
+                pickle.dump(results_figure, f)
+
+            # if using comet, log pickle file as asset
+            if self.comet_experiment:
+                self.comet_experiment.log_asset(file_data=os.path.join(dir, f'infos_{self.num_timesteps}.pkl'),
+                                                file_name=f'infos_{self.num_timesteps}')
+
             # create variable plot
             for i, variable in enumerate(variables):
                 if variable not in results_figure[list(results_figure.keys())[0]][0].keys():
@@ -586,6 +598,24 @@ class EvalCallback(BaseCallback):
             #         plt.close()
 
             self.logger.dump(step=self.num_timesteps)
+
+        return True
+
+class CometCallback(EvalCallback):
+    def __init__(self, *args, comet_experiment, save_path, **kwargs):
+        super(CometCallback, self).__init__(*args, **kwargs)
+        self.comet_experiment = comet_experiment
+        self.save_path = save_path
+
+    def _on_step(self):
+        # Call the original _on_step method
+        super(CometCallback, self)._on_step()
+
+        # Your custom Comet.ml logging logic
+        if self.n_calls % self.eval_freq == 0 or self.n_calls == 1:
+
+            # Log the .pkl file as an artifact to Comet.ml
+            self.comet_experiment.log_asset(file_path=self.save_path, file_name="CustomEnvironmentData.pkl")
 
         return True
 

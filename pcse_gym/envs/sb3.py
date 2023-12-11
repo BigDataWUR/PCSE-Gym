@@ -176,6 +176,9 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         self.no_weather = kwargs.get('no_weather', False)
         self.mask_binary = kwargs.get('mask_binary', False)
         self.po_features = kwargs.get('po_features', [])
+        self.random_feature = False
+        if 'random' in self.po_features:
+            self.random_feature = True
         self.seed = seed
         self.rng = np.random.default_rng(seed=seed)
         super().__init__(timestep=timestep, years=years, location=location, *args, **kwargs)
@@ -236,11 +239,15 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         info = {**pd.concat([crop_info, weather_info], axis=1, join="inner").to_dict()}
 
         start_date = process_pcse.get_start_date(pcse_output, self.timestep)
+        # start_date is beginning of the week
+        # self.date is the end of the week (if timestep=7)
         info = update_info(info, 'action', start_date, action)
         info = update_info(info, 'fertilizer', start_date, amount*10 if 'TWSO' in pcse_output[0].keys() else amount)
         info = update_info(info, 'reward', self.date, reward)
         if measure is not None:
             info = update_info(info, 'measure', start_date, measure)
+        if self.random_feature:
+            info = update_info(info, 'random', self.date, observation[len(self.crop_features)]-1)
 
         if self.index_feature:
             if 'indexes' not in info.keys():

@@ -179,9 +179,6 @@ def train(log_dir, n_steps,
                     auto_histogram_tensorboard_logging=True
                 )
                 comet_log.log_code(folder=os.path.join(rootdir, 'pcse_gym'))
-                # comet_log.log_asset_folder(os.path.join(rootdir, 'pcse_gym', 'envs'), log_file_name=True,
-                #                            recursive=True)
-                # comet_log.log_asset(os.path.join(rootdir, 'pcse_gym', 'utils', 'eval'), file_name='eval.py')
                 comet_log.log_parameters(hyperparams)
 
             env_pcse_train = WinterWheat(crop_features=crop_features, action_features=action_features,
@@ -261,7 +258,7 @@ def train(log_dir, n_steps,
                         callback=EvalCallback(env_eval=env_pcse_eval, test_years=test_years,
                                               train_years=train_years, train_locations=train_locations,
                                               test_locations=test_locations, seed=seed, pcse_model=pcse_model,
-                                              **kwargs),
+                                              comet_experiment=comet_log, **kwargs),
                         tb_log_name=tb_log_name)
 
             # from stable_baselines3.common.utils import get_latest_run_id
