@@ -1,3 +1,4 @@
+import gymnasium
 from collections import OrderedDict, defaultdict
 from copy import deepcopy
 
@@ -19,7 +20,7 @@ class MeasureOrNot:
         self.cost_multiplier = cost_multiplier
         self.placeholder = placeholder_val
         self.sorted = sorted(list(self.feature_ind))
-        self.rng = np.random.default_rng(seed=self.env.seed)
+        self.rng, self.seed = gymnasium.utils.seeding.np_random(seed=self.env.seed)
         self.other_cost = 2
 
     def get_feature_cost_ind(self) -> None:

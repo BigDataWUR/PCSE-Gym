@@ -49,14 +49,13 @@ class WinterWheat(gym.Env):
         self.cost_measure = kwargs.get('cost_measure', 'real')
         self.random_init = kwargs.get('random_init', False)
         self.measure_cost_multiplier = kwargs.get('m_multiplier', 1)
-        self.seed = seed
         self.measure_all = kwargs.get('measure_all', False)
         self.list_wav_nav = None
         if self.random_init:
             self.eval_wav = None
             self.eval_nav = None
             self.list_wav_nav = [self.eval_wav, self.eval_nav]
-        self.rng = np.random.default_rng(seed=seed)
+        self.rng, self.seed = gym.utils.seeding.np_random(seed=seed)
 
 
         if self.reward_function not in reward_functions_without_baseline():
