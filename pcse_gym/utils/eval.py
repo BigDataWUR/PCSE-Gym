@@ -19,7 +19,7 @@ from stable_baselines3.common.logger import Figure
 from sb3_contrib import RecurrentPPO
 import pcse_gym.utils.defaults as defaults
 from pcse_gym.utils.process_pcse_output import get_dict_lintul_wofost
-from utils.plotter import (plot_variable, plot_var_vs_freq,
+from .plotter import (plot_variable, plot_var_vs_freq,
                            plot_var_vs_freq_box, plot_year_loc_heatmap)
 
 
