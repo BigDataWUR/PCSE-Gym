@@ -102,6 +102,7 @@ def train(log_dir, n_steps,
     mask_binary = kwargs.get('mask_binary', False)
     loc_code = kwargs.get('loc_code', None)
     random_init = kwargs.get('random_init', False)
+    cost_measure = kwargs.get('cost_measure', None)
 
     if framework == 'sb3':
         from stable_baselines3 import PPO, DQN, A2C
@@ -170,7 +171,7 @@ def train(log_dir, n_steps,
                 api_key = f.readline()
             comet_log = Experiment(
                 api_key=api_key,
-                project_name="cropGym_1",
+                project_name="cropGym_measure",
                 workspace="pcse-gym",
                 log_code=True,
                 log_graph=True,
@@ -231,6 +232,8 @@ def train(log_dir, n_steps,
             env_pcse_eval = ActionConstrainer(env_pcse_eval, action_limit=action_limit, n_budget=n_budget)
 
         tb_log_name = f'{tag}-{loc_code}-nsteps-{n_steps}-{agent}-rew-{reward}-lim-act-{action_limit}-budget-{n_budget}'
+        if cost_measure:
+            tb_log_name = cost_measure + '-' + tb_log_name
         if no_weather:
             tb_log_name = tb_log_name + '-no_weather'
         if normalize:

@@ -551,10 +551,15 @@ class EvalCallback(BaseCallback):
             with open(os.path.join(dir, f'infos_{self.num_timesteps}.pkl'), 'wb') as f:
                 pickle.dump(results_figure, f)
 
-            # if using comet, log pickle file as asset
+            # if using comet, log pickle file and model as asset
             if self.comet_experiment:
                 self.comet_experiment.log_asset(file_data=os.path.join(dir, f'infos_{self.num_timesteps}.pkl'),
+                                                step=self.num_timesteps,
                                                 file_name=f'infos_{self.num_timesteps}')
+                self.comet_experiment.log_asset(file_data=os.path.join(dir, f'model-{self.num_timesteps}.zip'),
+                                                step=self.num_timesteps,
+                                                file_name=f'infos_{self.num_timesteps}')
+
 
             # create variable plot
             for i, variable in enumerate(variables):
