@@ -103,6 +103,7 @@ def train(log_dir, n_steps,
     loc_code = kwargs.get('loc_code', None)
     random_init = kwargs.get('random_init', False)
     cost_measure = kwargs.get('cost_measure', None)
+    measure_all =  kwargs.get('measure_all', None)
 
     if framework == 'sb3':
         from stable_baselines3 import PPO, DQN, A2C
@@ -231,6 +232,8 @@ def train(log_dir, n_steps,
         if action_limit or n_budget > 0:
             env_pcse_eval = ActionConstrainer(env_pcse_eval, action_limit=action_limit, n_budget=n_budget)
 
+        if measure_all:
+            cost_measure = 'all'
         tb_log_name = f'{tag}-{loc_code}-nsteps-{n_steps}-{agent}-rew-{reward}-lim-act-{action_limit}-budget-{n_budget}'
         if cost_measure:
             tb_log_name = cost_measure + '-' + tb_log_name
@@ -243,8 +246,9 @@ def train(log_dir, n_steps,
         if random_init:
             tb_log_name = tb_log_name + '-random-init'
         if use_comet:
-            comet_log.set_name(f'{tag}-{loc_code}-{n_steps}-{agent}-{reward}-{"normalize" if normalize else ""}-'
-                               f'{"mask_binary" if mask_binary else ""}')
+            comet_log.set_name(f'{cost_measure}-{tag}-{loc_code}-{n_steps}-{agent}-{reward}-{"normalize" if normalize else ""}-'
+                               f'{"budget" if n_budget>0 else ""}{"mask_binary" if mask_binary else ""}')
+            comet_log.add_tag(measure_all)
         tb_log_name = tb_log_name + '-run'
 
         # json_config = get_json_config(n_steps, crop_features, weather_features, train_years, test_years,
