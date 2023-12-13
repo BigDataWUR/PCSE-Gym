@@ -558,7 +558,7 @@ class EvalCallback(BaseCallback):
                                                 file_name=f'infos_{self.num_timesteps}')
                 self.comet_experiment.log_asset(file_data=os.path.join(dir, f'model-{self.num_timesteps}.zip'),
                                                 step=self.num_timesteps,
-                                                file_name=f'infos_{self.num_timesteps}')
+                                                file_name=f'model_{self.num_timesteps}')
 
 
             # create variable plot
