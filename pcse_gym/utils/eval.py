@@ -143,13 +143,16 @@ def compute_average(results_dict: dict, filter_list=None):
     return sum(filtered_results) / len(filtered_results)
 
 
-def get_action_probs(dis : MultiCategoricalDistribution, po_features):
+def get_action_probs(dis : MultiCategoricalDistribution, po_features, measure_all):
     if po_features:
         dict = {}
         dict['prob_action'] = dis.distribution[0].probs.detach().numpy()[0]
-        for i, feature in enumerate(po_features, 1):
-            feature = "prob_"+feature
-            dict[feature] = dis.distribution[i].probs.detach().numpy()[0][1]
+        if measure_all:
+            dict['prob_measure'] = dis.distribution[1].probs.detach().numpy()[0][1]
+        else:
+            for i, feature in enumerate(po_features, 1):
+                feature = "prob_"+feature
+                dict[feature] = dis.distribution[i].probs.detach().numpy()[0][1]
         return dict
     else:
         return None
@@ -243,31 +246,14 @@ def  evaluate_policy(
                                                          lstm_states=lstm_torch,
                                                          episode_starts=torch.from_numpy(episode_starts))
 
-                    action_probs = get_action_probs(dis, env.envs[0].unwrapped.po_features)
+                    action_probs = get_action_probs(dis, env.envs[0].unwrapped.po_features,
+                                                    env.envs[0].unwrapped.measure_all)
 
                     val = policy.policy.predict_values(torch.from_numpy(obs),
                                                          lstm_states=lstm_torch,
                                                          episode_starts=torch.from_numpy(episode_starts))
                     val = val.detach().numpy()[0][0]
-                    # lstm_state_obj = RNNStates(
-                    #     (   # actor network / policy network hidden states
-                    #         torch.from_numpy(lstm_state[0]),
-                    #         torch.from_numpy(lstm_state[1])
-                    #     ),
-                    #     (   # critic network / value function network hidden states
-                    #         torch.from_numpy(lstm_state[0]),
-                    #         torch.from_numpy(lstm_state[1])
-                    #     )
-                    # )
-                    # sb_values, sb_log_probs, sb_entropy = policy.policy.evaluate_actions(
-                    #     torch.from_numpy(obs),
-                    #     actions=torch.from_numpy(action),
-                    #     lstm_states=lstm_state_obj,
-                    #     episode_starts=torch.from_numpy(episode_starts),)
-                    # sb_prob = np.exp(sb_log_probs.detach().numpy()).item()
-                    # sb_val = sb_values.detach().item()
-                    # prob = sb_prob
-                    # val = sb_val
+
                 if isinstance(policy, DQN):
                     action = policy.predict(obs, deterministic=deterministic)
 
@@ -288,10 +274,10 @@ def  evaluate_policy(
                 # reward = env.envs[0].unwrapped.norm.unnormalize_rew(rew)
                 reward = env.envs[0].unwrapped.norm.unnormalize_reward(rew)
 
-            # if prob:
-            #     action_date = list(info[0]['action'].keys())[0]
-            #     info[0]['prob'] = {action_date: prob}
-            #     info[0]['dvs'] = {action_date: info[0]['DVS'][action_date]}
+            if prob:
+                action_date = list(info[0]['action'].keys())[0]
+                info[0]['prob'] = {action_date: prob}
+                info[0]['dvs'] = {action_date: info[0]['DVS'][action_date]}
             if val:
                 val_date = list(info[0]['action'].keys())[0]
                 info[0]['val'] = {val_date: val}
@@ -582,7 +568,7 @@ class EvalCallback(BaseCallback):
 
             if self.pcse_model:
                 variables = ['DVS', 'action', 'TWSO', 'reward',
-                             'fertilizer', 'val', 'IDWST', 'prob']
+                             'fertilizer', 'val', 'IDWST', 'prob_measure']
                 if self.po_features:
                     variables.append('measure')
                     for p in self.po_features:
@@ -633,11 +619,11 @@ class EvalCallback(BaseCallback):
                 if variable.startswith('measure'):
                     self.logger.record(f'figures/sum-{variable}', Figure(fig, close=True))
                 else:
-                    self.logger.record(f'figures/avg-{variable}', Figure(fig, close=True))
+                    self.logger.record(f'figures/med-{variable}', Figure(fig, close=True))
                 plt.close()
 
                 # measure frequency vs variance
-                if variable.startswith('measure_') or variable.startswith('prob_'):
+                if variable.startswith('measure_') or variable.startswith('prob_') and not self.env_eval.measure_all:
                     fig, ax = plt.subplots(figsize=(9,6))
                     plot_var_vs_freq_scatter(results_figure, variable=variable, ax=ax)
                     self.logger.record(f'figures/var-freq-{variable}', Figure(fig, close=True))
