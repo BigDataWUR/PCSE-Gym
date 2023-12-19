@@ -144,13 +144,15 @@ def compute_average(results_dict: dict, filter_list=None):
 
 
 def get_action_probs(dis : MultiCategoricalDistribution, po_features):
-    dict = {}
     if po_features:
-        dict['action_prob'] = dis.distribution[0].probs.detach().numpy()[0]
+        dict = {}
+        dict['prob_action'] = dis.distribution[0].probs.detach().numpy()[0]
         for i, feature in enumerate(po_features, 1):
-            feature = feature+"_prob"
-            dict[feature] = dis.distribution[i].probs.detach().numpy()[0]
-    return dict
+            feature = "prob_"+feature
+            dict[feature] = dis.distribution[i].probs.detach().numpy()[0][1]
+        return dict
+    else:
+        return None
 
 def  evaluate_policy(
         policy,
@@ -214,6 +216,7 @@ def  evaluate_policy(
 
         lstm_state = None
         episode_starts = np.ones((1,), dtype=bool)
+        action_probs = None
 
         while not terminated or truncated:
             if policy == 'start-dump' and (episode_length == 0):
@@ -479,7 +482,10 @@ class EvalCallback(BaseCallback):
             if not self.env_eval.normalize:
                 stats_path = os.path.join(tensorboard_logdir, f'env-{self.n_calls}.pkl')
                 self.model.get_env().save(stats_path)
+
+            # evaluate model and get rewards and infos
             episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=self.model.get_env())
+
             if self.pcse_model:
                 variables = ['action', 'TWSO', 'reward', 'IDWST', 'val']
                 if self.po_features: variables.append('measure')
@@ -589,7 +595,7 @@ class EvalCallback(BaseCallback):
             if 'measure' in variables and not self.env_eval.measure_all:
                 variables = self.replace_measure_variable(variables)
                 for variable in self.env_eval.po_features:  # TODO make tidier
-                    variable = variable + '_prob'
+                    variable = 'prob_' + variable
                     variables += [variable]
 
             keys_figure = [(a, b) for a in self.test_years for b in self.test_locations]
@@ -631,7 +637,7 @@ class EvalCallback(BaseCallback):
                 plt.close()
 
                 # measure frequency vs variance
-                if variable.startswith('measure_') and n_year_loc != 0:
+                if variable.startswith('measure_') or variable.startswith('prob_'):
                     fig, ax = plt.subplots(figsize=(9,6))
                     plot_var_vs_freq_scatter(results_figure, variable=variable, ax=ax)
                     self.logger.record(f'figures/var-freq-{variable}', Figure(fig, close=True))
