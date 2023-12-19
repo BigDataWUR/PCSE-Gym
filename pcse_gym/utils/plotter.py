@@ -426,7 +426,7 @@ def plot_var_vs_freq_scatter(results_dict, variable='measure_LAI', ax=None):
 
     name, unit = titles[variable]
 
-    ax.set_ylim([-1, 32])
+    ax.set_ylim([-1, 33])
 
     ax.set_title(f'measuring actions for {variable}', fontsize=10, fontweight='bold', color='green')
 
