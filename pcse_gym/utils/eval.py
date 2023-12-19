@@ -589,7 +589,7 @@ class EvalCallback(BaseCallback):
             if 'measure' in variables and not self.env_eval.measure_all:
                 variables = self.replace_measure_variable(variables)
                 for variable in self.env_eval.po_features:  # TODO make tidier
-                    variable = variable + '_probs'
+                    variable = variable + '_prob'
                     variables += [variable]
 
             keys_figure = [(a, b) for a in self.test_years for b in self.test_locations]
