@@ -5,7 +5,7 @@
         crop_start_date: 2006-10-01
         crop_start_type: sowing
         crop_end_date: 2007-09-01
-        crop_end_type: earliest
+        crop_end_type: harvest
         max_duration: 365
     TimedEvents: null
     StateEvents: null

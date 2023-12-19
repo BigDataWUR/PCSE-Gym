@@ -179,8 +179,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         self.random_feature = False
         if 'random' in self.po_features:
             self.random_feature = True
-        self.seed = seed
-        self.rng = np.random.default_rng(seed=seed)
+        self.rng, self.seed = gym.utils.seeding.np_random(seed=seed)
         super().__init__(timestep=timestep, years=years, location=location, *args, **kwargs)
         self.action_space = action_space
         self.action_multiplier = action_multiplier
@@ -247,7 +246,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         if measure is not None:
             info = update_info(info, 'measure', start_date, measure)
         if self.random_feature:
-            info = update_info(info, 'random', self.date, observation[len(self.crop_features)]-1)
+            info = update_info(info, 'random', self.date, observation[len(self.crop_features)-1])
 
         if self.index_feature:
             if 'indexes' not in info.keys():
@@ -276,7 +275,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
 
         for i, feature in enumerate(self.crop_features):
             if feature == 'random':
-                obs[i] = self.rng.normal(0, 10)
+                obs[i] = np.clip(self.rng.normal(10, 10), 0.0, None)
             else:
                 obs[i] = observation['crop_model'][feature][-1]
 

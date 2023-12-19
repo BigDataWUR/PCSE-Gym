@@ -365,3 +365,74 @@ def plot_var_vs_freq_box(results_dict, variable='measure_LAI', ax=None, ylim=Non
     ax.set_ylabel(f'{variable} [{unit}] variance across years and locations')
 
     return ax
+
+def plot_var_vs_freq_scatter(results_dict, variable='measure_LAI', ax=None):
+
+    # Function to find the nearest weekly date
+    def nearest_weekly_date(date, base_date):
+        days_difference = (date - base_date).days
+        nearest_weekly_difference = round(days_difference / 7) * 7
+        return base_date + pd.Timedelta(days=nearest_weekly_difference)
+
+    dataframes_list = []
+    for label, results in results_dict.items():
+        df = pd.DataFrame.from_dict(results[0][variable], orient='index', columns=[label])
+        df.index = df.index.map(lambda d: d.strftime('%m-%d'))
+        dataframes_list.append(df)
+
+    plot_measure = pd.concat(dataframes_list, axis=1)
+    plot_measure = plot_measure.sum(axis=1)
+
+    variable = variable.replace("measure_","")
+
+    dataframes_list = []
+    for label, results in results_dict.items():
+        df = pd.DataFrame.from_dict(results[0][variable], orient='index', columns=[label])
+        df.index = df.index.map(lambda d: d.strftime('%m-%d'))
+        dataframes_list.append(df)
+
+    plot_var = pd.concat(dataframes_list, axis=1)
+    plot_var = plot_var.std(ddof=0, axis=1)
+
+    plot_df = pd.concat([plot_var, plot_measure], axis=1)
+    plot_df.dropna(inplace=True)
+    plot_df = plot_df.rename(columns={0:'variance', 1: 'measure'})
+    # plot_df = plot_df.sort_values(by=['variance'])
+
+    plot_df['Date'] = plot_df.index
+
+    # Convert date strings to datetime objects (considering a non-leap year)
+    base_year = 2021  # placeholder non-leap year
+    base_date = pd.to_datetime(f'{base_year}-10-01')  # Starting date (1st of October)
+    plot_df['Date'] = pd.to_datetime(plot_df['Date'] + f'-{base_year}', format='%m-%d-%Y')
+
+    # Apply the function to assign each date to the nearest weekly date
+    plot_df['Nearest_Weekly_Date'] = plot_df['Date'].apply(lambda d: nearest_weekly_date(d, base_date))
+    result = plot_df.groupby('Nearest_Weekly_Date').agg({'variance': 'mean', 'measure': 'sum'})
+
+    # Convert the index back to MM-DD format
+    result.index = result.index.map(lambda d: d.strftime('%m-%d'))
+    result = result.sort_values(by=['variance'])
+
+    result['variance'] = (result['variance'] - result['variance'].min()) / (result['variance'].max() - result['variance'].min())
+
+    ax.scatter(result['variance'], result['measure'], edgecolor='black', alpha=0.7)
+
+    titles = get_titles()
+
+    ax.set_xticks(np.arange(min(result['variance']), max(result['variance'])+0.1, 0.1))
+
+    # ax.set_xticklabels(range(0, int(max(result['variance']))), rotation=315, fontsize=8)
+
+    name, unit = titles[variable]
+
+    ax.set_ylim([-1, 32])
+
+    ax.set_title(f'measuring actions for {variable}', fontsize=10, fontweight='bold', color='green')
+
+    ax.set_ylabel(f'measuring frequency between years', fontsize=8)
+
+    ax.set_xlabel(f'Normalized {variable} [{unit}] variance across years and locations', fontsize=8)
+
+    return ax
+

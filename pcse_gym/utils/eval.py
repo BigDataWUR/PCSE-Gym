@@ -4,6 +4,7 @@ import pandas as pd
 import gymnasium as gym
 import numpy as np
 import matplotlib.pyplot as plt
+import torch
 from torch.utils.tensorboard import SummaryWriter
 from collections import defaultdict
 from scipy.optimize import minimize_scalar
@@ -16,11 +17,12 @@ from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv, VecNormalize, 
 from stable_baselines3.common import base_class
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.logger import Figure
+from stable_baselines3.common.distributions import MultiCategoricalDistribution
+from sb3_contrib.common.recurrent.type_aliases import RNNStates
 from sb3_contrib import RecurrentPPO
 import pcse_gym.utils.defaults as defaults
 from pcse_gym.utils.process_pcse_output import get_dict_lintul_wofost
-from .plotter import (plot_variable, plot_var_vs_freq,
-                           plot_var_vs_freq_box, plot_year_loc_heatmap)
+from .plotter import plot_variable, plot_var_vs_freq_scatter
 
 
 def compute_median(results_dict: dict, filter_list=None):
@@ -43,7 +45,7 @@ def get_ylim_dict(n=32):
 
     ylim = defaultdict(def_value)
     ylim['WSO'] = [0, 1000]
-    ylim['TWSO'] = [0, 15000]
+    ylim['TWSO'] = [0, 10000]
     ylim['measure_SM'] = [0, n]
     ylim['measure_TAGP'] = [0, n]
     ylim['measure_random'] = [0, n]
@@ -141,6 +143,15 @@ def compute_average(results_dict: dict, filter_list=None):
     return sum(filtered_results) / len(filtered_results)
 
 
+def get_action_probs(dis : MultiCategoricalDistribution, po_features):
+    dict = {}
+    if po_features:
+        dict['action_prob'] = dis.distribution[0].probs.detach().numpy()[0]
+        for i, feature in enumerate(po_features, 1):
+            feature = feature+"_prob"
+            dict[feature] = dis.distribution[i].probs.detach().numpy()[0]
+    return dict
+
 def  evaluate_policy(
         policy,
         env: Union[gym.Env, VecEnv],
@@ -210,12 +221,12 @@ def  evaluate_policy(
             if isinstance(policy, base_class.BaseAlgorithm):
                 if isinstance(policy, PPO):
                     action, state = policy.predict(obs, state=state, deterministic=deterministic)
-                    # sb_actions, sb_values, sb_log_probs = policy.policy(torch.from_numpy(obs),
-                    #                                                     deterministic=deterministic)
-                    # sb_prob = np.exp(sb_log_probs.detach().numpy()).item()
-                    # sb_val = sb_values.detach().item()
-                    # prob = sb_prob
-                    # val = sb_val
+                    sb_actions, sb_values, sb_log_probs = policy.policy(torch.from_numpy(obs),
+                                                                        deterministic=deterministic)
+                    sb_prob = np.exp(sb_log_probs.detach().numpy()).item()
+                    sb_val = sb_values.detach().item()
+                    prob = sb_prob
+                    val = sb_val
                 if isinstance(policy, A2C):
                     action, state = policy.predict(obs, state=state, episode_start=episode_starts,
                                                    deterministic=deterministic)
@@ -223,6 +234,37 @@ def  evaluate_policy(
                 if isinstance(policy, RecurrentPPO):
                     action, lstm_state = policy.predict(obs, state=lstm_state, episode_start=episode_starts,
                                                         deterministic=deterministic)
+                    lstm_torch = (torch.from_numpy(lstm_state[0]),torch.from_numpy(lstm_state[1]))
+
+                    dis, _ = policy.policy.get_distribution(torch.from_numpy(obs),
+                                                         lstm_states=lstm_torch,
+                                                         episode_starts=torch.from_numpy(episode_starts))
+
+                    action_probs = get_action_probs(dis, env.envs[0].unwrapped.po_features)
+
+                    val = policy.policy.predict_values(torch.from_numpy(obs),
+                                                         lstm_states=lstm_torch,
+                                                         episode_starts=torch.from_numpy(episode_starts))
+                    val = val.detach().numpy()[0][0]
+                    # lstm_state_obj = RNNStates(
+                    #     (   # actor network / policy network hidden states
+                    #         torch.from_numpy(lstm_state[0]),
+                    #         torch.from_numpy(lstm_state[1])
+                    #     ),
+                    #     (   # critic network / value function network hidden states
+                    #         torch.from_numpy(lstm_state[0]),
+                    #         torch.from_numpy(lstm_state[1])
+                    #     )
+                    # )
+                    # sb_values, sb_log_probs, sb_entropy = policy.policy.evaluate_actions(
+                    #     torch.from_numpy(obs),
+                    #     actions=torch.from_numpy(action),
+                    #     lstm_states=lstm_state_obj,
+                    #     episode_starts=torch.from_numpy(episode_starts),)
+                    # sb_prob = np.exp(sb_log_probs.detach().numpy()).item()
+                    # sb_val = sb_values.detach().item()
+                    # prob = sb_prob
+                    # val = sb_val
                 if isinstance(policy, DQN):
                     action = policy.predict(obs, deterministic=deterministic)
 
@@ -243,13 +285,17 @@ def  evaluate_policy(
                 # reward = env.envs[0].unwrapped.norm.unnormalize_rew(rew)
                 reward = env.envs[0].unwrapped.norm.unnormalize_reward(rew)
 
-            if prob:
-                action_date = list(info[0]['action'].keys())[0]
-                info[0]['prob'] = {action_date: prob}
-                info[0]['dvs'] = {action_date: info[0]['DVS'][action_date]}
+            # if prob:
+            #     action_date = list(info[0]['action'].keys())[0]
+            #     info[0]['prob'] = {action_date: prob}
+            #     info[0]['dvs'] = {action_date: info[0]['DVS'][action_date]}
             if val:
                 val_date = list(info[0]['action'].keys())[0]
                 info[0]['val'] = {val_date: val}
+            if action_probs:
+                action_date = list(info[0]['action'].keys())[0]
+                for key, val in action_probs.items():
+                    info[0][key] = {action_date: val}
 
             action = [amount * 0]
             if policy in ['standard-practice', 'standard-practise']:
@@ -435,7 +481,7 @@ class EvalCallback(BaseCallback):
                 self.model.get_env().save(stats_path)
             episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=self.model.get_env())
             if self.pcse_model:
-                variables = ['action', 'TWSO', 'reward', 'IDWST']
+                variables = ['action', 'TWSO', 'reward', 'IDWST', 'val']
                 if self.po_features: variables.append('measure')
                 cumulative = ['action', 'reward']
             else:
@@ -530,7 +576,7 @@ class EvalCallback(BaseCallback):
 
             if self.pcse_model:
                 variables = ['DVS', 'action', 'TWSO', 'reward',
-                             'fertilizer', 'val', 'IDWST']
+                             'fertilizer', 'val', 'IDWST', 'prob']
                 if self.po_features:
                     variables.append('measure')
                     for p in self.po_features:
@@ -542,6 +588,9 @@ class EvalCallback(BaseCallback):
 
             if 'measure' in variables and not self.env_eval.measure_all:
                 variables = self.replace_measure_variable(variables)
+                for variable in self.env_eval.po_features:  # TODO make tidier
+                    variable = variable + '_probs'
+                    variables += [variable]
 
             keys_figure = [(a, b) for a in self.test_years for b in self.test_locations]
             results_figure = {filter_key: result_model[filter_key] for filter_key in keys_figure}
@@ -583,8 +632,8 @@ class EvalCallback(BaseCallback):
 
                 # measure frequency vs variance
                 if variable.startswith('measure_') and n_year_loc != 0:
-                    fig, ax = plt.subplots()
-                    plot_var_vs_freq_box(results_figure, variable=variable, ax=ax, n_year_loc=n_year_loc)
+                    fig, ax = plt.subplots(figsize=(9,6))
+                    plot_var_vs_freq_scatter(results_figure, variable=variable, ax=ax)
                     self.logger.record(f'figures/var-freq-{variable}', Figure(fig, close=True))
                     plt.close()
             #
