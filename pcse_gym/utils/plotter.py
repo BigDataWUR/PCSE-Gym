@@ -368,6 +368,10 @@ def plot_var_vs_freq_box(results_dict, variable='measure_LAI', ax=None, ylim=Non
 
 def plot_var_vs_freq_scatter(results_dict, variable='measure_LAI', ax=None):
 
+    if variable.startswith('measure_'):
+        variable_type = 'm'
+    else:
+        variable_type = 'p'
     # Function to find the nearest weekly date
     def nearest_weekly_date(date, base_date):
         days_difference = (date - base_date).days
@@ -383,7 +387,10 @@ def plot_var_vs_freq_scatter(results_dict, variable='measure_LAI', ax=None):
     plot_measure = pd.concat(dataframes_list, axis=1)
     plot_measure = plot_measure.sum(axis=1)
 
-    variable = variable.replace("measure_","")
+    if variable_type == 'm':
+        variable = variable.replace("measure_","")
+    else:
+        variable = variable.replace("prob_", "")
 
     dataframes_list = []
     for label, results in results_dict.items():
@@ -397,11 +404,9 @@ def plot_var_vs_freq_scatter(results_dict, variable='measure_LAI', ax=None):
     plot_df = pd.concat([plot_var, plot_measure], axis=1)
     plot_df.dropna(inplace=True)
     plot_df = plot_df.rename(columns={0:'variance', 1: 'measure'})
-    # plot_df = plot_df.sort_values(by=['variance'])
 
     plot_df['Date'] = plot_df.index
 
-    # Convert date strings to datetime objects (considering a non-leap year)
     base_year = 2021  # placeholder non-leap year
     base_date = pd.to_datetime(f'{base_year}-10-01')  # Starting date (1st of October)
     plot_df['Date'] = pd.to_datetime(plot_df['Date'] + f'-{base_year}', format='%m-%d-%Y')
@@ -428,11 +433,14 @@ def plot_var_vs_freq_scatter(results_dict, variable='measure_LAI', ax=None):
 
     ax.set_ylim([-1, 33])
 
-    ax.set_title(f'measuring actions for {variable}', fontsize=10, fontweight='bold', color='green')
+    if variable_type == 'm':
+        ax.set_title(f'{variable} variance vs measuring frequency', fontsize=10, fontweight='bold', color='green')
+        ax.set_ylabel(f'measuring frequency between test years', fontsize=8)
+    else:
+        ax.set_title(f'{variable} variance vs measuring probability', fontsize=10, fontweight='bold', color='green')
+        ax.set_ylabel(f'probability of measuring between test years', fontsize=8)
 
-    ax.set_ylabel(f'measuring frequency between years', fontsize=8)
-
-    ax.set_xlabel(f'Normalized {variable} [{unit}] variance across years and locations', fontsize=8)
+    ax.set_xlabel(f'Normalized {variable} [{unit}] variance across test years', fontsize=8)
 
     return ax
 

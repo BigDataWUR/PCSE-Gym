@@ -611,8 +611,8 @@ class EvalCallback(BaseCallback):
                 self.comet_experiment.log_asset(file_data=os.path.join(dir, f'infos_{self.num_timesteps}.pkl'),
                                                 step=self.num_timesteps,
                                                 file_name=f'infos_{self.num_timesteps}')
-                self.comet_experiment.log_asset(file_data=os.path.join(dir, f'model-{self.num_timesteps}.zip'),
-                                                step=self.num_timesteps,
+                self.comet_experiment.log_model(self.comet_experiment.get_name(),
+                                                os.path.join(dir, f'model-{self.num_timesteps}.zip'),
                                                 file_name=f'model_{self.num_timesteps}')
 
 
