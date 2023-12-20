@@ -250,7 +250,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
 
         if self.index_feature:
             if 'indexes' not in info.keys():
-                info['indexes'] = {}
+                info['indexes'] = OrderedDict()
             info['indexes'] = self.index_feature
 
         return observation, reward, terminated, truncated, info

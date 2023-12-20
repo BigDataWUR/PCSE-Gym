@@ -122,16 +122,17 @@ def compute_average(results_dict: dict, filter_list=None):
     return sum(filtered_results) / len(filtered_results)
 
 
-def get_action_probs(dis : MultiCategoricalDistribution, po_features, measure_all):
+def get_action_probs(dis : MultiCategoricalDistribution, po_features, crop_features, measure_all):
     if po_features:
         dict = {}
         dict['prob_action'] = dis.distribution[0].probs.detach().numpy()[0]
         if measure_all:
             dict['prob_measure'] = dis.distribution[1].probs.detach().numpy()[0][1]
         else:
-            for i, feature in enumerate(po_features, 1):
-                feature = "prob_"+feature
-                dict[feature] = dis.distribution[i].probs.detach().numpy()[0][1]
+            for i, feature in enumerate(crop_features):
+                if feature in po_features:
+                    feature = "prob_"+feature
+                    dict[feature] = dis.distribution[i].probs.detach().numpy()[0][1]
         return dict
     else:
         return None
@@ -226,6 +227,7 @@ def  evaluate_policy(
                                                          episode_starts=torch.from_numpy(episode_starts))
 
                     action_probs = get_action_probs(dis, env.envs[0].unwrapped.po_features,
+                                                    env.envs[0].unwrapped.crop_features,
                                                     env.envs[0].unwrapped.measure_all)
 
                     val = policy.policy.predict_values(torch.from_numpy(obs),
