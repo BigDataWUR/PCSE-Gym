@@ -246,8 +246,7 @@ def train(log_dir, n_steps,
         if random_init:
             tb_log_name = tb_log_name + '-random-init'
         if use_comet:
-            comet_log.set_name(f'{cost_measure}-{tag}-{loc_code}-{n_steps}-{agent}-{reward}-{"normalize" if normalize else ""}-'
-                               f'{"budget-" if n_budget>0 else ""}{"mask_binary" if mask_binary else ""}')
+            comet_log.set_name(f'{tag}-{agent}-{cost_measure}')
             comet_log.add_tag(cost_measure)
         tb_log_name = tb_log_name + '-run'
 
