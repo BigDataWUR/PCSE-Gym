@@ -6,6 +6,34 @@ from collections import defaultdict
 def get_cumulative_variables():
     return ['fertilizer', 'reward']
 
+def get_ylim_dict(n=32):
+    def def_value():
+        return None
+
+    if n == 0:
+        n = 32
+
+    ylim = defaultdict(def_value)
+    ylim['WSO'] = [0, 1000]
+    ylim['TWSO'] = [0, 10000]
+    ylim['measure_SM'] = [0, n]
+    ylim['measure_TAGP'] = [0, n]
+    ylim['measure_random'] = [0, n]
+    ylim['measure_LAI'] = [0, n]
+    ylim['measure_NuptakeTotal'] = [0, n]
+    ylim['measure_NAVAIL'] = [0, n]
+    ylim['measure_SM'] = [0, n]
+    ylim['measure'] = [0, n]
+    ylim['prob_SM'] = [0, 1.0]
+    ylim['prob_TAGP'] = [0, 1.0]
+    ylim['prob_random'] = [0, 1.0]
+    ylim['prob_LAI'] = [0, 1.0]
+    ylim['prob_NuptakeTotal'] = [0, 1.0]
+    ylim['prob_NAVAIL'] = [0, 1.0]
+    ylim['prob_SM'] = [0, 1.0]
+    ylim['prob_measure'] = [0, 1.0]
+    return ylim
+
 def get_titles():
     def def_value(): return ("", "")
 

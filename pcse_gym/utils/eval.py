@@ -22,7 +22,7 @@ from sb3_contrib.common.recurrent.type_aliases import RNNStates
 from sb3_contrib import RecurrentPPO
 import pcse_gym.utils.defaults as defaults
 from pcse_gym.utils.process_pcse_output import get_dict_lintul_wofost
-from .plotter import plot_variable, plot_var_vs_freq_scatter
+from .plotter import plot_variable, plot_var_vs_freq_scatter, get_ylim_dict
 
 
 def compute_median(results_dict: dict, filter_list=None):
@@ -34,27 +34,6 @@ def compute_median(results_dict: dict, filter_list=None):
 
 def get_cumulative_variables():
     return ['fertilizer', 'reward']
-
-
-def get_ylim_dict(n=32):
-    def def_value():
-        return None
-
-    if n == 0:
-        n = 32
-
-    ylim = defaultdict(def_value)
-    ylim['WSO'] = [0, 1000]
-    ylim['TWSO'] = [0, 10000]
-    ylim['measure_SM'] = [0, n]
-    ylim['measure_TAGP'] = [0, n]
-    ylim['measure_random'] = [0, n]
-    ylim['measure_LAI'] = [0, n]
-    ylim['measure_NuptakeTotal'] = [0, n]
-    ylim['measure_NAVAIL'] = [0, n]
-    ylim['measure_SM'] = [0, n]
-    ylim['measure'] = [0, n]
-    return ylim
 
 
 def identity_line(ax=None, ls='--', *args, **kwargs):
