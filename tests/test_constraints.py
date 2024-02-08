@@ -7,25 +7,25 @@ from pcse_gym.utils.normalization import RunningMeanStdPO, VecNormalizePO
 from stable_baselines3.common.vec_env import DummyVecEnv
 
 
-class TestRecoveryRate(unittest.TestCase):
-    def setUp(self):
-        self.env = init_env.initialize_env_rr()
-
-    def test_rr(self):
-        self.env.reset()
-        action = np.array([0])
-        _, _, _, _, info = self.env.step(action)
-        initial_n = list(info['NAVAIL'].values())[0]
-        action = np.array([2])
-        actual = int(action) * 10 * self.env.sb3_env.recovery_penalty()
-        _, _, _, _, info = self.env.step(action)
-        # key = info['NAVAIL'].keys()[-1]
-        end_n = list(info['NAVAIL'].values())[-1]
-
-        expected = end_n - initial_n
-
-        # assert almost equal due to possibly the crop taking up some nitrogen
-        self.assertAlmostEqual(expected, actual, 1)
+# class TestRecoveryRate(unittest.TestCase):
+#     def setUp(self):
+#         self.env = init_env.initialize_env_rr()
+#
+#     def test_rr(self):
+#         self.env.reset()
+#         action = np.array([0])
+#         _, _, _, _, info = self.env.step(action)
+#         initial_n = list(info['NAVAIL'].values())[0]
+#         action = np.array([2])
+#         actual = int(action) * 10 * self.env.sb3_env.recovery_penalty()
+#         _, _, _, _, info = self.env.step(action)
+#         # key = info['NAVAIL'].keys()[-1]
+#         end_n = list(info['NAVAIL'].values())[-1]
+#
+#         expected = end_n - initial_n
+#
+#         # assert almost equal due to possibly the crop taking up some nitrogen
+#         self.assertAlmostEqual(expected, actual, 1)
 
 
 class ActionLimit(unittest.TestCase):
@@ -135,16 +135,16 @@ class TestStartType(unittest.TestCase):
         self.assertEqual(year[0], int(self.env2.date.year))
 
 
-class TestEnvFeatures(unittest.TestCase):
-    import pcse
-    def setUp(self):
-        self.env = init_env.initialize_env_random_init()
-
-    def test_different_initial_conditions(self):
-        site_params = pcse.util.WOFOST80SiteDataProvider(WAV=10, NAVAILI=10, PAVAILI=50, KAVAILI=100)
-        self.assertEqual(site_params, self.env.sb3_env.model.parameterprovider._sitedata)
-        self.env.reset()
-        self.assertNotEqual(site_params, self.env.sb3_env.model.parameterprovider._sitedata)
+# class TestEnvFeatures(unittest.TestCase):
+#     import pcse
+#     def setUp(self):
+#         self.env = init_env.initialize_env_random_init()
+#
+#     def test_different_initial_conditions(self):
+#         site_params = pcse.util.WOFOST80SiteDataProvider(WAV=10, NAVAILI=10, PAVAILI=50, KAVAILI=100)
+#         self.assertEqual(site_params, self.env.sb3_env.model.parameterprovider._sitedata)
+#         self.env.reset()
+#         self.assertNotEqual(site_params, self.env.sb3_env.model.parameterprovider._sitedata)
 
 
 

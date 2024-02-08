@@ -454,7 +454,8 @@ class EvalCallback(BaseCallback):
             episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=self.model.get_env())
 
             if self.pcse_model:
-                variables = ['action', 'TWSO', 'reward', 'IDWST', 'val']
+                variables = ['action', 'TWSO', 'WSO', 'reward', 'IDWST', 'val',
+                             'NLOSSCUM']
                 if self.po_features: variables.append('measure')
                 cumulative = ['action', 'reward']
             else:
@@ -504,7 +505,10 @@ class EvalCallback(BaseCallback):
             log_training = self.get_do_log_training()
 
             env_pcse_evaluation = self.env_eval
-            env_pcse_evaluation = VecNormalize(DummyVecEnv([lambda: env_pcse_evaluation]),
+            if env_pcse_evaluation.normalize:
+                env_pcse_evaluation = DummyVecEnv([lambda: env_pcse_evaluation])
+            else:
+                env_pcse_evaluation = VecNormalize(DummyVecEnv([lambda: env_pcse_evaluation]),
                                                norm_obs=True, norm_reward=True,
                                                clip_obs=10., clip_reward=50., gamma=1)
             env_pcse_evaluation.training = False
@@ -548,12 +552,14 @@ class EvalCallback(BaseCallback):
                 self.logger.record(f'eval/nitrogen-median-train', compute_median(fertilizer, train_keys))
 
             if self.pcse_model:
-                variables = ['DVS', 'action', 'TWSO', 'reward',
-                             'fertilizer', 'val', 'IDWST', 'prob_measure']
+                variables = ['DVS', 'action', 'WSO', 'reward',
+                             'fertilizer', 'val', 'IDWST', 'prob_measure',
+                             'NLOSSCUM', 'WC', 'Ndemand', 'NAVAIL', 'NuptakeTotal',
+                             'SM', 'TAGP', 'LAI']
                 if self.po_features:
                     variables.append('measure')
-                    for p in self.po_features:
-                        variables.append(p)
+                    # for p in self.po_features:
+                    #     variables.append(p)
                 if self.env_eval.reward_function == 'ANE': variables.append('moving_ANE')
             else:
                 variables = ['action', 'WSO', 'reward', 'TNSOIL', 'val']
@@ -603,12 +609,12 @@ class EvalCallback(BaseCallback):
                     self.logger.record(f'figures/med-{variable}', Figure(fig, close=True))
                 plt.close()
 
-                # measure frequency vs variance
-                if variable.startswith('measure_') or variable.startswith('prob_') and not self.env_eval.measure_all:
-                    fig, ax = plt.subplots(figsize=(9,6))
-                    plot_var_vs_freq_scatter(results_figure, variable=variable, ax=ax)
-                    self.logger.record(f'figures/var-freq-{variable}', Figure(fig, close=True))
-                    plt.close()
+                # # measure frequency vs variance
+                # if variable.startswith('measure_') or variable.startswith('prob_') and not self.env_eval.measure_all:
+                #     fig, ax = plt.subplots(figsize=(9,6))
+                #     plot_var_vs_freq_scatter(results_figure, variable=variable, ax=ax)
+                #     self.logger.record(f'figures/var-freq-{variable}', Figure(fig, close=True))
+                #     plt.close()
             #
             # # create heatmap plot
             # if self.po_features:

@@ -14,7 +14,7 @@ def get_ylim_dict(n=32):
         n = 32
 
     ylim = defaultdict(def_value)
-    ylim['WSO'] = [0, 1000]
+    ylim['WSO'] = [0, 10000]
     ylim['TWSO'] = [0, 10000]
     ylim['measure_SM'] = [0, n]
     ylim['measure_TAGP'] = [0, n]
@@ -247,6 +247,11 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
 
 
     if plot_average:
+        # get top soil layer
+        if variable in ['SM', 'NH4', 'NO3', 'WC']:
+            for k, v in results_dict.items():
+                for key in v[0][variable].keys():
+                    results_dict[k][0][variable][key] = results_dict[k][0][variable][key][0]
         dataframes_list = []
         for label, results in results_dict.items():
             gen = doy_generator()  # restart the generator

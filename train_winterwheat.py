@@ -172,7 +172,7 @@ def train(log_dir, n_steps,
                 api_key = f.readline()
             comet_log = Experiment(
                 api_key=api_key,
-                project_name="cropGym_measure",
+                project_name="cropGym_new_wofost",
                 workspace="pcse-gym",
                 log_code=True,
                 log_graph=True,

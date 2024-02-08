@@ -108,11 +108,11 @@ def get_config_dir():
 
 def get_wofost_kwargs(config_dir=get_config_dir(), soil_file='ec3.CAB', agro_file='wheat_cropcalendar_sow.yaml'):
     wofost_kwargs = dict(
-        model_config=os.path.join(config_dir, 'Wofost81_NWLP_FD.conf'),
+        model_config=os.path.join(config_dir, 'Wofost8_ML_SNOMIN.conf'),
         agro_config=os.path.join(config_dir, 'agro', agro_file),
         crop_parameters=pcse.fileinput.YAMLCropDataProvider(fpath=os.path.join(config_dir, 'crop'), force_reload=True),
-        site_parameters=pcse.util.WOFOST80SiteDataProvider(WAV=10, NAVAILI=10, PAVAILI=50, KAVAILI=100),
-        soil_parameters=pcse.fileinput.CABOFileReader(os.path.join(config_dir, 'soil', soil_file))
+        site_parameters=yaml.safe_load(open(os.path.join(config_dir, 'site', 'arminda_site.yaml'))),
+        soil_parameters=yaml.safe_load(open(os.path.join(config_dir, 'soil', 'arminda_soil.yaml')))
     )
     return wofost_kwargs
 
@@ -139,7 +139,7 @@ def get_model_kwargs(pcse_model, loc=defaults.get_default_location(), start_type
         else:
             agro_file = 'wheat_cropcalendar_emergence_lt.yaml'
     else:
-        soil_file = 'ec2.CAB'
+        soil_file = 'arminda_soil.yaml'
         if start_type == 'sowing':
             agro_file = 'wheat_cropcalendar_sow_nl.yaml'
         else:
@@ -204,8 +204,16 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
 
     def _apply_action(self, action):
         amount = action * self.action_multiplier
-        self._model._send_signal(signal=pcse.signals.apply_n, N_amount=amount * 10, N_recovery=0.7,
-                                 amount=amount, recovery=0.7)
+        self._model._send_signal(signal=pcse.signals.apply_n,
+                                 amount=amount,
+                                 application_depth=10.,
+                                 cnratio=0.,
+                                 f_orgmat=0.,
+                                 f_NH4N=0.5,
+                                 f_NO3N=0.5,
+                                 initial_age=0,
+                                 recovery=0.7
+                                 )
 
     def _get_reward(self):
         # Reward gets overwritten in step()
@@ -277,7 +285,10 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
             if feature == 'random':
                 obs[i] = np.clip(self.rng.normal(10, 10), 0.0, None)
             else:
-                obs[i] = observation['crop_model'][feature][-1]
+                if feature in ['SM', 'NH4', 'NO3', 'WC']:
+                    obs[i] = observation['crop_model'][feature][-1][0]
+                else:
+                    obs[i] = observation['crop_model'][feature][-1]
 
         if not self.no_weather:
             # for i, feature in enumerate(self.action_features):

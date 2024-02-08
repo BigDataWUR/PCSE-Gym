@@ -362,7 +362,8 @@ class PCSEEnv(gym.Env):
         # Apply action
         if isinstance(action, np.ndarray):
             action = action[0]
-        self._apply_action(action)
+        if action:
+            self._apply_action(action)
 
         # Run the crop growth model
         self._model.run(days=self._timestep)
