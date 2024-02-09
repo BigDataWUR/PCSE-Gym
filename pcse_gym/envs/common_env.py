@@ -150,10 +150,16 @@ class Engine(pcse.engine.Engine):
     def run(self, days=1, action=0):
         """Advances the system state with given number of days"""
 
+        # do action at end of time step
+        days_counter = days
         days_done = 0
         while (days_done < days) and (self.flag_terminate is False):
             days_done += 1
-            self._run(action)
+            days_counter -= 1
+            if days_counter > 0:
+                self._run(0)
+            else:
+                self._run(action)
 
     @property
     def terminated(self):
