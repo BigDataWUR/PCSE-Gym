@@ -191,6 +191,14 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
             if feature in self.po_features:
                 self.index_feature[feature] = i
 
+        cgm_kwargs = kwargs.get('model_config', '')
+        if 'lintul' in cgm_kwargs:
+            self.multiplier_amount = 1
+            print('Using Lintul!')
+        elif 'Wofost' in cgm_kwargs:
+            self.multiplier_amount = 10
+            print('Using Wofost!')
+
         super().reset(seed=seed)
 
     def _get_observation_space(self):
@@ -203,17 +211,9 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         return gym.spaces.Box(-10, np.inf, shape=(nvars,))
 
     def _apply_action(self, action):
-        amount = action * self.action_multiplier
-        self._model._send_signal(signal=pcse.signals.apply_n,
-                                 amount=amount,
-                                 application_depth=10.,
-                                 cnratio=0.,
-                                 f_orgmat=0.,
-                                 f_NH4N=0.5,
-                                 f_NO3N=0.5,
-                                 initial_age=0,
-                                 recovery=0.7
-                                 )
+        action = action * self.action_multiplier
+        action = action * self.multiplier_amount
+        return action
 
     def _get_reward(self):
         # Reward gets overwritten in step()
