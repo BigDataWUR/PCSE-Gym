@@ -113,6 +113,48 @@ class Engine(pcse.engine.Engine):
         super().__init__(*args, **kwargs)
         self._flag_terminated = False
 
+    def _run(self, action):
+        """Make one time step of the simulation.
+        """
+
+        # Update timer
+        self.day, delt = self.timer()
+
+        # State integration
+        self.integrate(self.day, delt)
+
+        # Driving variables
+        self.drv = self._get_driving_variables(self.day)
+
+        # Agromanagement decisions
+        self.agromanager(self.day, self.drv)
+
+        if action > 0:
+            self._send_signal(signal=pcse.signals.apply_n,
+                             amount=action,
+                             application_depth=10.,
+                             cnratio=0.,
+                             f_orgmat=0.,
+                             f_NH4N=0.5,
+                             f_NO3N=0.5,
+                             initial_age=0,
+                             recovery=0.7
+                             )
+
+        # Rate calculation
+        self.calc_rates(self.day, self.drv)
+
+        if self.flag_terminate is True:
+            self._terminate_simulation(self.day)
+
+    def run(self, days=1, action=0):
+        """Advances the system state with given number of days"""
+
+        days_done = 0
+        while (days_done < days) and (self.flag_terminate is False):
+            days_done += 1
+            self._run(action)
+
     @property
     def terminated(self):
         return self._flag_terminated
@@ -362,11 +404,11 @@ class PCSEEnv(gym.Env):
         # Apply action
         if isinstance(action, np.ndarray):
             action = action[0]
-        if action:
-            self._apply_action(action)
+        # if action:
+        #     self._apply_action(action)
 
         # Run the crop growth model
-        self._model.run(days=self._timestep)
+        self._model.run(days=self._timestep, action=action)
         # Get the model output
         output = self._model.get_output()[-self._timestep:]
         info['days'] = [day['day'] for day in output]
