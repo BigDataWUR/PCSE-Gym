@@ -57,6 +57,17 @@ class Rewards:
         reward, growth = ane_obj.reward(output, output_baseline, amount)
         return reward, growth
 
+    def end_reward(self, end_obj, output, output_baseline, amount):
+        end_obj.calculate_cost_cumulative(amount)
+        end_obj.calculate_positive_reward_cumulative(output, output_baseline)
+        reward = 0 - amount * self.costs_nitrogen
+        growth = process_pcse.compute_growth_storage_organ(output, self.timestep)
+
+        return reward, growth
+
+    def calc_misc_cost(self, end_obj, cost):
+        end_obj.calculate_misc_cumulative_cost(cost)
+
     # TODO nitrogen use efficiency reward; WIP
     def nue_reward(self, output, amount):
         assert 'NuptakeTotal' and 'NLossesTotal' and 'NfixTotal' in \
@@ -86,12 +97,64 @@ class Rewards:
     @staticmethod
     def various_costs():
         return dict(
-            to_the_field=10,
+            to_the_field=100,
             fertilizer=1,
             environmental=2
         )
 
-    #ane_reward object
+    class ContainerEND:
+        '''
+        Container to keep track of cumulative positive rewards for end of timestep
+        '''
+        def __init__(self, timestep, costs_nitrogen=10.0):
+            self.timestep = timestep
+            self.costs_nitrogen = costs_nitrogen
+
+            self.cum_growth = 0
+            self.cum_amount = 0
+            self.cum_positive_reward = 0
+            self.cum_cost = 0
+            self.cum_misc_cost = 0
+
+        def reset(self):
+            self.cum_growth = 0
+            self.cum_amount = 0
+            self.cum_positive_reward = 0
+            self.cum_cost = 0
+            self.cum_misc_cost = 0
+
+        def growth_storage_organ_wo_cost(self, output):
+            return process_pcse.compute_growth_storage_organ(output, self.timestep)
+
+        def default_winterwheat_reward_wo_cost(self, output, output_baseline):
+            growth = process_pcse.compute_growth_storage_organ(output, self.timestep)
+            growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep)
+            benefits = growth - growth_baseline
+            return benefits, growth
+
+        def calculate_cost_cumulative(self, amount):
+            self.cum_amount += amount
+            self.cum_cost += amount * self.costs_nitrogen
+
+        def calculate_misc_cumulative_cost(self, cost):
+            self.cum_misc_cost += cost
+
+        def calculate_positive_reward_cumulative(self, output, output_baseline=None):
+            if not output_baseline:
+                benefits = self.default_winterwheat_reward_wo_cost(output, output_baseline)
+            else:
+                benefits = self.growth_storage_organ_wo_cost(output)
+            self.cum_positive_reward += benefits
+
+        @property
+        def dump_cumulative_positive_reward(self) -> float:
+            return self.cum_positive_reward
+
+        @property
+        def dump_cumulative_cost(self) -> float:
+            return self.cum_cost + self.cum_misc_cost
+
+    # ane_reward object
     class ContainerANE:
         """
         A container to keep track of the cumulative ratio of kg grain / kg N
