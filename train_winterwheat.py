@@ -158,8 +158,8 @@ def train(log_dir, n_steps,
             # hyperparams['policy_kwargs']['optimizer_class'] = RMSpropTFLike
             # hyperparams['policy_kwargs']['optimizer_kwargs'] = dict(eps=0.00001)
         if agent == 'DQN':
-            hyperparams = {'exploration_fraction': 0.1, 'exploration_initial_eps': 1.0,
-                           'exploration_final_eps': 0.01,
+            hyperparams = {'exploration_fraction': 0.3, 'exploration_initial_eps': 1.0,
+                           'exploration_final_eps': 0.001,
                            'policy_kwargs': get_policy_kwargs(n_crop_features=len(crop_features),
                                                               n_weather_features=len(weather_features),
                                                               n_action_features=len(action_features))

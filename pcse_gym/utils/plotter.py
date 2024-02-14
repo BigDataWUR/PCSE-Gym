@@ -245,6 +245,10 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
         if not plot_average:
             ax.step(x, y, label=label, where='post')
 
+    if variable == 'reward':
+        where = 'pre'
+    else:
+        where = 'post'
 
     if plot_average:
         # get top soil layer
@@ -264,16 +268,16 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
         if variable in cumulative_variables: plot_df = plot_df.apply(np.cumsum, axis=0)
         if variable.startswith("measure"):
             plot_df.ffill(inplace=True)
-            ax.step(plot_df.index, plot_df.sum(axis=1), 'k-', where='post')
-            ax.fill_between(plot_df.index, plot_df.min(axis=1), plot_df.sum(axis=1), color='g', step='post')
+            ax.step(plot_df.index, plot_df.sum(axis=1), 'k-', where=where)
+            ax.fill_between(plot_df.index, plot_df.min(axis=1), plot_df.sum(axis=1), color='g', step=where)
         elif variable == 'action':
             plot_df.fillna(0, inplace=True)
-            ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where='post')
-            ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step='post')
+            ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where=where)
+            ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step=where)
         else:
             plot_df.ffill(axis=0, inplace=True)
-            ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where='post')
-            ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step='post')
+            ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where=where)
+            ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step=where)
 
     ax.axhline(y=0, color='lightgrey', zorder=1)
     ax.margins(x=0)

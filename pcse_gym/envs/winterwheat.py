@@ -12,7 +12,7 @@ from .constraints import VariableRecoveryRate
 from .measure import MeasureOrNot
 from .sb3 import ZeroNitrogenEnvStorage, StableBaselinesWrapper
 from .rewards import Rewards
-from .rewards import reward_functions_without_baseline
+from .rewards import reward_functions_without_baseline, reward_functions_end
 
 
 class WinterWheat(gym.Env):
@@ -74,7 +74,7 @@ class WinterWheat(gym.Env):
         if self.reward_function == 'ANE':
             self.ane = self.rewards.ContainerANE(self.timestep)
 
-        if self.reward_function == 'END':
+        if self.reward_function in reward_functions_end():
             self.end = self.rewards.ContainerEND(self.timestep, costs_nitrogen)
 
         if self.po_features:
@@ -142,7 +142,7 @@ class WinterWheat(gym.Env):
                 info['moving_ANE'] = {}
             info['moving_ANE'][self.date] = self.ane.moving_ane
 
-        if terminated and self.reward_function == 'END':
+        if terminated and self.reward_function in reward_functions_end():
             reward = self.end.dump_cumulative_positive_reward - reward
 
         # normalize observations and reward if not using VecNormalize wrapper
@@ -166,7 +166,7 @@ class WinterWheat(gym.Env):
             reward, growth = self.get_reward_and_growth(output, amount)
             obs, cost = self.measure_features.measure_act(obs, measure)
             measurement_cost = sum(cost)
-            if self.reward_function == "END":
+            if self.reward_function in reward_functions_end():
                 self.rewards.calc_misc_cost(self.end, measurement_cost)
             reward -= measurement_cost
             return obs, reward, growth
@@ -200,7 +200,7 @@ class WinterWheat(gym.Env):
             return self.rewards.growth_storage_organ(output, amount)
         elif self.reward_function == 'DEP':
             return self.rewards.deployment_reward(output, amount)
-        elif self.reward_function == 'END':
+        elif self.reward_function in reward_functions_end():
             return self.rewards.end_reward(self.end, output, output_baseline, amount)
         else:
             return self.rewards.default_winterwheat_reward(output, output_baseline, amount)
@@ -247,9 +247,10 @@ class WinterWheat(gym.Env):
         if isinstance(self.locations, list):
             location = self.locations[self.np_random.choice(len(self.locations), 1)[0]]
             self.set_location(location)
+
         if self.reward_function == 'ANE':
             self.ane.reset()
-        if self.reward_function == 'END':
+        if self.reward_function in reward_functions_end():
             self.end.reset()
         if self.reward_function not in reward_functions_without_baseline():
             self.baseline_env.reset(seed=seed, options=site_params)

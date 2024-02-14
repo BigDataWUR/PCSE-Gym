@@ -2,7 +2,12 @@ import pcse_gym.utils.process_pcse_output as process_pcse
 
 
 def reward_functions_without_baseline():
-    return ['GRO', 'DEP']
+    return ['GRO', 'DEP', 'ENY']
+
+
+def reward_functions_end():
+    return ['END', 'ENY']
+
 
 class Rewards:
     def __init__(self, reward_var, timestep, costs_nitrogen=10.0, vrr=0.7):
@@ -110,18 +115,18 @@ class Rewards:
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
 
-            self.cum_growth = 0
-            self.cum_amount = 0
-            self.cum_positive_reward = 0
-            self.cum_cost = 0
-            self.cum_misc_cost = 0
+            self.cum_growth = .0
+            self.cum_amount = .0
+            self.cum_positive_reward = .0
+            self.cum_cost = .0
+            self.cum_misc_cost = .0
 
         def reset(self):
-            self.cum_growth = 0
-            self.cum_amount = 0
-            self.cum_positive_reward = 0
-            self.cum_cost = 0
-            self.cum_misc_cost = 0
+            self.cum_growth = .0
+            self.cum_amount = .0
+            self.cum_positive_reward = .0
+            self.cum_cost = .0
+            self.cum_misc_cost = .0
 
         def growth_storage_organ_wo_cost(self, output):
             return process_pcse.compute_growth_storage_organ(output, self.timestep)
@@ -130,7 +135,7 @@ class Rewards:
             growth = process_pcse.compute_growth_storage_organ(output, self.timestep)
             growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep)
             benefits = growth - growth_baseline
-            return benefits, growth
+            return benefits
 
         def calculate_cost_cumulative(self, amount):
             self.cum_amount += amount
@@ -141,9 +146,9 @@ class Rewards:
 
         def calculate_positive_reward_cumulative(self, output, output_baseline=None):
             if not output_baseline:
-                benefits = self.default_winterwheat_reward_wo_cost(output, output_baseline)
-            else:
                 benefits = self.growth_storage_organ_wo_cost(output)
+            else:
+                benefits = self.default_winterwheat_reward_wo_cost(output, output_baseline)
             self.cum_positive_reward += benefits
 
         @property
