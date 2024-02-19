@@ -121,20 +121,34 @@ def initialize_env_measure_po_normalize_extend():
 def initialize_env_measure_no_cost():
     return initialize_env(po_features=get_po_features(), cost_measure='no')
 
+
 def initialize_env_measure_same_cost():
     return initialize_env(po_features=get_po_features(), cost_measure='same')
+
 
 def initialize_env_sow():
     return initialize_env(start_type='sowing')
 
+
 def initialize_env_emergence():
     return initialize_env(start_type='emergence')
+
 
 def initialize_env_random_init():
     return initialize_env(random_init=True)
 
+
 def initialize_env_multiplier():
     return initialize_env(po_features=get_po_features(), m_multiplier=10)
 
+
 def initialize_env_non_selective():
     return initialize_env(po_features=get_po_features(), measure_all=True)
+
+
+def initialize_env_end_reward():
+    return initialize_env(reward='END')
+
+
+def initialize_env_eny_reward():
+    return initialize_env(reward='ENY')

@@ -76,6 +76,7 @@ class WinterWheat(gym.Env):
 
         if self.reward_function in reward_functions_end():
             self.end = self.rewards.ContainerEND(self.timestep, costs_nitrogen)
+            self.ended = False
 
         if self.po_features:
             self.__measure = MeasureOrNot(self.sb3_env, extend_obs=self.mask_binary,
@@ -142,8 +143,12 @@ class WinterWheat(gym.Env):
                 info['moving_ANE'] = {}
             info['moving_ANE'][self.date] = self.ane.moving_ane
 
+        # if output[-1]['DVS'] == 2.0 and self.ended is False and self.reward_function in reward_functions_end():
+        #     self.ended = True
+        #     reward = self.end.dump_cumulative_positive_reward - abs(reward)
+
         if terminated and self.reward_function in reward_functions_end():
-            reward = self.end.dump_cumulative_positive_reward - reward
+            reward = self.end.dump_cumulative_positive_reward - abs(reward)
 
         # normalize observations and reward if not using VecNormalize wrapper
         if self.normalize:
@@ -252,6 +257,7 @@ class WinterWheat(gym.Env):
             self.ane.reset()
         if self.reward_function in reward_functions_end():
             self.end.reset()
+            self.ended = False
         if self.reward_function not in reward_functions_without_baseline():
             self.baseline_env.reset(seed=seed, options=site_params)
         obs = self.sb3_env.reset(seed=seed, options=site_params)

@@ -528,8 +528,8 @@ class EvalCallback(BaseCallback):
                     if self.po_features:
                         episode_infos = get_measure_graphs(episode_infos)
                     fertilizer[my_key] = sum(episode_infos[0]['fertilizer'].values())
-                    self.logger.record(f'eval/reward-{my_key}', reward[my_key])
-                    self.logger.record(f'eval/nitrogen-{my_key}', fertilizer[my_key])
+                    # self.logger.record(f'eval/reward-{my_key}', reward[my_key])
+                    # self.logger.record(f'eval/nitrogen-{my_key}', fertilizer[my_key])
                     result_model[my_key] = episode_infos
                     if log_training:
                         n_year_loc = 0
@@ -550,6 +550,11 @@ class EvalCallback(BaseCallback):
                 self.logger.record(f'eval/nitrogen-average-train', compute_average(fertilizer, train_keys))
                 self.logger.record(f'eval/reward-median-train', compute_median(reward, train_keys))
                 self.logger.record(f'eval/nitrogen-median-train', compute_median(fertilizer, train_keys))
+
+            self.logger.record(f'eval/reward-average-all', compute_average(reward))
+            self.logger.record(f'eval/nitrogen-average-all', compute_average(fertilizer))
+            self.logger.record(f'eval/reward-median-all', compute_median(reward))
+            self.logger.record(f'eval/nitrogen-median-all', compute_median(fertilizer))
 
             if self.pcse_model:
                 variables = ['DVS', 'action', 'WSO', 'reward',
@@ -587,7 +592,6 @@ class EvalCallback(BaseCallback):
                 self.comet_experiment.log_model(self.comet_experiment.get_name(),
                                                 os.path.join(dir, f'model-{self.num_timesteps}.zip'),
                                                 file_name=f'model_{self.num_timesteps}')
-
 
             # create variable plot
             for i, variable in enumerate(variables):

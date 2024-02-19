@@ -245,10 +245,7 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
         if not plot_average:
             ax.step(x, y, label=label, where='post')
 
-    if variable == 'reward':
-        where = 'pre'
-    else:
-        where = 'post'
+    where = 'post'
 
     if plot_average:
         # get top soil layer
