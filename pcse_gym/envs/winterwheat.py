@@ -12,7 +12,7 @@ from .constraints import VariableRecoveryRate
 from .measure import MeasureOrNot
 from .sb3 import ZeroNitrogenEnvStorage, StableBaselinesWrapper
 from .rewards import Rewards
-from .rewards import reward_functions_without_baseline, reward_functions_end
+from .rewards import reward_functions_without_baseline, reward_functions_end, calculate_nue
 
 
 class WinterWheat(gym.Env):
@@ -57,7 +57,6 @@ class WinterWheat(gym.Env):
             self.list_wav_nav = [self.eval_wav, self.eval_nav]
         self.rng, self.seed = gym.utils.seeding.np_random(seed=seed)
 
-
         if self.reward_function not in reward_functions_without_baseline():
             self._env_baseline = self._initialize_sb_wrapper(seed, *args, **kwargs)
         self._env = self._initialize_sb_wrapper(seed, *args, **kwargs)
@@ -76,6 +75,10 @@ class WinterWheat(gym.Env):
 
         if self.reward_function in reward_functions_end():
             self.end = self.rewards.ContainerEND(self.timestep, costs_nitrogen)
+            self.ended = False
+
+        if self.reward_function == 'NUE':
+            self.nue = self.rewards.ContainerNUE(self.timestep, costs_nitrogen)
             self.ended = False
 
         if self.po_features:
@@ -150,6 +153,14 @@ class WinterWheat(gym.Env):
         if terminated and self.reward_function in reward_functions_end():
             reward = self.end.dump_cumulative_positive_reward - abs(reward)
 
+        if terminated and self.reward_function == 'NUE':
+            n_so = output[-1]['NamountSO']
+            cum_actions = self.nue.actions * 10
+            reward = self.nue.calculate_reward_nue(cum_actions, n_so, year=self.date.year)
+            if 'NUE' not in info.keys():
+                info['NUE'] = {}
+            info['NUE'][self.date] = calculate_nue(cum_actions, n_so, year=self.date.year)
+
         # normalize observations and reward if not using VecNormalize wrapper
         if self.normalize:
             measure = None
@@ -173,6 +184,8 @@ class WinterWheat(gym.Env):
             measurement_cost = sum(cost)
             if self.reward_function in reward_functions_end():
                 self.rewards.calc_misc_cost(self.end, measurement_cost)
+            elif self.reward_function == 'NUE':
+                self.rewards.calc_misc_cost(self.nue, measurement_cost)
             reward -= measurement_cost
             return obs, reward, growth
         else:
@@ -200,15 +213,17 @@ class WinterWheat(gym.Env):
         if self.reward_function == 'ANE':
             return self.rewards.ane_reward(self.ane, output, output_baseline, amount)
         elif self.reward_function == 'DEF':
-            return self.rewards.default_winterwheat_reward(output, output_baseline, amount)
+            return self.rewards.default_winterwheat_reward(output, output_baseline, amount, self.sb3_env.multiplier_amount)
         elif self.reward_function == 'GRO':
-            return self.rewards.growth_storage_organ(output, amount)
+            return self.rewards.growth_storage_organ(output, amount, self.sb3_env.multiplier_amount)
         elif self.reward_function == 'DEP':
-            return self.rewards.deployment_reward(output, amount)
+            return self.rewards.deployment_reward(output, amount, self.sb3_env.multiplier_amount)
         elif self.reward_function in reward_functions_end():
-            return self.rewards.end_reward(self.end, output, output_baseline, amount)
+            return self.rewards.end_reward(self.end, output, output_baseline, amount, self.sb3_env.multiplier_amount)
+        elif self.reward_function == 'NUE':
+            return self.rewards.nue_reward(self.nue, output, output_baseline, amount, self.sb3_env.multiplier_amount)
         else:
-            return self.rewards.default_winterwheat_reward(output, output_baseline, amount)
+            return self.rewards.default_winterwheat_reward(output, output_baseline, amount, self.sb3_env.multiplier_amount)
 
     def overwrite_year(self, year):
         self.years = year
@@ -257,6 +272,9 @@ class WinterWheat(gym.Env):
             self.ane.reset()
         if self.reward_function in reward_functions_end():
             self.end.reset()
+            self.ended = False
+        if self.reward_function == 'NUE':
+            self.nue.reset()
             self.ended = False
         if self.reward_function not in reward_functions_without_baseline():
             self.baseline_env.reset(seed=seed, options=site_params)

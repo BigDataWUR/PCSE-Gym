@@ -108,7 +108,7 @@ def get_config_dir():
 
 def get_wofost_kwargs(config_dir=get_config_dir(), soil_file='ec3.CAB', agro_file='wheat_cropcalendar_sow.yaml'):
     wofost_kwargs = dict(
-        model_config=os.path.join(config_dir, 'Wofost8_ML_SNOMIN.conf'),
+        model_config=os.path.join(config_dir, 'Wofost81_NWLP_MLWB_SNOMIN.conf'),
         agro_config=os.path.join(config_dir, 'agro', agro_file),
         crop_parameters=pcse.fileinput.YAMLCropDataProvider(fpath=os.path.join(config_dir, 'crop'), force_reload=True),
         site_parameters=yaml.safe_load(open(os.path.join(config_dir, 'site', 'arminda_site.yaml'))),
@@ -236,7 +236,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         # populate reward
         pcse_output = self.model.get_output()
         amount = action * self.action_multiplier
-        reward, growth = self.rewards.growth_storage_organ(pcse_output, amount)
+        reward, growth = self.rewards.growth_storage_organ(pcse_output, amount, self.multiplier_amount)
 
         # populate info
         crop_info = pd.DataFrame(pcse_output).set_index("day").fillna(value=np.nan)
@@ -249,7 +249,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         # start_date is beginning of the week
         # self.date is the end of the week (if timestep=7)
         info = update_info(info, 'action', start_date, action)
-        info = update_info(info, 'fertilizer', start_date, amount*10 if 'TWSO' in pcse_output[0].keys() else amount)
+        info = update_info(info, 'fertilizer', start_date, amount*self.multiplier_amount)
         info = update_info(info, 'reward', self.date, reward)
         if measure is not None:
             info = update_info(info, 'measure', start_date, measure)

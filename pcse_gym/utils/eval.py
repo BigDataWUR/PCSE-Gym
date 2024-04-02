@@ -22,6 +22,7 @@ from sb3_contrib.common.recurrent.type_aliases import RNNStates
 from sb3_contrib import RecurrentPPO
 import pcse_gym.utils.defaults as defaults
 from pcse_gym.utils.process_pcse_output import get_dict_lintul_wofost
+from pcse_gym.envs.rewards import calculate_nue
 from .plotter import plot_variable, plot_var_vs_freq_scatter, get_ylim_dict
 
 
@@ -430,6 +431,12 @@ class EvalCallback(BaseCallback):
                 cumulative += [variable]
         return (variables, cumulative) if cumulative else variables
 
+    def get_nue(self, episode_infos):
+        n_so = list(episode_infos[0]['NamountSO'].values())[-1]
+        n_in = np.cumsum(list(episode_infos[0]['fertilizer'].values()))[-1]
+        n_year = list(episode_infos[0]['NamountSO'].keys())[-1].year
+        return calculate_nue(n_input=n_in, n_so=n_so, year=n_year)
+
     def _on_step(self):
         train_year = self.model.get_env().get_attr("date")[0].year
         self.histogram_training_years[train_year] = self.histogram_training_years[train_year] + 1
@@ -453,8 +460,11 @@ class EvalCallback(BaseCallback):
             # evaluate model and get rewards and infos
             episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=self.model.get_env())
 
+            if self.env_eval.reward_function == 'NUE':
+                nue = self.get_nue(episode_infos)
+
             if self.pcse_model:
-                variables = ['action', 'TWSO', 'WSO', 'reward', 'IDWST',
+                variables = ['action', 'WSO', 'reward', 'IDWST',
                              'NLOSSCUM']
                 if self.po_features: variables.append('measure')
                 cumulative = ['action', 'reward']
@@ -501,7 +511,7 @@ class EvalCallback(BaseCallback):
             ax.set_xticklabels(list(self.histogram_training_locations.keys()), fontdict=None, minor=False)
             self.logger.record(f'figures/training-locations', Figure(fig, close=True))
 
-            reward, fertilizer, result_model = {}, {}, {}
+            reward, fertilizer, result_model, WSO, NUE = {}, {}, {}, {}, {}
             log_training = self.get_do_log_training()
 
             env_pcse_evaluation = self.env_eval
@@ -528,6 +538,9 @@ class EvalCallback(BaseCallback):
                     if self.po_features:
                         episode_infos = get_measure_graphs(episode_infos)
                     fertilizer[my_key] = sum(episode_infos[0]['fertilizer'].values())
+                    WSO[my_key] = list(episode_infos[0]['WSO'].values())[-1]
+                    if self.env_eval.reward_function == 'NUE':
+                        NUE[my_key] = self.get_nue(episode_infos)
                     # self.logger.record(f'eval/reward-{my_key}', reward[my_key])
                     # self.logger.record(f'eval/nitrogen-{my_key}', fertilizer[my_key])
                     result_model[my_key] = episode_infos
@@ -541,8 +554,12 @@ class EvalCallback(BaseCallback):
                 self.logger.record(f'eval/reward-average-test-{test_location}', compute_average(reward, test_keys))
                 self.logger.record(f'eval/nitrogen-average-test-{test_location}',
                                    compute_average(fertilizer, test_keys))
+                self.logger.record(f'eval/WSO-average-test-{test_location}', compute_average(WSO, test_keys))
+                self.logger.record(f'eval/NUE-average-test-{test_location}', compute_average(NUE, test_keys))
                 self.logger.record(f'eval/reward-median-test-{test_location}', compute_median(reward, test_keys))
                 self.logger.record(f'eval/nitrogen-median-test-{test_location}', compute_median(fertilizer, test_keys))
+                self.logger.record(f'eval/WSO-median-test-{test_location}', compute_median(WSO, test_keys))
+                self.logger.record(f'eval/NUE-median-test-{test_location}', compute_median(NUE, test_keys))
 
             if log_training:
                 train_keys = [(a, b) for a in self.train_years for b in self.train_locations]
@@ -553,8 +570,12 @@ class EvalCallback(BaseCallback):
 
             self.logger.record(f'eval/reward-average-all', compute_average(reward))
             self.logger.record(f'eval/nitrogen-average-all', compute_average(fertilizer))
+            self.logger.record(f'eval/WSO-average-all', compute_average(WSO))
+            self.logger.record(f'eval/NUE-average-all', compute_average(NUE))
             self.logger.record(f'eval/reward-median-all', compute_median(reward))
             self.logger.record(f'eval/nitrogen-median-all', compute_median(fertilizer))
+            self.logger.record(f'eval/WSO-median-all', compute_median(WSO))
+            self.logger.record(f'eval/NUE-median-all', compute_median(NUE))
 
             if self.pcse_model:
                 variables = ['DVS', 'action', 'WSO', 'reward',
