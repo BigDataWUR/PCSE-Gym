@@ -37,7 +37,6 @@ class Rewards:
         reward = benefits - costs
         return reward, growth
 
-    # TODO reward based on cost if deploying in the field, to be tested; WIP
     def deployment_reward(self, output, amount, multiplier=10, vrr=None):
         """
         reward function that mirrors a realistic (financial) cost of DT deployment in a field
@@ -82,22 +81,6 @@ class Rewards:
     def calc_misc_cost(self, end_obj, cost):
         end_obj.calculate_misc_cumulative_cost(cost)
 
-    # TODO nitrogen use efficiency reward; WIP
-    # def nue_reward(self, output, amount):
-    #     assert 'NuptakeTotal' and 'NLossesTotal' and 'NfixTotal' in \
-    #            self.reward_var, f"reward_var does not contain NuptakeTotal, NLossesTotal or NfixTotal"
-    #
-    #
-    #     n_upt = output[-1][self.reward_var]
-    #     if n_upt is None: n_upt = 0.0
-    #     n_loss = output[-1][self.reward_var]
-    #     n_fix = output[-1][self.reward_var]
-    #     fert = amount  # *costs_nitrogen
-    #     crop_output = n_upt + n_loss
-    #     crop_input = n_fix + fert
-    #     nue = crop_output / crop_input
-    #     return nue
-
     # TODO create reward surrounding crop N demand; WIP
     def n_demand_yield_reward(self, output, multiplier=10):
         assert 'TWSO' and 'Ndemand' in self.reward_var, f"reward_var does not contain TWSO and Ndemand"
@@ -108,13 +91,86 @@ class Rewards:
         print(f"the benefits are {benefits}")
         return benefits, growth
 
-    @staticmethod
-    def various_costs():
-        return dict(
-            to_the_field=100,
-            fertilizer=1,
-            environmental=2
-        )
+    class DEF:
+        def __init__(self, timestep, costs_nitrogen):
+            self.timestep = timestep
+            self.costs_nitrogen = costs_nitrogen
+
+        def return_reward(self, output, amount, output_baseline=None, multiplier=10, obj=None):
+            growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
+            growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep, multiplier)
+            benefits = growth - growth_baseline
+            costs = self.costs_nitrogen * amount
+            reward = benefits - costs
+            return reward, growth
+
+    class GRO:
+        def __init__(self, timestep, costs_nitrogen):
+            self.timestep = timestep
+            self.costs_nitrogen = costs_nitrogen
+
+        def return_reward(self, output, amount, output_baseline=None, multiplier=10, obj=None):
+            growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
+            costs = self.costs_nitrogen * amount
+            reward = growth - costs
+            return reward, growth
+
+    class DEP:
+        def __init__(self, timestep, costs_nitrogen):
+            self.timestep = timestep
+            self.costs_nitrogen = costs_nitrogen
+
+        def return_reward(self, output, amount, output_baseline=None, multiplier=10, obj=None):
+            """
+            reward function that mirrors a realistic (financial) cost of DT deployment in a field
+            one unit of reward equals the price of 1kg of wheat yield
+            """
+            if amount == 0:
+                cost_deployment = 0
+            else:
+                cost_deployment = self.various_costs()['to_the_field']
+
+            growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
+            # growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep)
+            # fertilizer_price = self.various_costs()['fertilizer'] * amount
+            costs = (self.costs_nitrogen * amount) + cost_deployment
+            reward = growth - costs
+            return reward, growth
+
+        @staticmethod
+        def various_costs():
+            return dict(
+                to_the_field=10,
+                fertilizer=1,
+                environmental=2
+            )
+
+    class END:
+        def __init__(self, timestep, costs_nitrogen):
+            self.timestep = timestep
+            self.costs_nitrogen = costs_nitrogen
+
+        def return_reward(self, output, amount, output_baseline=None, multiplier=10, obj=None):
+            obj.calculate_cost_cumulative(amount)
+            obj.calculate_positive_reward_cumulative(output, output_baseline)
+            reward = 0 - amount * self.costs_nitrogen
+            growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
+
+            return reward, growth
+
+    class NUE:
+        def __init__(self, timestep, costs_nitrogen):
+            self.timestep = timestep
+            self.costs_nitrogen = costs_nitrogen
+
+        def return_reward(self, output, amount, output_baseline=None, multiplier=10, obj=None):
+            obj.calculate_cost_cumulative(amount)
+            obj.calculate_positive_reward_cumulative(output, output_baseline, multiplier)
+            reward = 0 - amount * self.costs_nitrogen
+            growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
+
+            return reward, growth
+
 
     class ContainerEND:
         '''
@@ -228,6 +284,11 @@ class Rewards:
             self.cum_growth = 0
             self.cum_baseline_growth = 0
             self.cum_amount = 0
+
+
+class DummyClass:
+    def reset(self):
+        pass
 
 
 def calculate_nue(n_input, n_so, year=None, n_seed=3.5):
