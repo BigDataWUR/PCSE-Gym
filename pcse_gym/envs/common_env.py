@@ -47,7 +47,7 @@ def generate_agro_management(years: list, start_type='emergence', ) -> list:
     # Generate structure for each year
     agro_management = []
     for year in years:
-        year_structure = copy.deepcopy(base_structure)  # use deepcopy to ensure propagation
+        year_structure = base_structure.copy()
         # Correctly setting the dates for each year
         if start_type == 'emergence':
             year_structure['CropCalendar']['crop_start_date'] = f"{year}-01-01"
@@ -61,7 +61,78 @@ def generate_agro_management(years: list, start_type='emergence', ) -> list:
     return agro_management
 
 
-def replace_years(agro_management, years):
+class AgroManagementContainer:
+    def __init__(self, agro_management: list):
+        self.agro_structure = agro_management
+        self.campaign_date: datetime.date = list(agro_management[0].keys())[0]
+        self.crop_name: str = agro_management[0][self.campaign_date]['CropCalendar']['crop_name']
+        self.crop_variety: str = agro_management[0][self.campaign_date]['CropCalendar']['variety_name']
+        self.crop_start_date: datetime.date = agro_management[0][self.campaign_date]['CropCalendar']['crop_start_date']
+        self.crop_start_type: str = agro_management[0][self.campaign_date]['CropCalendar']['crop_start_type']
+        self.crop_end_date: datetime.date = agro_management[0][self.campaign_date]['CropCalendar']['crop_end_date']
+        self.crop_end_type: str = agro_management[0][self.campaign_date]['CropCalendar']['crop_end_type']
+        self.max_duration: int = agro_management[0][self.campaign_date]['CropCalendar']['max_duration']
+
+        self.structure = None
+        self.build_structure()
+
+    def build_structure(self):
+        self.structure = yaml.load(f'''
+                    - {self.campaign_date}:
+                        CropCalendar:
+                            crop_name: {self.crop_name}
+                            variety_name: {self.crop_variety}
+                            crop_start_date: {self.crop_start_date}
+                            crop_start_type: {self.crop_start_type}
+                            crop_end_date: {self.crop_end_date}
+                            crop_end_type: {self.crop_end_type}
+                            max_duration: {self.max_duration}
+                        TimedEvents: null
+                        StateEvents: null
+                ''', Loader=yaml.SafeLoader)
+
+    def replace_years(self, y):
+        """
+            Years replaced are the harvest date. Campaign start and sow date starts a year before.
+        """
+        if isinstance(y, list):
+            y = y[0]
+        if self.campaign_date.year == self.crop_end_date.year:
+            yprev = y
+        else:
+            yprev = y - 1
+        self.campaign_date = self.campaign_date.replace(year=yprev)
+        self.crop_start_date = self.crop_start_date.replace(year=yprev)
+        self.crop_end_date = self.crop_end_date.replace(year=y)
+
+        self.build_structure()
+        return self.structure
+
+    def replace_sow_date(self, year, month, day):
+        self.crop_start_date = self.crop_start_date.replace(year=year, month=month, day=day)
+
+        self.build_structure()
+        return self.structure
+
+    def replace_harvest_date(self, year, month, day):
+        self.crop_end_date = self.crop_end_date.replace(year=year, month=month, day=day)
+
+        self.build_structure()
+        return self.structure
+
+    def replace_start_type(self, start):
+        assert start == 'sowing' or start == 'emergence'
+        self.crop_start_type = start
+
+        self.build_structure()
+        return self.structure
+
+    @property
+    def get_structure(self):
+        return self.structure
+
+
+def replace_years_(agro_management, years):
     if not isinstance(years, list):
         years = [years]
 
@@ -131,15 +202,15 @@ class Engine(pcse.engine.Engine):
 
         if action > 0:
             self._send_signal(signal=pcse.signals.apply_n,
-                             amount=action,
-                             application_depth=10.,
-                             cnratio=0.,
-                             f_orgmat=0.,
-                             f_NH4N=0.5,
-                             f_NO3N=0.5,
-                             initial_age=0,
-                             recovery=0.7
-                             )
+                              amount=action,
+                              application_depth=10.,
+                              cnratio=0.,
+                              f_orgmat=0.,
+                              f_NH4N=0.5,
+                              f_NO3N=0.5,
+                              initial_age=0,
+                              recovery=0.7
+                              )
 
         # Rate calculation
         self.calc_rates(self.day, self.drv)
@@ -254,8 +325,11 @@ class PCSEEnv(gym.Env):
         with open(agro_config, 'r') as f:
             self._agro_management = yaml.load(f, Loader=yaml.SafeLoader)
 
+        # Initialize Agromanagement Container Class
+        self.agmt = AgroManagementContainer(self._agro_management)
+
         if years is not None:
-            self._agro_management = replace_years(self._agro_management, years)
+            self._agro_management = self.agmt.replace_years(years)
 
         # Store the PCSE Engine config
         self._model_config = model_config
@@ -410,7 +484,7 @@ class PCSEEnv(gym.Env):
         # Apply action
         if isinstance(action, np.ndarray):
             action = action[0]
-        action = self._apply_action(action) # is subclassed by sb3
+        action = self._apply_action(action)  # is subclassed by sb3
 
         # Run the crop growth model
         self._model.run(days=self._timestep, action=action)

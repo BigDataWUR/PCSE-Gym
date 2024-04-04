@@ -198,6 +198,8 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         elif 'Wofost' in cgm_kwargs:
             self.multiplier_amount = 1
             print('Using Wofost!')
+        else:
+            self.multiplier_amount = 1
 
         super().reset(seed=seed)
 

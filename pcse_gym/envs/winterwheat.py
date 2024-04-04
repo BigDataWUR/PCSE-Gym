@@ -98,7 +98,7 @@ class WinterWheat(gym.Env):
             self.rewards = self.rewards_obj.DEF(self.timestep, costs_nitrogen)
 
         elif self.reward_function == 'GRO':
-            self.rewards = self.rewards_obj.DEF(self.timestep, costs_nitrogen)
+            self.rewards = self.rewards_obj.GRO(self.timestep, costs_nitrogen)
 
         elif self.reward_function == 'DEP':
             self.rewards = self.rewards_obj.DEP(self.timestep, costs_nitrogen)
@@ -231,9 +231,8 @@ class WinterWheat(gym.Env):
     def overwrite_year(self, year):
         self.years = year
         if self.reward_function not in reward_functions_without_baseline():
-            self.baseline_env.agro_management = common_env.replace_years(
-                self.baseline_env.agro_management, year)
-        self.sb3_env.agro_management = common_env.replace_years(self.sb3_env.agro_management, year)
+            self.baseline_env.agro_management = self.sb3_env.agmt.replace_years(year)
+        self.sb3_env.agro_management = self.sb3_env.agmt.replace_years(year)
 
     def set_location(self, location):
         if self.reward_function not in reward_functions_without_baseline():
@@ -252,7 +251,7 @@ class WinterWheat(gym.Env):
         nav = np.clip(self.rng.normal(15, 15), 0.0, 100.0)
         self.eval_wav = wav
         self.eval_nav = nav
-        site_parameters=pcse.util.WOFOST80SiteDataProvider(WAV=wav, NAVAILI=nav, PAVAILI=50, KAVAILI=100)
+        site_parameters=pcse.util.WOFOST80SiteDataProvider(WAV=wav, NAVAILI=nav)
         return site_parameters
 
     def reset(self, seed=None, options=None, **kwargs):
@@ -263,9 +262,8 @@ class WinterWheat(gym.Env):
         if isinstance(self.years, list):
             year = self.np_random.choice(self.years)
             if self.reward_function not in reward_functions_without_baseline():
-                self.baseline_env.agro_management = common_env.replace_years(
-                    self.baseline_env.agro_management, year)
-            self.sb3_env.agro_management = common_env.replace_years(self.sb3_env.agro_management, year)
+                self.baseline_env.agro_management = self.sb3_env.agmt.replace_years(year)
+            self.sb3_env.agro_management = self.sb3_env.agmt.replace_years(year)
 
         if isinstance(self.locations, list):
             location = self.locations[self.np_random.choice(len(self.locations), 1)[0]]
