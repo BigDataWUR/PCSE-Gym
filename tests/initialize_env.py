@@ -152,3 +152,7 @@ def initialize_env_end_reward():
 
 def initialize_env_eny_reward():
     return initialize_env(reward='ENY')
+
+
+def initialize_env_nue_reward():
+    return initialize_env(reward='NUE')

@@ -17,7 +17,7 @@ class Rewards:
         self.costs_nitrogen = costs_nitrogen
         self.vrr = vrr
 
-    def growth_storage_organ(self, output, amount, multiplier=10):
+    def growth_storage_organ(self, output, amount, multiplier=1):
         growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
         costs = self.costs_nitrogen * amount
         reward = growth - costs
@@ -29,7 +29,7 @@ class Rewards:
         reward = growth - costs
         return reward, growth
 
-    def default_winterwheat_reward(self, output, output_baseline, amount, multiplier=10):
+    def default_winterwheat_reward(self, output, output_baseline, amount, multiplier=1):
         growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
         growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep, multiplier)
         benefits = growth - growth_baseline
@@ -37,7 +37,7 @@ class Rewards:
         reward = benefits - costs
         return reward, growth
 
-    def deployment_reward(self, output, amount, multiplier=10, vrr=None):
+    def deployment_reward(self, output, amount, multiplier=1, vrr=None):
         """
         reward function that mirrors a realistic (financial) cost of DT deployment in a field
         one unit of reward equals the price of 1kg of wheat yield
@@ -62,7 +62,7 @@ class Rewards:
         reward, growth = ane_obj.reward(output, output_baseline, amount)
         return reward, growth
 
-    def end_reward(self, end_obj, output, output_baseline, amount, multiplier=10):
+    def end_reward(self, end_obj, output, output_baseline, amount, multiplier=1):
         end_obj.calculate_cost_cumulative(amount)
         end_obj.calculate_positive_reward_cumulative(output, output_baseline)
         reward = 0 - amount * self.costs_nitrogen
@@ -70,7 +70,7 @@ class Rewards:
 
         return reward, growth
 
-    def nue_reward(self, nue_obj, output, output_baseline, amount, multiplier=10):
+    def nue_reward(self, nue_obj, output, output_baseline, amount, multiplier=1):
         nue_obj.calculate_cost_cumulative(amount)
         nue_obj.calculate_positive_reward_cumulative(output, output_baseline, multiplier)
         reward = 0 - amount * self.costs_nitrogen
@@ -82,7 +82,7 @@ class Rewards:
         end_obj.calculate_misc_cumulative_cost(cost)
 
     # TODO create reward surrounding crop N demand; WIP
-    def n_demand_yield_reward(self, output, multiplier=10):
+    def n_demand_yield_reward(self, output, multiplier=1):
         assert 'TWSO' and 'Ndemand' in self.reward_var, f"reward_var does not contain TWSO and Ndemand"
         n_demand_diff = process_pcse.compute_growth_var(output, self.timestep, 'Ndemand')
         growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
@@ -96,7 +96,7 @@ class Rewards:
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
 
-        def return_reward(self, output, amount, output_baseline=None, multiplier=10, obj=None):
+        def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
             growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
             growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep, multiplier)
             benefits = growth - growth_baseline
@@ -109,7 +109,7 @@ class Rewards:
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
 
-        def return_reward(self, output, amount, output_baseline=None, multiplier=10, obj=None):
+        def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
             growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
             costs = self.costs_nitrogen * amount
             reward = growth - costs
@@ -120,7 +120,7 @@ class Rewards:
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
 
-        def return_reward(self, output, amount, output_baseline=None, multiplier=10, obj=None):
+        def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
             """
             reward function that mirrors a realistic (financial) cost of DT deployment in a field
             one unit of reward equals the price of 1kg of wheat yield
@@ -150,7 +150,7 @@ class Rewards:
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
 
-        def return_reward(self, output, amount, output_baseline=None, multiplier=10, obj=None):
+        def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
             obj.calculate_cost_cumulative(amount)
             obj.calculate_positive_reward_cumulative(output, output_baseline)
             reward = 0 - amount * self.costs_nitrogen
@@ -163,8 +163,9 @@ class Rewards:
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
 
-        def return_reward(self, output, amount, output_baseline=None, multiplier=10, obj=None):
+        def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
             obj.calculate_cost_cumulative(amount)
+            obj.calculate_amount(amount)
             obj.calculate_positive_reward_cumulative(output, output_baseline, multiplier)
             reward = 0 - amount * self.costs_nitrogen
             growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
@@ -193,10 +194,10 @@ class Rewards:
             self.cum_cost = .0
             self.cum_misc_cost = .0
 
-        def growth_storage_organ_wo_cost(self, output, multiplier=10):
+        def growth_storage_organ_wo_cost(self, output, multiplier=1):
             return process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
 
-        def default_winterwheat_reward_wo_cost(self, output, output_baseline, multiplier=10):
+        def default_winterwheat_reward_wo_cost(self, output, output_baseline, multiplier=1):
             growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
             growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep, multiplier)
             benefits = growth - growth_baseline
@@ -209,7 +210,7 @@ class Rewards:
         def calculate_misc_cumulative_cost(self, cost):
             self.cum_misc_cost += cost
 
-        def calculate_positive_reward_cumulative(self, output, output_baseline=None, multiplier=10):
+        def calculate_positive_reward_cumulative(self, output, output_baseline=None, multiplier=1):
             if not output_baseline:
                 benefits = self.growth_storage_organ_wo_cost(output, multiplier)
             else:
@@ -234,7 +235,7 @@ class Rewards:
             self.costs_nitrogen = costs_nitrogen
             self.actions = 0
 
-        def calculate_actions(self, action):
+        def calculate_amount(self, action):
             self.actions += action
 
         def calculate_reward_nue(self, n_input, n_output, year=None):
@@ -271,7 +272,7 @@ class Rewards:
             ane -= amount  # TODO need to add environmental penalty and reward ANE that favours TWSO
             return ane, growth
 
-        def cumulative(self, output, output_baseline, amount, multiplier=10):
+        def cumulative(self, output, output_baseline, amount, multiplier=1):
             growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
             growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep, multiplier)
 
@@ -296,6 +297,7 @@ def calculate_nue(n_input, n_so, year=None, n_seed=3.5):
     nue = n_so / n_in
     return nue
 
+
 def input_nue(n_input, year=None, n_seed=3.5):
     nh4, no3 = get_deposition_amount(year)
     n_depo = nh4 + no3
@@ -313,6 +315,12 @@ def get_deposition_amount(year) -> tuple:
         NH4 = 697 - 0.339 * year
 
     return NH4, NO3
+
+
+def get_surplus_n(n_input, n_so, year=None, n_seed=3.5):
+    n_i = input_nue(n_input, year=year, n_seed=n_seed)
+
+    return n_i - n_so
 
 
 #  piecewise conditions

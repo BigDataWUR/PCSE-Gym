@@ -51,11 +51,11 @@ def compute_growth_var(pcse_output, timestep, var):
     return growth
 
 
-def compute_growth_storage_organ(pcse_output, timestep, multiplier_amount=10):
+def compute_growth_storage_organ(pcse_output, timestep, multiplier_amount=1):
     """
     Computes growth of storage organ in g/m2
     """
-    wso_var = "WSO" # get_name_storage_organ(get_var_names(pcse_output))
+    wso_var = "WSO"  # get_name_storage_organ(get_var_names(pcse_output))
     wso_growth = compute_growth_var(pcse_output, timestep, wso_var)
     wso_growth = wso_growth / multiplier_amount
     return wso_growth

@@ -196,7 +196,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
             self.multiplier_amount = 1
             print('Using Lintul!')
         elif 'Wofost' in cgm_kwargs:
-            self.multiplier_amount = 10
+            self.multiplier_amount = 1
             print('Using Wofost!')
 
         super().reset(seed=seed)
@@ -212,7 +212,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
 
     def _apply_action(self, action):
         action = action * self.action_multiplier
-        action = action * self.multiplier_amount
+        action = action * 10  # kg N / ha
         return action
 
     def _get_reward(self):
@@ -249,7 +249,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         # start_date is beginning of the week
         # self.date is the end of the week (if timestep=7)
         info = update_info(info, 'action', start_date, action)
-        info = update_info(info, 'fertilizer', start_date, amount*self.multiplier_amount)
+        info = update_info(info, 'fertilizer', start_date, amount*10)
         info = update_info(info, 'reward', self.date, reward)
         if measure is not None:
             info = update_info(info, 'measure', start_date, measure)

@@ -12,7 +12,7 @@ from .constraints import VariableRecoveryRate
 from .measure import MeasureOrNot
 from .sb3 import ZeroNitrogenEnvStorage, StableBaselinesWrapper
 from .rewards import Rewards, DummyClass
-from .rewards import reward_functions_without_baseline, reward_functions_end, calculate_nue
+from .rewards import reward_functions_without_baseline, reward_functions_end, calculate_nue, get_surplus_n
 
 
 class WinterWheat(gym.Env):
@@ -158,25 +158,9 @@ class WinterWheat(gym.Env):
         info['reward'][self.date] = reward
         if 'growth' not in info.keys(): info['growth'] = {}
         info['growth'][self.date] = growth
-        if self.reward_function == 'ANE':
-            if 'moving_ANE' not in info.keys():
-                info['moving_ANE'] = {}
-            info['moving_ANE'][self.date] = self.ane.moving_ane
 
-        # if output[-1]['DVS'] == 2.0 and self.ended is False and self.reward_function in reward_functions_end():
-        #     self.ended = True
-        #     reward = self.end.dump_cumulative_positive_reward - abs(reward)
-
-        if terminated and self.reward_function in reward_functions_end():
-            reward = self.reward_container.dump_cumulative_positive_reward - abs(reward)
-
-        if terminated and self.reward_function == 'NUE':
-            n_so = output[-1]['NamountSO']
-            cum_actions = self.reward_container.actions * 10
-            reward = self.reward_container.calculate_reward_nue(cum_actions, n_so, year=self.date.year)
-            if 'NUE' not in info.keys():
-                info['NUE'] = {}
-            info['NUE'][self.date] = calculate_nue(cum_actions, n_so, year=self.date.year)
+        # used for reward functions that rely on rewards at terminate
+        reward, info = self.end_reward_modifiers(output, reward, terminated, info)
 
         # normalize observations and reward if not using VecNormalize wrapper
         if self.normalize:
@@ -227,6 +211,23 @@ class WinterWheat(gym.Env):
                                                     obj=self.reward_container)
         return reward, growth
 
+    def end_reward_modifiers(self, output, reward, terminated, info):
+        if terminated and self.reward_function in reward_functions_end():
+            reward = self.reward_container.dump_cumulative_positive_reward - abs(reward)
+
+        elif terminated and self.reward_function == 'NUE':
+            n_so = output[-1]['NamountSO']
+            cum_actions = self.reward_container.actions * 10
+            reward = self.reward_container.calculate_reward_nue(cum_actions, n_so, year=self.date.year)
+            if 'NUE' not in info.keys():
+                info['NUE'] = {}
+            info['NUE'][self.date] = calculate_nue(cum_actions, n_so, year=self.date.year)
+            if 'Nsurplus' not in info.keys():
+                info['Nsurplus'] = {}
+            info['Nsurplus'][self.date] = get_surplus_n(cum_actions, n_so, year=self.date.year)
+
+        return reward, info
+
     def overwrite_year(self, year):
         self.years = year
         if self.reward_function not in reward_functions_without_baseline():
@@ -248,7 +249,7 @@ class WinterWheat(gym.Env):
     def overwrite_initial_conditions(self):
         # method to overwrite a random initial condition for every call of reset()
         wav = np.clip(self.rng.normal(15, 15), 0.0, 100.0)
-        nav = np.clip(self.rng.normal(15, 15), 0.00,100.0)
+        nav = np.clip(self.rng.normal(15, 15), 0.0, 100.0)
         self.eval_wav = wav
         self.eval_nav = nav
         site_parameters=pcse.util.WOFOST80SiteDataProvider(WAV=wav, NAVAILI=nav, PAVAILI=50, KAVAILI=100)
