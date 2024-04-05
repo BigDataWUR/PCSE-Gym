@@ -3,7 +3,11 @@ import numpy as np
 
 
 def reward_functions_without_baseline():
-    return ['GRO', 'DEP', 'ENY', 'NUE']
+    return ['GRO', 'DEP', 'ENY', 'NUE', 'HAR', 'NUP']
+
+
+def reward_functions_with_baseline():
+    return ['DEF', 'ANE', 'END']
 
 
 def reward_functions_end():
@@ -91,7 +95,13 @@ class Rewards:
         print(f"the benefits are {benefits}")
         return benefits, growth
 
+    """
+    Classes that determine the reward function
+    """
     class DEF:
+        """
+        Relative yield reward function, as implemented in Kallenberg et al (2023)
+        """
         def __init__(self, timestep, costs_nitrogen):
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
@@ -105,6 +115,9 @@ class Rewards:
             return reward, growth
 
     class GRO:
+        """
+        Absolute growth reward function, modified from Kallenberg et al. (2023)
+        """
         def __init__(self, timestep, costs_nitrogen):
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
@@ -116,15 +129,15 @@ class Rewards:
             return reward, growth
 
     class DEP:
+        """
+        Reward function that considers a realistic (financial) cost of DT deployment in a field
+        one unit of reward equals the price of 1kg of wheat yield
+        """
         def __init__(self, timestep, costs_nitrogen):
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
 
         def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
-            """
-            reward function that mirrors a realistic (financial) cost of DT deployment in a field
-            one unit of reward equals the price of 1kg of wheat yield
-            """
             if amount == 0:
                 cost_deployment = 0
             else:
@@ -146,6 +159,10 @@ class Rewards:
             )
 
     class END:
+        """
+        Sparse reward function, modified from Kallenberg et al. (2023)
+        Only provides positive reward at harvest
+        """
         def __init__(self, timestep, costs_nitrogen):
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
@@ -159,6 +176,9 @@ class Rewards:
             return reward, growth
 
     class NUE:
+        """
+        Sparse reward based on calculated nitrogen use efficiency
+        """
         def __init__(self, timestep, costs_nitrogen):
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
@@ -172,11 +192,54 @@ class Rewards:
 
             return reward, growth
 
+    class NUP:
+        """
+        Reward based on Nitrogen Uptake, from Gautron et al. (2023)
+        """
+        def __init__(self, timestep, costs_nitrogen):
+            self.timestep = timestep
+            self.costs_nitrogen = costs_nitrogen
 
+        def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
+            growth = process_pcse.compute_growth_var(output, self.timestep, 'NuptakeTotal')
+            costs = self.costs_nitrogen * amount
+            reward = growth - costs
+            return reward, growth
+
+    class HAR:
+        """
+        Sparse reward based on Wu et al. (2021) considering N losses
+        """
+        def __init__(self, timestep, costs_nitrogen, threshold=200, loss_modifier=1, penalty_modifier=1):
+            self.timestep = timestep
+            self.threshold = threshold
+            self.costs_nitrogen = costs_nitrogen
+            self.loss_modifier = loss_modifier
+            self.penalty_modifier = penalty_modifier
+
+        def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
+            # N application (N_t)
+            obj.calculate_cost_n(amount)
+            # N loss (N_l_t)
+            n_loss = process_pcse.compute_growth_var(output, self.timestep, 'NLOSSCUM')
+            obj.calculate_n_loss(n_loss)
+            # Yield growth (Y)
+            obj.calculate_positive_reward_cumulative(output)
+            # Threshold
+            penalty = obj.calculate_threshold(amount, self.threshold)
+
+            reward = 0 - amount * self.costs_nitrogen - n_loss * self.loss_modifier - penalty * self.penalty_modifier
+            growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
+
+            return reward, growth
+
+    """
+    Containers for certain reward functions
+    """
     class ContainerEND:
-        '''
+        """
         Container to keep track of cumulative positive rewards for end of timestep
-        '''
+        """
         def __init__(self, timestep, costs_nitrogen=10.0):
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
@@ -186,6 +249,7 @@ class Rewards:
             self.cum_positive_reward = .0
             self.cum_cost = .0
             self.cum_misc_cost = .0
+            self.cum_leach = .0
 
         def reset(self):
             self.cum_growth = .0
@@ -193,6 +257,7 @@ class Rewards:
             self.cum_positive_reward = .0
             self.cum_cost = .0
             self.cum_misc_cost = .0
+            self.cum_leach = .0
 
         def growth_storage_organ_wo_cost(self, output, multiplier=1):
             return process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
@@ -216,6 +281,18 @@ class Rewards:
             else:
                 benefits = self.default_winterwheat_reward_wo_cost(output, output_baseline, multiplier)
             self.cum_positive_reward += benefits
+
+        def calculate_cost_n(self, amount):
+            self.cum_amount += amount
+
+        def calculate_n_loss(self, n_loss):
+            self.cum_leach += n_loss
+
+        def calculate_threshold(self, amount, threshold):
+            if amount == 0:
+                return 0
+            else:
+                return self.cum_amount - threshold
 
         @property
         def dump_cumulative_positive_reward(self) -> float:

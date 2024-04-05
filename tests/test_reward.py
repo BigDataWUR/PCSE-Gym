@@ -11,6 +11,8 @@ class Rewards(unittest.TestCase):
         self.end = init_env.initialize_env_end_reward()
         self.eny = init_env.initialize_env_eny_reward()
         self.nue = init_env.initialize_env_nue_reward()
+        self.nup = init_env.initialize_env_nup_reward()
+        self.har = init_env.initialize_env_har_reward()
 
     def test_dep_reward_action(self):
         self.env.reset()
@@ -125,7 +127,7 @@ class Rewards(unittest.TestCase):
             _, reward, terminated, _, _ = self.nue.step(action)
 
             if terminated:
-                expected_reward = 2546.4
+                expected_reward = 2536.419
             else:
                 expected_reward = -10
 
@@ -157,17 +159,57 @@ class Rewards(unittest.TestCase):
 
             week += 1
 
+    def test_nup_reward(self):
+        self.nup.reset()
+        terminated = False
+
+        week = 0
+        n = 12
+        rewards = 0
+        while not terminated:
+
+            if week == n or week == n + 4:
+                action = np.array([6])
+            else:
+                action = np.array([0])
+            _, reward, terminated, _, _ = self.nup.step(action)
+            rewards += reward
+
+        expected_reward = 144.034
+
+        self.assertAlmostEqual(expected_reward, rewards, 1)
+
+    def test_har_reward(self):
+        self.har.reset()
+        terminated = False
+
+        week = 0
+        n = 12
+        rewards = 0
+        while not terminated:
+
+            if week == n or week == n + 4:
+                action = np.array([6])
+            else:
+                action = np.array([0])
+            _, reward, terminated, _, _ = self.har.step(action)
+            rewards += reward
+        expected_reward = 6344.094
+
+        self.assertAlmostEqual(expected_reward, rewards, 1)
+
 
 class NitrogenUseEfficiency(unittest.TestCase):
     def setUp(self):
         self.nue1 = init_env.initialize_env_nue_reward()
 
     def process_nue(self, n_input, info, y):
-        n_in = self.process_nue_in(n_input, info, y)
+        n_in = self.process_nue_in(n_input, y)
 
         return info['NamountSO'][max(info['NamountSO'].keys())] / n_in
 
-    def process_nue_in(self, n_input, info, y):
+    @staticmethod
+    def process_nue_in(n_input, y):
         nh4 = 697 - 0.339 * y
         no3 = 538.868 - 0.264 * y
         n_depo = nh4 + no3
@@ -236,6 +278,6 @@ class NitrogenUseEfficiency(unittest.TestCase):
             _, reward, terminated, _, info = self.nue1.step(action)
             n_input += action * 10
 
-        calculated_surplus = self.process_nue_in(n_input, info, year) - info['NamountSO'][max(info['NamountSO'].keys())]
+        calculated_surplus = self.process_nue_in(n_input, year) - info['NamountSO'][max(info['NamountSO'].keys())]
 
         self.assertAlmostEqual(info['Nsurplus'][max(info['Nsurplus'].keys())], calculated_surplus, 1)

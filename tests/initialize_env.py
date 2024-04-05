@@ -156,3 +156,11 @@ def initialize_env_eny_reward():
 
 def initialize_env_nue_reward():
     return initialize_env(reward='NUE')
+
+
+def initialize_env_nup_reward():
+    return initialize_env(reward='NUP')
+
+
+def initialize_env_har_reward():
+    return initialize_env(reward='HAR')
