@@ -164,3 +164,7 @@ def initialize_env_nup_reward():
 
 def initialize_env_har_reward():
     return initialize_env(reward='HAR')
+
+
+def initialize_env_dnu_reward():
+    return initialize_env(reward='DNU')

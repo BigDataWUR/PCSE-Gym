@@ -19,48 +19,6 @@ import pcse
 """
 
 
-# TODO replace the usage of the function replace_years() with this. If we do, a lot of refactoring needed.
-def generate_agro_management(years: list, start_type='emergence', ) -> list:
-    """
-    Function to generate a dictionary, mimicking the wheat_cropcalendar.yaml file
-
-    :param years: a list of years, preferably a set() of test and train years
-    :param start_type: the crop state when starting the simulation.
-           Either 'sowing' or 'emergence'. It is 'emergence' by default.
-    :return: a list of dicts of the PCSE campaign schedule
-    """
-    assert start_type == 'emergence' or start_type == 'sowing', "start_type has to be either 'emergence' or 'sowing'"
-
-    # Base structure of wheat_cropcalendar.yaml
-    base_structure = {
-        'CropCalendar': {
-            'crop_name': 'wheat',
-            'variety_name': 'winter wheat',
-            'crop_start_type': start_type,
-            'crop_end_type': 'earliest',
-            'max_duration': 365
-        },
-        'StateEvents': None,
-        'TimedEvents': None  # can be modified if we add fixed fertilization events
-    }
-
-    # Generate structure for each year
-    agro_management = []
-    for year in years:
-        year_structure = base_structure.copy()
-        # Correctly setting the dates for each year
-        if start_type == 'emergence':
-            year_structure['CropCalendar']['crop_start_date'] = f"{year}-01-01"
-        elif start_type == 'sowing':
-            year_structure['CropCalendar']['crop_start_date'] = f"{year - 1}-10-01"
-        year_structure['CropCalendar']['crop_end_date'] = f"{year}-09-01"
-        if start_type == 'emergence':
-            agro_management.append({f"{year}-01-01": year_structure})
-        elif start_type == 'sowing':
-            agro_management.append({f"{year - 1}-10-01": year_structure})  # year - 1 to match sowing date
-    return agro_management
-
-
 class AgroManagementContainer:
     def __init__(self, agro_management: list):
         self.agro_structure = agro_management
@@ -131,8 +89,14 @@ class AgroManagementContainer:
     def get_structure(self):
         return self.structure
 
+    def get_start_date(self):
+        return self.crop_start_date
 
-def replace_years_(agro_management, years):
+    def get_end_date(self):
+        return self.crop_end_date
+
+
+def replace_years_(agro_management, years):  # deprecated
     if not isinstance(years, list):
         years = [years]
 
@@ -177,7 +141,8 @@ def get_weather_data_provider(location) -> pcse.db.NASAPowerWeatherDataProvider:
 
 class Engine(pcse.engine.Engine):
     """
-    Wraps around the PCSE engine/crop model to set a flag when the simulation has terminated
+    Wraps around the PCSE engine/crop model for correct rate updates after fertilization action and
+    to set a flag when the simulation has terminated
     """
 
     def __init__(self, *args, **kwargs):

@@ -1,6 +1,10 @@
 import pcse_gym.utils.process_pcse_output as process_pcse
 import numpy as np
 
+from abc import ABC, abstractmethod
+import datetime
+import calendar
+
 
 def reward_functions_without_baseline():
     return ['GRO', 'DEP', 'ENY', 'NUE', 'HAR', 'NUP']
@@ -98,11 +102,23 @@ class Rewards:
     """
     Classes that determine the reward function
     """
-    class DEF:
+
+    class Rew(ABC):
+        def __init__(self, timestep, costs_nitrogen):
+            self.timestep = timestep
+            self.costs_nitrogen = costs_nitrogen
+
+        @abstractmethod
+        def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
+            raise NotImplementedError
+
+    class DEF(Rew):
         """
         Relative yield reward function, as implemented in Kallenberg et al (2023)
         """
+
         def __init__(self, timestep, costs_nitrogen):
+            super().__init__(timestep, costs_nitrogen)
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
 
@@ -114,11 +130,13 @@ class Rewards:
             reward = benefits - costs
             return reward, growth
 
-    class GRO:
+    class GRO(Rew):
         """
         Absolute growth reward function, modified from Kallenberg et al. (2023)
         """
+
         def __init__(self, timestep, costs_nitrogen):
+            super().__init__(timestep, costs_nitrogen)
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
 
@@ -128,12 +146,14 @@ class Rewards:
             reward = growth - costs
             return reward, growth
 
-    class DEP:
+    class DEP(Rew):
         """
         Reward function that considers a realistic (financial) cost of DT deployment in a field
         one unit of reward equals the price of 1kg of wheat yield
         """
+
         def __init__(self, timestep, costs_nitrogen):
+            super().__init__(timestep, costs_nitrogen)
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
 
@@ -158,12 +178,14 @@ class Rewards:
                 environmental=2
             )
 
-    class END:
+    class END(Rew):
         """
         Sparse reward function, modified from Kallenberg et al. (2023)
         Only provides positive reward at harvest
         """
+
         def __init__(self, timestep, costs_nitrogen):
+            super().__init__(timestep, costs_nitrogen)
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
 
@@ -175,11 +197,13 @@ class Rewards:
 
             return reward, growth
 
-    class NUE:
+    class NUE(Rew):
         """
         Sparse reward based on calculated nitrogen use efficiency
         """
+
         def __init__(self, timestep, costs_nitrogen):
+            super().__init__(timestep, costs_nitrogen)
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
 
@@ -192,11 +216,13 @@ class Rewards:
 
             return reward, growth
 
-    class NUP:
+    class NUP(Rew):
         """
         Reward based on Nitrogen Uptake, from Gautron et al. (2023)
         """
+
         def __init__(self, timestep, costs_nitrogen):
+            super().__init__(timestep, costs_nitrogen)
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
 
@@ -206,11 +232,13 @@ class Rewards:
             reward = growth - costs
             return reward, growth
 
-    class HAR:
+    class HAR(Rew):
         """
         Sparse reward based on Wu et al. (2021) considering N losses
         """
+
         def __init__(self, timestep, costs_nitrogen, threshold=200, loss_modifier=1, penalty_modifier=1):
+            super().__init__(timestep, costs_nitrogen)
             self.timestep = timestep
             self.threshold = threshold
             self.costs_nitrogen = costs_nitrogen
@@ -233,13 +261,49 @@ class Rewards:
 
             return reward, growth
 
+    class DNU(Rew):
+        def __init__(self, timestep, costs_nitrogen):
+            super().__init__(timestep, costs_nitrogen)
+            self.timestep = timestep
+            self.costs_nitrogen = costs_nitrogen
+            self.n_so_mod = 1
+            self.n_dep_mod = 1
+            self.n_loss_mod = 1
+
+        def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
+            # N grain growth
+            n_so = process_pcse.compute_growth_var(output, self.timestep, 'NamountSO')
+            # N loss
+            n_loss = process_pcse.compute_growth_var(output, self.timestep, 'NLOSSCUM')
+            # N deposition
+            nh4, no3 = get_disaggregated_deposition(year=output[-1]['day'].year,
+                                                    start_date=
+                                                    output[process_pcse.get_previous_index(output, self.timestep)][
+                                                        'day'],
+                                                    end_date=output[-1]['day'])
+            n_dep = nh4 + no3
+            reward = (n_so * self.n_so_mod - amount * self.costs_nitrogen
+                      - n_dep * self.n_dep_mod - n_loss * self.n_loss_mod)
+            growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
+
+            return reward, growth
+
+    class FIN(Rew):
+        def __init__(self, timestep, costs_nitrogen):
+            super().__init__(timestep, costs_nitrogen)
+
+        def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
+            pass
+
     """
     Containers for certain reward functions
     """
+
     class ContainerEND:
         """
         Container to keep track of cumulative positive rewards for end of timestep
         """
+
         def __init__(self, timestep, costs_nitrogen=10.0):
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
@@ -267,6 +331,9 @@ class Rewards:
             growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep, multiplier)
             benefits = growth - growth_baseline
             return benefits
+
+        def growth_var(self, output, var):
+            return process_pcse.compute_growth_var(output, self.timestep, var)
 
         def calculate_cost_cumulative(self, amount):
             self.cum_amount += amount
@@ -306,6 +373,7 @@ class Rewards:
         '''
         Container to keep track of rewards based on nitrogen use efficiency
         '''
+
         def __init__(self, timestep, costs_nitrogen=10.0):
             super().__init__(timestep, costs_nitrogen)
             self.timestep = timestep
@@ -315,8 +383,8 @@ class Rewards:
         def calculate_amount(self, action):
             self.actions += action
 
-        def calculate_reward_nue(self, n_input, n_output, year=None):
-            nue = calculate_nue(n_input, n_output, year=year)
+        def calculate_reward_nue(self, n_input, n_output, year=None, start=None, end=None):
+            nue = calculate_nue(n_input, n_output, year=year, start=start, end=end)
             end_yield = super().dump_cumulative_positive_reward
 
             return unimodal_function(nue) * end_yield
@@ -330,6 +398,7 @@ class Rewards:
         """
         A container to keep track of the cumulative ratio of kg grain / kg N
         """
+
         def __init__(self, timestep):
             self.timestep = timestep
             self.cum_growth = 0
@@ -369,19 +438,23 @@ class DummyClass:
         pass
 
 
-def calculate_nue(n_input, n_so, year=None, n_seed=3.5):
-    n_in = input_nue(n_input, year, n_seed=n_seed)
+def calculate_nue(n_input, n_so, year=None, start=None, end=None, n_seed=3.5):
+    n_in = input_nue(n_input, year, n_seed=n_seed, start=start, end=end)
     nue = n_so / n_in
     return nue
 
 
-def input_nue(n_input, year=None, n_seed=3.5):
-    nh4, no3 = get_deposition_amount(year)
+def input_nue(n_input, year=None, start=None, end=None, n_seed=3.5):
+    if start is None or end is None:
+        nh4, no3 = get_deposition_amount(year)
+    else:
+        nh4, no3 = get_disaggregated_deposition(year=year, start_date=start, end_date=end)
     n_depo = nh4 + no3
     return n_input + n_seed + n_depo
 
 
 def get_deposition_amount(year) -> tuple:
+    """Currently only supports amount from the Netherlands"""
     if year is None:
         NO3 = 12.5
         NH4 = 12.5
@@ -394,8 +467,38 @@ def get_deposition_amount(year) -> tuple:
     return NH4, NO3
 
 
-def get_surplus_n(n_input, n_so, year=None, n_seed=3.5):
-    n_i = input_nue(n_input, year=year, n_seed=n_seed)
+def get_disaggregated_deposition(year, start_date, end_date):
+    """
+    Function to linearly disaggregate annual N deposition amount
+    """
+
+    assert start_date < end_date
+
+    if start_date.year != end_date.year:
+        nh4_s, no3_s = get_disaggregated_deposition(start_date.year, start_date,
+                                                    datetime.date(year=start_date.year, month=12, day=31))
+        nh4_e, no3_e = get_disaggregated_deposition(end_date.year, datetime.date(year=end_date.year, month=1, day=1),
+                                                    end_date)
+        nh4_dis = nh4_s + nh4_e
+        no3_dis = no3_s + no3_e
+
+        return nh4_dis, no3_dis
+
+    date_range = (end_date - start_date).days
+
+    nh4_full, no3_full = get_deposition_amount(year)
+
+    daily_nh4 = nh4_full / get_days_in_year(year)
+    daily_no3 = no3_full / get_days_in_year(year)
+
+    nh4_dis = daily_nh4 * date_range
+    no3_dis = daily_no3 * date_range
+
+    return nh4_dis, no3_dis
+
+
+def get_surplus_n(n_input, n_so, year=None, start=None, end=None, n_seed=3.5):
+    n_i = input_nue(n_input, year=year, start=start, end=end, n_seed=n_seed)
 
     return n_i - n_so
 
@@ -412,10 +515,13 @@ def unimodal_function(b):
     else:  # b > 0.9
         return 0.9 * np.exp(-10 * (b - 0.9)) + 0.1
 
+
+def get_days_in_year(year):
+    return 365 + calendar.isleap(year)
+
+
 def compute_economic_reward(wso, fertilizer, price_yield_ton=400.0, price_fertilizer_ton=300.0):
     g_m2_to_ton_hectare = 0.01
     convert_wso = g_m2_to_ton_hectare * price_yield_ton
     convert_fert = g_m2_to_ton_hectare * price_fertilizer_ton
     return 0.001 * (convert_wso * wso - convert_fert * fertilizer)
-
-

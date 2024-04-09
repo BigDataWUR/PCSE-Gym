@@ -1,6 +1,10 @@
 import unittest
 import numpy as np
 
+import calendar
+import datetime
+
+from pcse_gym.envs.rewards import get_deposition_amount, get_disaggregated_deposition
 import tests.initialize_env as init_env
 
 
@@ -13,6 +17,7 @@ class Rewards(unittest.TestCase):
         self.nue = init_env.initialize_env_nue_reward()
         self.nup = init_env.initialize_env_nup_reward()
         self.har = init_env.initialize_env_har_reward()
+        self.dnu = init_env.initialize_env_dnu_reward()
 
     def test_dep_reward_action(self):
         self.env.reset()
@@ -127,7 +132,7 @@ class Rewards(unittest.TestCase):
             _, reward, terminated, _, _ = self.nue.step(action)
 
             if terminated:
-                expected_reward = 2536.419
+                expected_reward = 2747.615
             else:
                 expected_reward = -10
 
@@ -149,7 +154,7 @@ class Rewards(unittest.TestCase):
             _, reward, terminated, _, _ = self.nue.step(action)
 
             if terminated:
-                expected_reward = 1330.2
+                expected_reward = 1115.126
             elif week == n or week == n + 4:
                 expected_reward = -60
             else:
@@ -198,23 +203,54 @@ class Rewards(unittest.TestCase):
 
         self.assertAlmostEqual(expected_reward, rewards, 1)
 
+    def test_dnu_reward(self):
+        self.dnu.reset()
+        terminated = False
+
+        week = 0
+        n = 12
+        rewards = 0
+        while not terminated:
+
+            if week == n or week == n + 4:
+                action = np.array([6])
+            else:
+                action = np.array([0])
+            _, reward, terminated, _, _ = self.dnu.step(action)
+            rewards += reward
+
+        expected_reward = 95.303
+
+        self.assertAlmostEqual(expected_reward, rewards, 1)
+
 
 class NitrogenUseEfficiency(unittest.TestCase):
     def setUp(self):
         self.nue1 = init_env.initialize_env_nue_reward()
 
-    def process_nue(self, n_input, info, y):
-        n_in = self.process_nue_in(n_input, y)
+    def process_nue(self, n_input, info, y, start, end):
+        n_in = self.process_nue_in(n_input, y, start, end)
 
         return info['NamountSO'][max(info['NamountSO'].keys())] / n_in
 
     @staticmethod
-    def process_nue_in(n_input, y):
+    def get_days_in_year(year):
+        return 365 + calendar.isleap(year)
+
+    def process_nue_in(self, n_input, y, start, end):
         nh4 = 697 - 0.339 * y
         no3 = 538.868 - 0.264 * y
-        n_depo = nh4 + no3
 
-        return n_input + 3.5 + n_depo
+        # date_range1 = (datetime.date(year=y, month=12, day=31) - start).days
+        date_range = (end - start).days
+
+        nh4_daily = nh4 / self.get_days_in_year(y)
+        no3_daily = no3 / self.get_days_in_year(y)
+
+        nh4_dis = nh4_daily * date_range
+        no3_dis = no3_daily * date_range
+
+        return n_input + nh4_dis + no3_dis + 3.5
 
     def test_nue_value(self):
         year = 2002
@@ -230,7 +266,8 @@ class NitrogenUseEfficiency(unittest.TestCase):
             _, rew, terminated, _, info = self.nue1.step(action)
             n_input += list(info['fertilizer'].values())[0]
 
-        calculated_nue = self.process_nue(n_input, info, year)
+        calculated_nue = self.process_nue(n_input, info, year, start=self.nue1.sb3_env.agmt.get_start_date(),
+                                          end=self.nue1.sb3_env.agmt.get_end_date())
 
         self.assertAlmostEqual(info['NUE'][max(info['NUE'].keys())], calculated_nue, 1)
 
@@ -254,7 +291,8 @@ class NitrogenUseEfficiency(unittest.TestCase):
             _, reward, terminated, _, info = self.nue1.step(action)
             n_input += list(info['fertilizer'].values())[0]
 
-        calculated_nue = self.process_nue(n_input, info, year)
+        calculated_nue = self.process_nue(n_input, info, year, start=self.nue1.sb3_env.agmt.get_start_date(),
+                                          end=self.nue1.sb3_env.agmt.get_end_date())
 
         self.assertAlmostEqual(info['NUE'][max(info['NUE'].keys())], calculated_nue, 1)
 
@@ -278,6 +316,30 @@ class NitrogenUseEfficiency(unittest.TestCase):
             _, reward, terminated, _, info = self.nue1.step(action)
             n_input += action * 10
 
-        calculated_surplus = self.process_nue_in(n_input, year) - info['NamountSO'][max(info['NamountSO'].keys())]
+        calculated_surplus = (self.process_nue_in(n_input, year,
+                                                  start=self.nue1.sb3_env.agmt.get_start_date(),
+                                                  end=self.nue1.sb3_env.agmt.get_end_date())
+                              - info['NamountSO'][max(info['NamountSO'].keys())])
 
-        self.assertAlmostEqual(info['Nsurplus'][max(info['Nsurplus'].keys())], calculated_surplus, 1)
+        self.assertAlmostEqual(info['Nsurplus'][max(info['Nsurplus'].keys())], calculated_surplus[0], 1)
+
+    def test_disaggregate(self):
+        start = datetime.date(2002, 1, 1)
+        end = datetime.date(2002, 2, 1)
+
+        nh4_depo, no3_depo = get_deposition_amount(2002)
+
+        daily_nh4 = nh4_depo / 365
+        daily_no3 = no3_depo / 365
+
+        expected_nh4 = daily_nh4 * 31
+        expected_no3 = daily_no3 * 31
+
+        nh4_dis, no3_dis = get_disaggregated_deposition(year=2002, start_date=start, end_date=end)
+
+        self.assertEqual(expected_nh4, nh4_dis)
+        self.assertEqual(expected_no3, no3_dis)
+
+
+
+

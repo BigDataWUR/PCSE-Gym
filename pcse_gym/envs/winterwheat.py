@@ -118,6 +118,9 @@ class WinterWheat(gym.Env):
             self.rewards = self.rewards_obj.HAR(self.timestep, costs_nitrogen, 200, 1, 1)
             self.reward_container = self.rewards_obj.ContainerEND(self.timestep, costs_nitrogen)
 
+        elif self.reward_function == 'DNU':
+            self.rewards = self.rewards_obj.DNU(self.timestep, costs_nitrogen)
+
         else:
             raise Exception('please choose valid reward function')
 
@@ -167,7 +170,7 @@ class WinterWheat(gym.Env):
         info['growth'][self.date] = growth
 
         # used for reward functions that rely on rewards at terminate
-        reward, info = self.end_reward_modifiers(output, reward, terminated, info)
+        reward, info = self.terminate_reward_signal(output, reward, terminated, info)
 
         # normalize observations and reward if not using VecNormalize wrapper
         if self.normalize:
@@ -218,23 +221,29 @@ class WinterWheat(gym.Env):
                                                     obj=self.reward_container)
         return reward, growth
 
-    def end_reward_modifiers(self, output, reward, terminated, info):
-        if terminated and self.reward_function in reward_functions_end():
+    def terminate_reward_signal(self, output, reward, terminated, info):
+        if terminated and (self.reward_function in reward_functions_end() or self.reward_function == 'HAR'):
             reward = self.reward_container.dump_cumulative_positive_reward - abs(reward)
 
         elif terminated and self.reward_function == 'NUE':
             n_so = output[-1]['NamountSO']
             cum_actions = self.reward_container.actions * 10
-            reward = self.reward_container.calculate_reward_nue(cum_actions, n_so, year=self.date.year) - abs(reward)
+            reward = (self.reward_container.calculate_reward_nue(cum_actions, n_so,
+                                                                 year=self.date.year,
+                                                                 start=self.sb3_env.agmt.get_start_date(),
+                                                                 end=self.sb3_env.agmt.get_end_date()) - abs(reward))
             if 'NUE' not in info.keys():
                 info['NUE'] = {}
-            info['NUE'][self.date] = calculate_nue(cum_actions, n_so, year=self.date.year)
+            info['NUE'][self.date] = calculate_nue(cum_actions, n_so,
+                                                   year=self.date.year,
+                                                   start=self.sb3_env.agmt.get_start_date(),
+                                                   end=self.sb3_env.agmt.get_end_date())
             if 'Nsurplus' not in info.keys():
                 info['Nsurplus'] = {}
-            info['Nsurplus'][self.date] = get_surplus_n(cum_actions, n_so, year=self.date.year)
-
-        elif terminated and self.reward_function == 'HAR':
-            reward = self.reward_container.dump_cumulative_positive_reward - abs(reward)
+            info['Nsurplus'][self.date] = get_surplus_n(cum_actions, n_so,
+                                                        year=self.date.year,
+                                                        start=self.sb3_env.agmt.get_start_date(),
+                                                        end=self.sb3_env.agmt.get_end_date())
 
         return reward, info
 
@@ -261,7 +270,7 @@ class WinterWheat(gym.Env):
         nav = np.clip(self.rng.normal(15, 15), 0.0, 100.0)
         self.eval_wav = wav
         self.eval_nav = nav
-        site_parameters=pcse.util.WOFOST80SiteDataProvider(WAV=wav, NAVAILI=nav)
+        site_parameters = pcse.util.WOFOST80SiteDataProvider(WAV=wav, NAVAILI=nav)
         return site_parameters
 
     def reset(self, seed=None, options=None, **kwargs):
@@ -352,6 +361,7 @@ class WinterWheatRay(WinterWheat):
     @:param config: a config file or a dict that contains input parameters for the custom environment; in this case
     winterwheat
     """
+
     def __init__(self, config, *args, **kwargs):
         super(WinterWheatRay, self).__init__(crop_features=config['crop_features'],
                                              action_features=config['action_features'],

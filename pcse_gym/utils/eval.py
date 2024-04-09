@@ -551,15 +551,16 @@ class EvalCallback(BaseCallback):
 
             for test_location in list(set(self.test_locations)):
                 test_keys = [(a, test_location) for a in self.test_years]
+                if self.env_eval.reward_function == 'NUE':
+                    self.logger.record(f'eval/NUE-average-test-{test_location}', compute_average(NUE, test_keys))
+                    self.logger.record(f'eval/NUE-median-test-{test_location}', compute_median(NUE, test_keys))
                 self.logger.record(f'eval/reward-average-test-{test_location}', compute_average(reward, test_keys))
                 self.logger.record(f'eval/nitrogen-average-test-{test_location}',
                                    compute_average(fertilizer, test_keys))
                 self.logger.record(f'eval/WSO-average-test-{test_location}', compute_average(WSO, test_keys))
-                self.logger.record(f'eval/NUE-average-test-{test_location}', compute_average(NUE, test_keys))
                 self.logger.record(f'eval/reward-median-test-{test_location}', compute_median(reward, test_keys))
                 self.logger.record(f'eval/nitrogen-median-test-{test_location}', compute_median(fertilizer, test_keys))
                 self.logger.record(f'eval/WSO-median-test-{test_location}', compute_median(WSO, test_keys))
-                self.logger.record(f'eval/NUE-median-test-{test_location}', compute_median(NUE, test_keys))
 
             if log_training:
                 train_keys = [(a, b) for a in self.train_years for b in self.train_locations]
@@ -568,14 +569,16 @@ class EvalCallback(BaseCallback):
                 self.logger.record(f'eval/reward-median-train', compute_median(reward, train_keys))
                 self.logger.record(f'eval/nitrogen-median-train', compute_median(fertilizer, train_keys))
 
+            if self.env_eval.reward_function == 'NUE':
+                self.logger.record(f'eval/NUE-median-all', compute_median(NUE))
+                self.logger.record(f'eval/NUE-average-all', compute_average(NUE))
             self.logger.record(f'eval/reward-average-all', compute_average(reward))
             self.logger.record(f'eval/nitrogen-average-all', compute_average(fertilizer))
             self.logger.record(f'eval/WSO-average-all', compute_average(WSO))
-            self.logger.record(f'eval/NUE-average-all', compute_average(NUE))
             self.logger.record(f'eval/reward-median-all', compute_median(reward))
             self.logger.record(f'eval/nitrogen-median-all', compute_median(fertilizer))
             self.logger.record(f'eval/WSO-median-all', compute_median(WSO))
-            self.logger.record(f'eval/NUE-median-all', compute_median(NUE))
+
 
             if self.pcse_model:
                 variables = ['DVS', 'action', 'WSO', 'reward',
