@@ -123,7 +123,7 @@ def compute_average(results_dict: dict, filter_list=None):
     return sum(filtered_results) / len(filtered_results)
 
 
-def get_action_probs(dis : MultiCategoricalDistribution, po_features, crop_features, measure_all):
+def get_action_probs(dis: MultiCategoricalDistribution, po_features, crop_features, measure_all):
     if po_features:
         dict = {}
         dict['prob_action'] = dis.distribution[0].probs.detach().numpy()[0]
@@ -132,13 +132,14 @@ def get_action_probs(dis : MultiCategoricalDistribution, po_features, crop_featu
         else:
             for i, feature in enumerate(crop_features):
                 if feature in po_features:
-                    feature = "prob_"+feature
+                    feature = "prob_" + feature
                     dict[feature] = dis.distribution[i].probs.detach().numpy()[0][1]
         return dict
     else:
         return None
 
-def  evaluate_policy(
+
+def evaluate_policy(
         policy,
         env: Union[gym.Env, VecEnv],
         n_eval_episodes: int = 1,
@@ -221,19 +222,19 @@ def  evaluate_policy(
                 if isinstance(policy, RecurrentPPO):
                     action, lstm_state = policy.predict(obs, state=lstm_state, episode_start=episode_starts,
                                                         deterministic=deterministic)
-                    lstm_torch = (torch.from_numpy(lstm_state[0]),torch.from_numpy(lstm_state[1]))
+                    lstm_torch = (torch.from_numpy(lstm_state[0]), torch.from_numpy(lstm_state[1]))
 
                     dis, _ = policy.policy.get_distribution(torch.from_numpy(obs),
-                                                         lstm_states=lstm_torch,
-                                                         episode_starts=torch.from_numpy(episode_starts))
+                                                            lstm_states=lstm_torch,
+                                                            episode_starts=torch.from_numpy(episode_starts))
 
                     action_probs = get_action_probs(dis, env.envs[0].unwrapped.po_features,
                                                     env.envs[0].unwrapped.crop_features,
                                                     env.envs[0].unwrapped.measure_all)
 
                     val = policy.policy.predict_values(torch.from_numpy(obs),
-                                                         lstm_states=lstm_torch,
-                                                         episode_starts=torch.from_numpy(episode_starts))
+                                                       lstm_states=lstm_torch,
+                                                       episode_starts=torch.from_numpy(episode_starts))
                     val = val.detach().numpy()[0][0]
 
                 if isinstance(policy, DQN):
@@ -511,7 +512,7 @@ class EvalCallback(BaseCallback):
             ax.set_xticklabels(list(self.histogram_training_locations.keys()), fontdict=None, minor=False)
             self.logger.record(f'figures/training-locations', Figure(fig, close=True))
 
-            reward, fertilizer, result_model, WSO, NUE = {}, {}, {}, {}, {}
+            reward, fertilizer, result_model, WSO, NUE, profit = {}, {}, {}, {}, {}, {}
             log_training = self.get_do_log_training()
 
             env_pcse_evaluation = self.env_eval
@@ -519,8 +520,8 @@ class EvalCallback(BaseCallback):
                 env_pcse_evaluation = DummyVecEnv([lambda: env_pcse_evaluation])
             else:
                 env_pcse_evaluation = VecNormalize(DummyVecEnv([lambda: env_pcse_evaluation]),
-                                               norm_obs=True, norm_reward=True,
-                                               clip_obs=10., clip_reward=50., gamma=1)
+                                                   norm_obs=True, norm_reward=True,
+                                                   clip_obs=10., clip_reward=50., gamma=1)
             env_pcse_evaluation.training = False
             n_year_loc = 0
 
@@ -539,6 +540,7 @@ class EvalCallback(BaseCallback):
                         episode_infos = get_measure_graphs(episode_infos)
                     fertilizer[my_key] = sum(episode_infos[0]['fertilizer'].values())
                     WSO[my_key] = list(episode_infos[0]['WSO'].values())[-1]
+                    profit[my_key] = list(episode_infos[0]['profit'].values())[-1]
                     if self.env_eval.reward_function == 'NUE':
                         NUE[my_key] = self.get_nue(episode_infos)
                     # self.logger.record(f'eval/reward-{my_key}', reward[my_key])
@@ -557,17 +559,22 @@ class EvalCallback(BaseCallback):
                 self.logger.record(f'eval/reward-average-test-{test_location}', compute_average(reward, test_keys))
                 self.logger.record(f'eval/nitrogen-average-test-{test_location}',
                                    compute_average(fertilizer, test_keys))
+                self.logger.record(f'eval/profit-average-test-{test_location}',
+                                   compute_average(profit, test_keys))
                 self.logger.record(f'eval/WSO-average-test-{test_location}', compute_average(WSO, test_keys))
                 self.logger.record(f'eval/reward-median-test-{test_location}', compute_median(reward, test_keys))
                 self.logger.record(f'eval/nitrogen-median-test-{test_location}', compute_median(fertilizer, test_keys))
                 self.logger.record(f'eval/WSO-median-test-{test_location}', compute_median(WSO, test_keys))
+                self.logger.record(f'eval/profit-median-test-{test_location}', compute_median(profit, test_keys))
 
             if log_training:
                 train_keys = [(a, b) for a in self.train_years for b in self.train_locations]
                 self.logger.record(f'eval/reward-average-train', compute_average(reward, train_keys))
                 self.logger.record(f'eval/nitrogen-average-train', compute_average(fertilizer, train_keys))
+                self.logger.record(f'eval/profit-average-train', compute_average(profit, train_keys))
                 self.logger.record(f'eval/reward-median-train', compute_median(reward, train_keys))
                 self.logger.record(f'eval/nitrogen-median-train', compute_median(fertilizer, train_keys))
+                self.logger.record(f'eval/profit-median-train', compute_median(profit, train_keys))
 
             if self.env_eval.reward_function == 'NUE':
                 self.logger.record(f'eval/NUE-median-all', compute_median(NUE))
@@ -575,10 +582,11 @@ class EvalCallback(BaseCallback):
             self.logger.record(f'eval/reward-average-all', compute_average(reward))
             self.logger.record(f'eval/nitrogen-average-all', compute_average(fertilizer))
             self.logger.record(f'eval/WSO-average-all', compute_average(WSO))
+            self.logger.record(f'eval/profit-average-all', compute_average(profit))
             self.logger.record(f'eval/reward-median-all', compute_median(reward))
             self.logger.record(f'eval/nitrogen-median-all', compute_median(fertilizer))
             self.logger.record(f'eval/WSO-median-all', compute_median(WSO))
-
+            self.logger.record(f'eval/profit-median-all', compute_median(profit))
 
             if self.pcse_model:
                 variables = ['DVS', 'action', 'WSO', 'reward',
@@ -662,6 +670,7 @@ class EvalCallback(BaseCallback):
 
         return True
 
+
 class CometCallback(EvalCallback):
     def __init__(self, *args, comet_experiment, save_path, **kwargs):
         super(CometCallback, self).__init__(*args, **kwargs)
@@ -674,7 +683,6 @@ class CometCallback(EvalCallback):
 
         # Your custom Comet.ml logging logic
         if self.n_calls % self.eval_freq == 0 or self.n_calls == 1:
-
             # Log the .pkl file as an artifact to Comet.ml
             self.comet_experiment.log_asset(file_path=self.save_path, file_name="CustomEnvironmentData.pkl")
 

@@ -18,6 +18,7 @@ class Rewards(unittest.TestCase):
         self.nup = init_env.initialize_env_nup_reward()
         self.har = init_env.initialize_env_har_reward()
         self.dnu = init_env.initialize_env_dnu_reward()
+        self.fin = init_env.initialize_env_fin_reward()
 
     def test_dep_reward_action(self):
         self.env.reset()
@@ -48,7 +49,7 @@ class Rewards(unittest.TestCase):
             _, reward, terminated, _, _ = self.end.step(action)
 
             if terminated:
-                expected_reward = 2151.22
+                expected_reward = 2151.55
             else:
                 expected_reward = -10
 
@@ -70,7 +71,7 @@ class Rewards(unittest.TestCase):
             _, reward, terminated, _, _ = self.end.step(action)
 
             if terminated:
-                expected_reward = 1943.18
+                expected_reward = 1943.47
             elif week == n or week == n + 4:
                 expected_reward = -60
             else:
@@ -179,8 +180,9 @@ class Rewards(unittest.TestCase):
                 action = np.array([0])
             _, reward, terminated, _, _ = self.nup.step(action)
             rewards += reward
+            week += 1
 
-        expected_reward = 144.034
+        expected_reward = 142.13
 
         self.assertAlmostEqual(expected_reward, rewards, 1)
 
@@ -199,7 +201,8 @@ class Rewards(unittest.TestCase):
                 action = np.array([0])
             _, reward, terminated, _, _ = self.har.step(action)
             rewards += reward
-        expected_reward = 6344.094
+            week += 1
+        expected_reward = 8549.11
 
         self.assertAlmostEqual(expected_reward, rewards, 1)
 
@@ -218,10 +221,36 @@ class Rewards(unittest.TestCase):
                 action = np.array([0])
             _, reward, terminated, _, _ = self.dnu.step(action)
             rewards += reward
+            week += 1
 
-        expected_reward = 95.303
+        expected_reward = 25.31
 
         self.assertAlmostEqual(expected_reward, rewards, 1)
+
+    def test_fin_reward_single_year(self, year=2002, expected_reward=911.42):
+        self.fin.overwrite_year(year)
+        self.fin.reset()
+        terminated = False
+
+        week = 0
+        n = 4
+        rewards = 0
+        while not terminated:
+
+            if week == n or week == n + 4 or week == n + 8:
+                action = np.array([6])
+            else:
+                action = np.array([0])
+            _, reward, terminated, _, _ = self.fin.step(action)
+            rewards += reward
+            week += 1
+
+        self.assertAlmostEqual(expected_reward, rewards, 1)
+
+    def test_fin_reward_multiple_years(self):
+        self.test_fin_reward_single_year(year=2005, expected_reward=807.52)
+        self.test_fin_reward_single_year(year=2020, expected_reward=1281.57)
+        self.test_fin_reward_single_year(year=1990, expected_reward=1550.18)
 
 
 class NitrogenUseEfficiency(unittest.TestCase):

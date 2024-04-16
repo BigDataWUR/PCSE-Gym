@@ -168,3 +168,7 @@ def initialize_env_har_reward():
 
 def initialize_env_dnu_reward():
     return initialize_env(reward='DNU')
+
+
+def initialize_env_fin_reward():
+    return initialize_env(reward='FIN')

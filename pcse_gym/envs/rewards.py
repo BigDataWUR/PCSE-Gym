@@ -24,6 +24,7 @@ class Rewards:
         self.timestep = timestep
         self.costs_nitrogen = costs_nitrogen
         self.vrr = vrr
+        self.profit = 0
 
     def growth_storage_organ(self, output, amount, multiplier=1):
         growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
@@ -98,6 +99,18 @@ class Rewards:
         print(f"the N demand is {n_demand_diff}")
         print(f"the benefits are {benefits}")
         return benefits, growth
+
+    def reset(self):
+        self.profit = 0
+
+    def calculate_profit(self, output, amount, year, multiplier, country='NL'):
+        
+        profit, _ = calculate_net_profit(output, amount, year, multiplier, self.timestep, country)
+
+        return profit
+
+    def update_profit(self, output, amount, year, multiplier, country='NL'):
+        self.profit += self.calculate_profit(output, amount, year, multiplier)
 
     """
     Classes that determine the reward function
@@ -262,6 +275,9 @@ class Rewards:
             return reward, growth
 
     class DNU(Rew):
+        """
+        Dense reward of Nitrogen in Wheat Grain and N losses and N deposition
+        """
         def __init__(self, timestep, costs_nitrogen):
             super().__init__(timestep, costs_nitrogen)
             self.timestep = timestep
@@ -276,7 +292,7 @@ class Rewards:
             # N loss
             n_loss = process_pcse.compute_growth_var(output, self.timestep, 'NLOSSCUM')
             # N deposition
-            nh4, no3 = get_disaggregated_deposition(year=output[-1]['day'].year,
+            nh4, no3 = get_disaggregated_deposition(year=self.get_year_in_step(output),
                                                     start_date=
                                                     output[process_pcse.get_previous_index(output, self.timestep)][
                                                         'day'],
@@ -288,12 +304,31 @@ class Rewards:
 
             return reward, growth
 
+        @staticmethod
+        def get_year_in_step(output):
+            return output[-1]['day'].year
+
     class FIN(Rew):
-        def __init__(self, timestep, costs_nitrogen):
+        """
+        Financial reward function, converting yield, N fertilizer and labour costs into a net profit reward.
+        """
+        def __init__(self, timestep, costs_nitrogen, labour=False):
             super().__init__(timestep, costs_nitrogen)
+            self.labour = labour
+            self.base_labour_cost_index = 28.9  # euros, in 2020
+            self.time_per_hectare = 5 / 60  # minutes to hours
+            self.country = 'NL'
 
         def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
-            pass
+            year = self.get_year_in_step(output)
+
+            reward, growth = calculate_net_profit(output, amount, year, multiplier, self.timestep, self.country)
+
+            return reward, growth
+
+        @staticmethod
+        def get_year_in_step(output):
+            return output[-1]['day'].year
 
     """
     Containers for certain reward functions
@@ -525,3 +560,95 @@ def compute_economic_reward(wso, fertilizer, price_yield_ton=400.0, price_fertil
     convert_wso = g_m2_to_ton_hectare * price_yield_ton
     convert_fert = g_m2_to_ton_hectare * price_fertilizer_ton
     return 0.001 * (convert_wso * wso - convert_fert * fertilizer)
+
+
+def calculate_net_profit(output, amount, year, multiplier, timestep, country='NL'):
+
+    growth = process_pcse.compute_growth_storage_organ(output, timestep, multiplier)
+
+    wso_conv_eur = growth * get_wheat_price_in_kgs(year)
+
+    n_conv_eur = get_fertilizer_price(amount, year)
+
+    labour_conv_eur = get_labour_price(year)
+
+    labour_flag = 1 if amount else 0
+
+    reward = wso_conv_eur - n_conv_eur - labour_conv_eur * labour_flag
+
+    return reward, growth
+
+
+def annual_price_wheat_per_ton(year):
+    prices = {
+        1989: 177.16, 1990: 168.27, 1991: 174.05, 1992: 171.61, 1993: 148.94, 1994: 135.27, 1995: 131.89,
+        1996: 130.50, 1997: 120.84, 1998: 111.39, 1999: 111.62, 2000: 116.23, 2001: 112.17, 2002: 102.89,
+        2003: 114.73, 2004: 116.95, 2005: 96.73, 2006: 117.95, 2007: 180.78, 2008: 169.84, 2009: 112.23,
+        2010: 152.00, 2011: 197.5, 2012: 219.28, 2013: 203.23, 2014: 164.12, 2015: 159.43, 2016: 145.17,
+        2017: 154.62, 2018: 176.23, 2019: 172.23, 2020: 181.67, 2021: 233.84, 2022: 312.56, 2023: 227.56
+    }
+
+    return prices[year]
+
+
+def get_wheat_price_in_kgs(year):
+    return annual_price_wheat_per_ton(year) * 0.001
+
+
+def get_nitrogen_price_in_kgs(year):
+    return annual_price_nitrogen_per_quintal(year) * 0.01
+
+
+def annual_price_nitrogen_per_quintal(year):
+    prices = {
+        1989: 11.61, 1990: 11.61, 1991: 12.20, 1992: 11.04, 1993: 10.07, 1994: 10.24, 1995: 12.58,
+        1996: 13.22, 1997: 11.49, 1998: 10.55, 1999: 9.48, 2000: 13.09, 2001: 15.60, 2002: 14.28,
+        2003: 15.18, 2004: 15.89, 2005: 17.11, 2006: 18.85, 2007: 19.81, 2008: 33.12, 2009: 21.37,
+        2010: 21.71, 2011: 29.39, 2012: 29.38, 2013: 27.13, 2014: 27.74, 2015: 27.85, 2016: 21.49,
+        2017: 21.37, 2018: 22.90, 2019: 24.17, 2020: 20.49, 2021: 35.71, 2022: 76.62, 2023: 38.14
+    }
+
+    return prices[year]
+
+
+def labour_index_per_year(year):
+    """
+    Linear function to estimate hourly labour costs per year in the Netherlands
+    From https://ycharts.com/indicators/netherlands_labor_cost_index
+    """
+    index = 2.0016 * year - 3941.4
+
+    index = index / 100  # convert to percentage
+    return index
+
+
+"""
+Calculations for getting prices in the year
+"""
+
+
+def get_fertilizer_price(action, year):
+    """
+    Price of N fertilizer per kg in the year
+
+    :param action: agent's action
+    :param year: year of the action
+    :return: nitrogen price per kg
+    """
+    amount = action * 10  # action to kg/ha
+    price = get_nitrogen_price_in_kgs(year)
+
+    return amount * price
+
+
+def get_labour_price(year, base_labour_cost_index=28.9, time_per_hectare=0.0834):
+    """
+    Price of hourly labour per year, considering the European labour cost index
+
+    :param base_labour_cost_index: labour cost in the base year of the index
+    :param time_per_hectare: assumption of the time needed to fertilize one hectare of land, currently defaults to
+            5 minutes per hectare.
+    :return: price of labour in euros
+    """
+
+    return (base_labour_cost_index * labour_index_per_year(year) + base_labour_cost_index) * time_per_hectare

@@ -121,6 +121,9 @@ class WinterWheat(gym.Env):
         elif self.reward_function == 'DNU':
             self.rewards = self.rewards_obj.DNU(self.timestep, costs_nitrogen)
 
+        elif self.reward_function == 'FIN':
+            self.rewards = self.rewards_obj.FIN(self.timestep, costs_nitrogen)
+
         else:
             raise Exception('please choose valid reward function')
 
@@ -219,6 +222,8 @@ class WinterWheat(gym.Env):
                                                     output_baseline=output_baseline,
                                                     multiplier=self.sb3_env.multiplier_amount,
                                                     obj=self.reward_container)
+        self.rewards_obj.update_profit(output, amount, year=self.sb3_env.date.year,
+                                       multiplier=self.sb3_env.multiplier_amount)
         return reward, growth
 
     def terminate_reward_signal(self, output, reward, terminated, info):
@@ -244,6 +249,10 @@ class WinterWheat(gym.Env):
                                                         year=self.date.year,
                                                         start=self.sb3_env.agmt.get_start_date(),
                                                         end=self.sb3_env.agmt.get_end_date())
+
+        if 'profit' not in info.keys():
+            info['profit'] = {}
+        info['profit'][self.date] = self.rewards_obj.profit
 
         return reward, info
 
@@ -289,6 +298,7 @@ class WinterWheat(gym.Env):
             self.set_location(location)
 
         self.reward_container.reset()
+        self.rewards_obj.reset()
 
         if self.reward_function in reward_functions_with_baseline():
             self.baseline_env.reset(seed=seed, options=site_params)
