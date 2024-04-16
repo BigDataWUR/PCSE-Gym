@@ -256,6 +256,7 @@ class Rewards(unittest.TestCase):
 class NitrogenUseEfficiency(unittest.TestCase):
     def setUp(self):
         self.nue1 = init_env.initialize_env_nue_reward()
+        self.def1 = init_env.initialize_env_reward_dep()
 
     def process_nue(self, n_input, info, y, start, end):
         n_in = self.process_nue_in(n_input, y, start, end)
@@ -368,6 +369,16 @@ class NitrogenUseEfficiency(unittest.TestCase):
 
         self.assertEqual(expected_nh4, nh4_dis)
         self.assertEqual(expected_no3, no3_dis)
+
+    def test_nue_calc_in_other_rf(self):
+        self.def1.overwrite_year(2002)
+        self.def1.reset()
+        terminated = False
+
+        while not terminated:
+            _, _, terminated, _, infos = self.def1.step(np.array([1]))
+
+        self.assertAlmostEqual(0.58, max(list(infos['NUE'].values())), 0)
 
 
 

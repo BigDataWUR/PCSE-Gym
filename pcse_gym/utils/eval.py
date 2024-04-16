@@ -553,9 +553,8 @@ class EvalCallback(BaseCallback):
 
             for test_location in list(set(self.test_locations)):
                 test_keys = [(a, test_location) for a in self.test_years]
-                if self.env_eval.reward_function == 'NUE':
-                    self.logger.record(f'eval/NUE-average-test-{test_location}', compute_average(NUE, test_keys))
-                    self.logger.record(f'eval/NUE-median-test-{test_location}', compute_median(NUE, test_keys))
+                self.logger.record(f'eval/NUE-average-test-{test_location}', compute_average(NUE, test_keys))
+                self.logger.record(f'eval/NUE-median-test-{test_location}', compute_median(NUE, test_keys))
                 self.logger.record(f'eval/reward-average-test-{test_location}', compute_average(reward, test_keys))
                 self.logger.record(f'eval/nitrogen-average-test-{test_location}',
                                    compute_average(fertilizer, test_keys))
@@ -571,14 +570,15 @@ class EvalCallback(BaseCallback):
                 train_keys = [(a, b) for a in self.train_years for b in self.train_locations]
                 self.logger.record(f'eval/reward-average-train', compute_average(reward, train_keys))
                 self.logger.record(f'eval/nitrogen-average-train', compute_average(fertilizer, train_keys))
+                self.logger.record(f'eval/NUE-average-train', compute_average(NUE, train_keys))
+                self.logger.record(f'eval/NUE-median-train', compute_median(NUE, train_keys))
                 self.logger.record(f'eval/profit-average-train', compute_average(profit, train_keys))
                 self.logger.record(f'eval/reward-median-train', compute_median(reward, train_keys))
                 self.logger.record(f'eval/nitrogen-median-train', compute_median(fertilizer, train_keys))
                 self.logger.record(f'eval/profit-median-train', compute_median(profit, train_keys))
 
-            if self.env_eval.reward_function == 'NUE':
-                self.logger.record(f'eval/NUE-median-all', compute_median(NUE))
-                self.logger.record(f'eval/NUE-average-all', compute_average(NUE))
+            self.logger.record(f'eval/NUE-median-all', compute_median(NUE))
+            self.logger.record(f'eval/NUE-average-all', compute_average(NUE))
             self.logger.record(f'eval/reward-average-all', compute_average(reward))
             self.logger.record(f'eval/nitrogen-average-all', compute_average(fertilizer))
             self.logger.record(f'eval/WSO-average-all', compute_average(WSO))

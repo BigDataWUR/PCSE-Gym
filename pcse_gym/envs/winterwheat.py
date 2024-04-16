@@ -11,7 +11,7 @@ from pcse_gym.utils.normalization import NormalizeMeasureObservations, RunningRe
 from .constraints import VariableRecoveryRate
 from .measure import MeasureOrNot
 from .sb3 import ZeroNitrogenEnvStorage, StableBaselinesWrapper
-from .rewards import Rewards, DummyClass
+from .rewards import Rewards, ActionsContainer
 from .rewards import reward_functions_with_baseline, reward_functions_end, calculate_nue, get_surplus_n
 
 
@@ -88,7 +88,7 @@ class WinterWheat(gym.Env):
     def _init_reward_function(self, costs_nitrogen, kwargs):
 
         self.rewards_obj = Rewards(kwargs.get('reward_var'), self.timestep, costs_nitrogen)
-        self.reward_container = DummyClass()
+        self.reward_container = ActionsContainer()
 
         if self.reward_function == 'ANE':
             self.rewards = self.rewards_obj.DEF(self.timestep, costs_nitrogen)
@@ -227,22 +227,23 @@ class WinterWheat(gym.Env):
         return reward, growth
 
     def terminate_reward_signal(self, output, reward, terminated, info):
+        n_so = output[-1]['NamountSO']
+        cum_actions = self.reward_container.actions * 10  # convert to kg N / ha
+        if 'NUE' not in info.keys():
+            info['NUE'] = {}
+        info['NUE'][self.date] = calculate_nue(cum_actions, n_so,
+                                               year=self.date.year,
+                                               start=self.sb3_env.agmt.get_start_date(),
+                                               end=self.sb3_env.agmt.get_end_date())
+
         if terminated and (self.reward_function in reward_functions_end() or self.reward_function == 'HAR'):
             reward = self.reward_container.dump_cumulative_positive_reward - abs(reward)
 
         elif terminated and self.reward_function == 'NUE':
-            n_so = output[-1]['NamountSO']
-            cum_actions = self.reward_container.actions * 10
             reward = (self.reward_container.calculate_reward_nue(cum_actions, n_so,
                                                                  year=self.date.year,
                                                                  start=self.sb3_env.agmt.get_start_date(),
                                                                  end=self.sb3_env.agmt.get_end_date()) - abs(reward))
-            if 'NUE' not in info.keys():
-                info['NUE'] = {}
-            info['NUE'][self.date] = calculate_nue(cum_actions, n_so,
-                                                   year=self.date.year,
-                                                   start=self.sb3_env.agmt.get_start_date(),
-                                                   end=self.sb3_env.agmt.get_end_date())
             if 'Nsurplus' not in info.keys():
                 info['Nsurplus'] = {}
             info['Nsurplus'][self.date] = get_surplus_n(cum_actions, n_so,

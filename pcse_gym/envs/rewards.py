@@ -112,6 +112,9 @@ class Rewards:
     def update_profit(self, output, amount, year, multiplier, country='NL'):
         self.profit += self.calculate_profit(output, amount, year, multiplier)
 
+    def calculate_nue(self, output, amount, year, multiplier, country='NL'):
+        pass
+
     """
     Classes that determine the reward function
     """
@@ -136,6 +139,7 @@ class Rewards:
             self.costs_nitrogen = costs_nitrogen
 
         def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
+            obj.calculate_amount(amount)
             growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
             growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep, multiplier)
             benefits = growth - growth_baseline
@@ -154,6 +158,7 @@ class Rewards:
             self.costs_nitrogen = costs_nitrogen
 
         def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
+            obj.calculate_amount(amount)
             growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
             costs = self.costs_nitrogen * amount
             reward = growth - costs
@@ -171,6 +176,7 @@ class Rewards:
             self.costs_nitrogen = costs_nitrogen
 
         def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
+            obj.calculate_amount(amount)
             if amount == 0:
                 cost_deployment = 0
             else:
@@ -203,6 +209,7 @@ class Rewards:
             self.costs_nitrogen = costs_nitrogen
 
         def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
+            obj.calculate_amount(amount)
             obj.calculate_cost_cumulative(amount)
             obj.calculate_positive_reward_cumulative(output, output_baseline)
             reward = 0 - amount * self.costs_nitrogen
@@ -240,6 +247,7 @@ class Rewards:
             self.costs_nitrogen = costs_nitrogen
 
         def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
+            obj.calculate_amount(amount)
             growth = process_pcse.compute_growth_var(output, self.timestep, 'NuptakeTotal')
             costs = self.costs_nitrogen * amount
             reward = growth - costs
@@ -259,6 +267,7 @@ class Rewards:
             self.penalty_modifier = penalty_modifier
 
         def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
+            obj.calculate_amount(amount)
             # N application (N_t)
             obj.calculate_cost_n(amount)
             # N loss (N_l_t)
@@ -287,6 +296,7 @@ class Rewards:
             self.n_loss_mod = 1
 
         def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
+            obj.calculate_amount(amount)
             # N grain growth
             n_so = process_pcse.compute_growth_var(output, self.timestep, 'NamountSO')
             # N loss
@@ -349,6 +359,7 @@ class Rewards:
             self.cum_cost = .0
             self.cum_misc_cost = .0
             self.cum_leach = .0
+            self.actions = 0
 
         def reset(self):
             self.cum_growth = .0
@@ -357,6 +368,7 @@ class Rewards:
             self.cum_cost = .0
             self.cum_misc_cost = .0
             self.cum_leach = .0
+            self.actions = 0
 
         def growth_storage_organ_wo_cost(self, output, multiplier=1):
             return process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
@@ -369,6 +381,9 @@ class Rewards:
 
         def growth_var(self, output, var):
             return process_pcse.compute_growth_var(output, self.timestep, var)
+
+        def calculate_amount(self, action):
+            self.actions += action
 
         def calculate_cost_cumulative(self, amount):
             self.cum_amount += amount
@@ -413,10 +428,6 @@ class Rewards:
             super().__init__(timestep, costs_nitrogen)
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
-            self.actions = 0
-
-        def calculate_amount(self, action):
-            self.actions += action
 
         def calculate_reward_nue(self, n_input, n_output, year=None, start=None, end=None):
             nue = calculate_nue(n_input, n_output, year=year, start=start, end=end)
@@ -426,7 +437,6 @@ class Rewards:
 
         def reset(self):
             super().reset()
-            self.actions = 0
 
     # ane_reward object
     class ContainerANE:
@@ -468,9 +478,15 @@ class Rewards:
             self.cum_amount = 0
 
 
-class DummyClass:
+class ActionsContainer:
+    def __init__(self):
+        self.actions = 0
+
+    def calculate_amount(self, action):
+        self.actions += action
+
     def reset(self):
-        pass
+        self.actions = 0
 
 
 def calculate_nue(n_input, n_so, year=None, start=None, end=None, n_seed=3.5):
