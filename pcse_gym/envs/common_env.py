@@ -320,7 +320,8 @@ class PCSEEnv(gym.Env):
 
         # Inject different initial condition every episode if it specified in args
         if options is not None:
-            self._site_params = options
+            self._site_params['NH4I'] = options['NH4I']
+            self._site_params['NO3I'] = options['NO3I']
 
         # Combine the config files in a single PCSE ParameterProvider object
         self._parameter_provider = pcse.base.ParameterProvider(cropdata=self._crop_params,

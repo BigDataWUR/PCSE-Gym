@@ -51,11 +51,12 @@ class WinterWheat(gym.Env):
         self.measure_cost_multiplier = kwargs.get('m_multiplier', 1)
         self.measure_all = kwargs.get('measure_all', False)
         self.list_wav_nav = None
-        if self.random_init:
-            self.eval_wav = None
-            self.eval_nav = None
-            self.list_wav_nav = [self.eval_wav, self.eval_nav]
+        self.eval_nh4i = None
+        self.eval_no3i = None
+        self.list_n_i = [self.eval_nh4i, self.eval_no3i]
         self.rng, self.seed = gym.utils.seeding.np_random(seed=seed)
+
+        """ Initialize SB3 env wrapper """
 
         if self.reward_function in reward_functions_with_baseline():
             self._env_baseline = self._initialize_sb_wrapper(seed, *args, **kwargs)
@@ -64,15 +65,24 @@ class WinterWheat(gym.Env):
         self.observation_space = self._get_observation_space()
         self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
 
-        # Reward Init
+        """ Get number of soil layers if using WOFOST snomin"""
+
+        self.len_soil_layers = self.get_len_soil_layers
+        self.soil_layers_dis = [self.len_soil_layers*1.5-i for i, n in enumerate(range(self.len_soil_layers))]
+
+        """ Initialize reward function """
 
         self._init_reward_function(costs_nitrogen, kwargs)
+
+        """ Use AFA-POMDP measuring paradigm"""
 
         if self.po_features:
             self.__measure = MeasureOrNot(self.sb3_env, extend_obs=self.mask_binary,
                                           placeholder_val=self.placeholder_val,
                                           cost_multiplier=self.measure_cost_multiplier,
                                           measure_all_flag=self.measure_all)
+
+        """ In-house normalization"""
 
         if self.normalize:
             self.loc_code = kwargs.get('loc_code', None)
@@ -255,6 +265,12 @@ class WinterWheat(gym.Env):
             info['profit'] = {}
         info['profit'][self.date] = self.rewards_obj.profit
 
+        if terminated and self.random_init:
+            if 'init_n' not in info.keys():
+                info['init_n'] = {}
+            info['init_n']['no3'] = self.eval_no3i
+            info['init_n']['nh4'] = self.eval_nh4i
+
         return reward, info
 
     def overwrite_year(self, year):
@@ -274,19 +290,19 @@ class WinterWheat(gym.Env):
         self.locations = location
         self.set_location(location)
 
-    def overwrite_initial_conditions(self):
-        # method to overwrite a random initial condition for every call of reset()
-        wav = np.clip(self.rng.normal(15, 15), 0.0, 100.0)
-        nav = np.clip(self.rng.normal(15, 15), 0.0, 100.0)
-        self.eval_wav = wav
-        self.eval_nav = nav
-        site_parameters = pcse.util.WOFOST80SiteDataProvider(WAV=wav, NAVAILI=nav)
+    def overwrite_initial_conditions(self, n_layers=None):
+        """ method to overwrite a random N initial condition for every call of reset() """
+        list_nh4i = [np.clip(self.rng.normal(s-r, 10), 0.0, 100.0) for s, r in zip(self.soil_layers_dis, reversed(range(n_layers)))]
+        list_no3i = [np.clip(self.rng.normal(s-r, 10), 0.0, 100.0) for s, r in zip(self.soil_layers_dis, reversed(range(n_layers)))]
+        self.eval_nh4i = list_nh4i
+        self.eval_no3i = list_no3i
+        site_parameters = {'NH4I': list_nh4i, 'NO3I': list_no3i}
         return site_parameters
 
     def reset(self, seed=None, options=None, **kwargs):
         site_params = None
         if self.random_init:
-            site_params = self.overwrite_initial_conditions()
+            site_params = self.overwrite_initial_conditions(self.len_soil_layers)
 
         if isinstance(self.years, list):
             year = self.np_random.choice(self.years)
@@ -319,6 +335,10 @@ class WinterWheat(gym.Env):
     @property
     def measure_features(self):
         return self.__measure
+
+    @property
+    def get_len_soil_layers(self):
+        return len(self.sb3_env.model.kiosk.SM)
 
     @property
     def model(self):

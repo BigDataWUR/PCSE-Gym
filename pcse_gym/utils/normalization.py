@@ -429,3 +429,25 @@ class MinMaxReward:
         return reward * (self.reward_max - self.reward_min) + self.reward_min
 
 
+class WOFOSTMinMaxObservations:
+    def __init__(self,
+                 crop_features,
+                 index_measure,
+                 /,
+                 has_random=False,
+                 no_weather=False,
+                 loc='NL',
+                 start_type='sowing',
+                 mask_binary=False,
+                 placeholder=-1.11,
+                 reward_div=600,
+                 is_clipped=False,
+                 decay_rate=0.95):
+        self.mask = mask_binary
+        self.no_weather = no_weather
+        self.crop_features = crop_features
+        self.is_clipped = is_clipped
+        self.has_random = has_random
+        self.loc = loc
+        self.start_type = start_type
+

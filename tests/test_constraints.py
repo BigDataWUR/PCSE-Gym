@@ -1,4 +1,6 @@
 import unittest
+import yaml
+import os
 import numpy as np
 
 import pcse.util
@@ -135,16 +137,15 @@ class TestStartType(unittest.TestCase):
         self.assertEqual(year[0], int(self.env2.date.year))
 
 
-# class TestEnvFeatures(unittest.TestCase):
-#     import pcse
-#     def setUp(self):
-#         self.env = init_env.initialize_env_random_init()
-#
-#     def test_different_initial_conditions(self):
-#         site_params = pcse.util.WOFOST80SiteDataProvider(WAV=10, NAVAILI=10, PAVAILI=50, KAVAILI=100)
-#         self.assertEqual(site_params, self.env.sb3_env.model.parameterprovider._sitedata)
-#         self.env.reset()
-#         self.assertNotEqual(site_params, self.env.sb3_env.model.parameterprovider._sitedata)
+class TestEnvFeatures(unittest.TestCase):
+    def setUp(self):
+        self.env = init_env.initialize_env_random_init()
+
+    def test_different_initial_conditions(self):
+        site_params = yaml.safe_load(open(os.path.abspath('../pcse_gym/envs/configs/site/arminda_site.yaml')))
+        self.assertEqual(site_params, self.env.sb3_env.model.parameterprovider._sitedata)
+        self.env.reset()
+        self.assertNotEqual(site_params, self.env.sb3_env.model.parameterprovider._sitedata)
 
 
 

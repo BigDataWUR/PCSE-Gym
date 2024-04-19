@@ -512,7 +512,7 @@ class EvalCallback(BaseCallback):
             ax.set_xticklabels(list(self.histogram_training_locations.keys()), fontdict=None, minor=False)
             self.logger.record(f'figures/training-locations', Figure(fig, close=True))
 
-            reward, fertilizer, result_model, WSO, NUE, profit = {}, {}, {}, {}, {}, {}
+            reward, fertilizer, result_model, WSO, NUE, profit, init_no3, init_nh4 = {}, {}, {}, {}, {}, {}, {}, {}
             log_training = self.get_do_log_training()
 
             env_pcse_evaluation = self.env_eval
@@ -543,6 +543,9 @@ class EvalCallback(BaseCallback):
                     profit[my_key] = list(episode_infos[0]['profit'].values())[-1]
                     if self.env_eval.reward_function == 'NUE':
                         NUE[my_key] = self.get_nue(episode_infos)
+                    if self.env_eval.random_init:
+                        init_no3[my_key] = episode_infos[0]['init_n']['no3']
+                        init_nh4[my_key] = episode_infos[0]['init_n']['nh4']
                     # self.logger.record(f'eval/reward-{my_key}', reward[my_key])
                     # self.logger.record(f'eval/nitrogen-{my_key}', fertilizer[my_key])
                     result_model[my_key] = episode_infos
