@@ -120,6 +120,8 @@ def compute_average(results_dict: dict, filter_list=None):
     if filter_list is None:
         filter_list = list(results_dict.keys())
     filtered_results = [results_dict[f] for f in filter_list if f in results_dict.keys()]
+    if len(filtered_results) == 0:
+        return 0
     return sum(filtered_results) / len(filtered_results)
 
 
@@ -543,9 +545,9 @@ class EvalCallback(BaseCallback):
                     profit[my_key] = list(episode_infos[0]['profit'].values())[-1]
                     if self.env_eval.reward_function == 'NUE':
                         NUE[my_key] = self.get_nue(episode_infos)
-                    if self.env_eval.random_init:
-                        init_no3[my_key] = episode_infos[0]['init_n']['no3']
-                        init_nh4[my_key] = episode_infos[0]['init_n']['nh4']
+                    # if self.env_eval.random_init:
+                        # init_no3[my_key] = episode_infos[0]['init_n']['no3']
+                        # init_nh4[my_key] = episode_infos[0]['init_n']['nh4']
                     # self.logger.record(f'eval/reward-{my_key}', reward[my_key])
                     # self.logger.record(f'eval/nitrogen-{my_key}', fertilizer[my_key])
                     result_model[my_key] = episode_infos

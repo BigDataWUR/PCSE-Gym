@@ -370,16 +370,23 @@ class NitrogenUseEfficiency(unittest.TestCase):
         self.assertEqual(expected_nh4, nh4_dis)
         self.assertEqual(expected_no3, no3_dis)
 
-    def test_nue_calc_in_other_rf(self):
-        self.def1.overwrite_year(2002)
-        self.def1.reset()
+    def test_nue_calc_in_other_rf(self, reward_func='DEP'):
+        self.env_rew = init_env.initialize_env(reward=reward_func)
+        self.env_rew.overwrite_year(2002)
+        self.env_rew.reset()
         terminated = False
 
         while not terminated:
-            _, _, terminated, _, infos = self.def1.step(np.array([1]))
+            _, _, terminated, _, infos = self.env_rew.step(np.array([1]))
 
         self.assertAlmostEqual(0.58, max(list(infos['NUE'].values())), 0)
 
-
-
-
+    def test_nue_all_rf(self):
+        self.test_nue_calc_in_other_rf('DEF')
+        self.test_nue_calc_in_other_rf('HAR')
+        self.test_nue_calc_in_other_rf('NUE')
+        self.test_nue_calc_in_other_rf('FIN')
+        self.test_nue_calc_in_other_rf('NUP')
+        self.test_nue_calc_in_other_rf('DNU')
+        self.test_nue_calc_in_other_rf('END')
+        self.test_nue_calc_in_other_rf('GRO')

@@ -430,7 +430,7 @@ if __name__ == '__main__':
         parser.error("--location arg should be either LT or NL")
 
     # define the crop, weather and (maybe) action features used in training
-    crop_features = defaults.get_default_crop_features(pcse_env=args.environment, minimal=True)
+    crop_features = defaults.get_default_crop_features(pcse_env=args.environment, minimal=False)
     weather_features = defaults.get_default_weather_features()
     action_features = defaults.get_default_action_features()
 

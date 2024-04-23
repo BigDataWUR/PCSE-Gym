@@ -42,6 +42,10 @@ def get_conversion_factor(var, dict_lintul_wofost=get_dict_lintul_wofost()):
     raise Exception(f'{var} not found')
 
 
+def get_n_storage_organ(pcse_output):
+    return pcse_output[-1]['NamountSO']
+
+
 def compute_growth_var(pcse_output, timestep, var):
     var_start = pcse_output[get_previous_index(pcse_output, timestep)][var]
     var_finish = pcse_output[-1][var]

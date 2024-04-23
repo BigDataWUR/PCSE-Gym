@@ -112,8 +112,8 @@ class Rewards:
     def update_profit(self, output, amount, year, multiplier, country='NL'):
         self.profit += self.calculate_profit(output, amount, year, multiplier)
 
-    def calculate_nue(self, output, amount, year, multiplier, country='NL'):
-        pass
+    def calculate_nue_on_terminate(self, n_input, n_so, year, start=None, end=None, country='NL'):
+        return calculate_nue(n_input, n_so, year=year, start=start, end=end)
 
     """
     Classes that determine the reward function
@@ -228,8 +228,8 @@ class Rewards:
             self.costs_nitrogen = costs_nitrogen
 
         def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
-            obj.calculate_cost_cumulative(amount)
             obj.calculate_amount(amount)
+            obj.calculate_cost_cumulative(amount)
             obj.calculate_positive_reward_cumulative(output, output_baseline, multiplier)
             reward = 0 - amount * self.costs_nitrogen
             growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
@@ -330,6 +330,8 @@ class Rewards:
             self.country = 'NL'
 
         def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
+            obj.calculate_amount(amount)
+
             year = self.get_year_in_step(output)
 
             reward, growth = calculate_net_profit(output, amount, year, multiplier, self.timestep, self.country)
@@ -412,6 +414,10 @@ class Rewards:
                 return self.cum_amount - threshold
 
         @property
+        def get_total_fertilization(self):
+            return self.actions
+
+        @property
         def dump_cumulative_positive_reward(self) -> float:
             return self.cum_positive_reward
 
@@ -487,6 +493,10 @@ class ActionsContainer:
 
     def reset(self):
         self.actions = 0
+
+    @property
+    def get_total_fertilization(self):
+        return self.actions
 
 
 def calculate_nue(n_input, n_so, year=None, start=None, end=None, n_seed=3.5):

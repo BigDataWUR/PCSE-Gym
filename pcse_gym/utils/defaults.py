@@ -5,7 +5,7 @@ def get_lintul_default_crop_features():
 
 def get_wofost_default_crop_features():
     # See get_titles() for description of variables
-    return ["DVS", "TAGP", "LAI", "NuptakeTotal", "TRA", "NAVAIL", "SM", "RFTRA", "TWSO"]
+    return ["DVS", "TAGP", "LAI", "NuptakeTotal", "TRA", "NAVAIL", "SM", "RFTRA", "WSO"]
 
 
 def get_wofost_minimal_crop_features():
