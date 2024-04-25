@@ -89,9 +89,11 @@ class AgroManagementContainer:
     def get_structure(self):
         return self.structure
 
+    @property
     def get_start_date(self):
         return self.crop_start_date
 
+    @property
     def get_end_date(self):
         return self.crop_end_date
 

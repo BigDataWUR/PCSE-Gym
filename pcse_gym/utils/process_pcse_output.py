@@ -46,6 +46,10 @@ def get_n_storage_organ(pcse_output):
     return pcse_output[-1]['NamountSO']
 
 
+def get_year_in_step(pcse_output):
+    return pcse_output[-1]['day'].year
+
+
 def compute_growth_var(pcse_output, timestep, var):
     var_start = pcse_output[get_previous_index(pcse_output, timestep)][var]
     var_finish = pcse_output[-1][var]

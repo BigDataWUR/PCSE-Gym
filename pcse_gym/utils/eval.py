@@ -463,9 +463,6 @@ class EvalCallback(BaseCallback):
             # evaluate model and get rewards and infos
             episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=self.model.get_env())
 
-            if self.env_eval.reward_function == 'NUE':
-                nue = self.get_nue(episode_infos)
-
             if self.pcse_model:
                 variables = ['action', 'WSO', 'reward', 'IDWST',
                              'NLOSSCUM']
@@ -543,8 +540,7 @@ class EvalCallback(BaseCallback):
                     fertilizer[my_key] = sum(episode_infos[0]['fertilizer'].values())
                     WSO[my_key] = list(episode_infos[0]['WSO'].values())[-1]
                     profit[my_key] = list(episode_infos[0]['profit'].values())[-1]
-                    if self.env_eval.reward_function == 'NUE':
-                        NUE[my_key] = self.get_nue(episode_infos)
+                    NUE[my_key] = self.get_nue(episode_infos)
                     # if self.env_eval.random_init:
                         # init_no3[my_key] = episode_infos[0]['init_n']['no3']
                         # init_nh4[my_key] = episode_infos[0]['init_n']['nh4']

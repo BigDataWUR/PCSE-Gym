@@ -296,8 +296,8 @@ class NitrogenUseEfficiency(unittest.TestCase):
             _, rew, terminated, _, info = self.nue1.step(action)
             n_input += list(info['fertilizer'].values())[0]
 
-        calculated_nue = self.process_nue(n_input, info, year, start=self.nue1.sb3_env.agmt.get_start_date(),
-                                          end=self.nue1.sb3_env.agmt.get_end_date())
+        calculated_nue = self.process_nue(n_input, info, year, start=self.nue1.sb3_env.agmt.get_start_date,
+                                          end=self.nue1.sb3_env.agmt.get_end_date)
 
         self.assertAlmostEqual(info['NUE'][max(info['NUE'].keys())], calculated_nue, 1)
 
@@ -321,8 +321,8 @@ class NitrogenUseEfficiency(unittest.TestCase):
             _, reward, terminated, _, info = self.nue1.step(action)
             n_input += list(info['fertilizer'].values())[0]
 
-        calculated_nue = self.process_nue(n_input, info, year, start=self.nue1.sb3_env.agmt.get_start_date(),
-                                          end=self.nue1.sb3_env.agmt.get_end_date())
+        calculated_nue = self.process_nue(n_input, info, year, start=self.nue1.sb3_env.agmt.get_start_date,
+                                          end=self.nue1.sb3_env.agmt.get_end_date)
 
         self.assertAlmostEqual(info['NUE'][max(info['NUE'].keys())], calculated_nue, 1)
 
@@ -347,8 +347,8 @@ class NitrogenUseEfficiency(unittest.TestCase):
             n_input += action * 10
 
         calculated_surplus = (self.process_nue_in(n_input, year,
-                                                  start=self.nue1.sb3_env.agmt.get_start_date(),
-                                                  end=self.nue1.sb3_env.agmt.get_end_date())
+                                                  start=self.nue1.sb3_env.agmt.get_start_date,
+                                                  end=self.nue1.sb3_env.agmt.get_end_date)
                               - info['NamountSO'][max(info['NamountSO'].keys())])
 
         self.assertAlmostEqual(info['Nsurplus'][max(info['Nsurplus'].keys())], calculated_surplus[0], 1)

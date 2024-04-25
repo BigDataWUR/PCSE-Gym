@@ -302,7 +302,7 @@ class Rewards:
             # N loss
             n_loss = process_pcse.compute_growth_var(output, self.timestep, 'NLOSSCUM')
             # N deposition
-            nh4, no3 = get_disaggregated_deposition(year=self.get_year_in_step(output),
+            nh4, no3 = get_disaggregated_deposition(year=process_pcse.get_year_in_step(output),
                                                     start_date=
                                                     output[process_pcse.get_previous_index(output, self.timestep)][
                                                         'day'],
@@ -313,10 +313,6 @@ class Rewards:
             growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
 
             return reward, growth
-
-        @staticmethod
-        def get_year_in_step(output):
-            return output[-1]['day'].year
 
     class FIN(Rew):
         """
@@ -332,15 +328,11 @@ class Rewards:
         def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
             obj.calculate_amount(amount)
 
-            year = self.get_year_in_step(output)
+            year = process_pcse.get_year_in_step(output)
 
             reward, growth = calculate_net_profit(output, amount, year, multiplier, self.timestep, self.country)
 
             return reward, growth
-
-        @staticmethod
-        def get_year_in_step(output):
-            return output[-1]['day'].year
 
     """
     Containers for certain reward functions
@@ -590,14 +582,19 @@ def compute_economic_reward(wso, fertilizer, price_yield_ton=400.0, price_fertil
 
 def calculate_net_profit(output, amount, year, multiplier, timestep, country='NL'):
 
+    '''Get growth of Crop'''
     growth = process_pcse.compute_growth_storage_organ(output, timestep, multiplier)
 
+    '''Convert growth to wheat price in the year'''
     wso_conv_eur = growth * get_wheat_price_in_kgs(year)
 
+    '''Convert price of used fertilizer in the year'''
     n_conv_eur = get_fertilizer_price(amount, year)
 
+    '''Convert labour price based on year'''
     labour_conv_eur = get_labour_price(year)
 
+    '''Flag for fertilization action'''
     labour_flag = 1 if amount else 0
 
     reward = wso_conv_eur - n_conv_eur - labour_conv_eur * labour_flag
