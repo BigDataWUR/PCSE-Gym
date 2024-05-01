@@ -136,8 +136,20 @@ def replace_years_(agro_management, years):  # deprecated
     return updated_agro_management
 
 
-def get_weather_data_provider(location) -> pcse.db.NASAPowerWeatherDataProvider:
-    wdp = pcse.db.NASAPowerWeatherDataProvider(*location)
+def get_weather_data_provider(location, random_weather=False) -> pcse.db.NASAPowerWeatherDataProvider or pcse.fileinput.CSVWeatherDataProvider:
+    if random_weather:
+        wdp = get_random_weather_provider(location)
+    else:
+        wdp = pcse.db.NASAPowerWeatherDataProvider(*location)
+    return wdp
+
+
+def get_random_weather_provider(location) -> pcse.fileinput.CSVWeatherDataProvider:
+    path_to_file = os.path.dirname(os.path.realpath(__file__))
+    lat, lon = location
+    csv_name = f'{lat}-{lon}_random_weather.csv'
+    filename = os.path.join(path_to_file[:-4], 'utils', 'weather_utils', 'random_weather_csv', csv_name)
+    wdp = pcse.fileinput.CSVWeatherDataProvider(filename)
     return wdp
 
 
@@ -275,7 +287,7 @@ class PCSEEnv(gym.Env):
 
         # Set location
         if location is None:
-            location = (52, 5.5)
+            location = (52.0, 5.5)
         self._location = location
         self._timestep = timestep
 
@@ -302,7 +314,7 @@ class PCSEEnv(gym.Env):
         self._model_config = model_config
 
         # Get the weather data source
-        self._weather_data_provider = get_weather_data_provider(self._location)
+        self._weather_data_provider = get_weather_data_provider(self._location, kwargs.get('random_weather'))
 
         # Create a PCSE engine / crop growth model
         self._model = self._init_pcse_model()

@@ -50,6 +50,7 @@ class WinterWheat(gym.Env):
         self.random_init = kwargs.get('random_init', False)
         self.measure_cost_multiplier = kwargs.get('m_multiplier', 1)
         self.measure_all = kwargs.get('measure_all', False)
+        self.random_weather = kwargs.get('random_weather', False)
         self.list_wav_nav = None
         self.eval_nh4i = None
         self.eval_no3i = None
@@ -284,9 +285,11 @@ class WinterWheat(gym.Env):
     def set_location(self, location):
         if self.reward_function in reward_functions_with_baseline():
             self.baseline_env.loc = location
-            self.baseline_env.weather_data_provider = common_env.get_weather_data_provider(location)
+            self.baseline_env.weather_data_provider = (
+                common_env.get_weather_data_provider(location, random_weather=self.random_weather))
         self.sb3_env.loc = location
-        self.sb3_env.weather_data_provider = common_env.get_weather_data_provider(location)
+        self.sb3_env.weather_data_provider = (
+            common_env.get_weather_data_provider(location, random_weather=self.random_weather))
 
     def overwrite_location(self, location):
         self.locations = location

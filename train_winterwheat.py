@@ -257,7 +257,6 @@ def train(log_dir, n_steps,
 
         print(json_config)
 
-
         model.learn(total_timesteps=n_steps,
                     callback=EvalCallback(env_eval=env_pcse_eval, test_years=test_years,
                                           train_years=train_years, train_locations=train_locations,
@@ -378,6 +377,7 @@ if __name__ == '__main__':
                                                                      "certain crop features")
     parser.add_argument("-l", "--location", type=str, default="NL", help="location to train the agent. NL or LT.")
     parser.add_argument("--random-init", action='store_true', dest='random_init')
+    parser.add_argument("--random-weather", action='store_true', dest='random_weather')
     parser.add_argument("--no-measure", action='store_false', dest='measure')
     parser.add_argument("--noisy-measure", action='store_true', dest='noisy_measure')
     parser.add_argument("--variable-recovery-rate", action='store_true', dest='vrr')
@@ -392,7 +392,7 @@ if __name__ == '__main__':
     parser.add_argument("--measure-all", action='store_true', dest='measure_all')
     parser.set_defaults(measure=True, vrr=False, noisy_measure=False, framework='sb3',
                         no_weather=False, random_feature=False, obs_mask=False, placeholder_val=-1.11,
-                        normalize=False, random_init=False, m_multiplier=1, measure_all=False)
+                        normalize=False, random_init=False, m_multiplier=1, measure_all=False, random_weather=False)
 
     args = parser.parse_args()
 
@@ -412,22 +412,32 @@ if __name__ == '__main__':
     log_dir = os.path.join(rootdir, 'tensorboard_logs', f'{pcse_model_name}_experiments')
     print(f'train for {args.nsteps} steps with costs_nitrogen={args.costs_nitrogen} (seed={args.seed})')
 
-    # define training and testing years
-    all_years = [*range(1990, 2022)]
-    train_years = [year for year in all_years if year % 2 == 1]
-    test_years = [year for year in all_years if year % 2 == 0]
+    # random weather
+    # TODO tidy up
+    if args.random_weather:
+        train_locations = (52.0, 5.5)
+        test_locations = (52.0, 5.5)
+        train_years = [*range(4000, 5999)]
+        test_years = [*range(1990, 2022)]
 
-    # define training and testing locations
-    if args.location == "NL":
-        """The Netherlands"""
-        train_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
-        test_locations = [(52, 5.5), (48, 0)]
-    elif args.location == "LT":
-        """Lithuania"""
-        train_locations = [(55.0, 23.5), (55.0, 24.0), (55.5, 23.5)]
-        test_locations = [(46.0, 25.0), (55.0, 23.5)]  # Romania
     else:
-        parser.error("--location arg should be either LT or NL")
+        # define training and testing years
+        all_years = [*range(1990, 2022)]
+        train_years = [year for year in all_years if year % 2 == 1]
+        test_years = [year for year in all_years if year % 2 == 0]
+
+
+        # define training and testing locations
+        if args.location == "NL":
+            """The Netherlands"""
+            train_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
+            test_locations = [(52, 5.5), (48, 0)]
+        elif args.location == "LT":
+            """Lithuania"""
+            train_locations = [(55.0, 23.5), (55.0, 24.0), (55.5, 23.5)]
+            test_locations = [(46.0, 25.0), (55.0, 23.5)]  # Romania
+        else:
+            parser.error("--location arg should be either LT or NL")
 
     # define the crop, weather and (maybe) action features used in training
     crop_features = defaults.get_default_crop_features(pcse_env=args.environment, minimal=False)
@@ -441,7 +451,8 @@ if __name__ == '__main__':
               'n_budget': args.n_budget, 'framework': args.framework, 'no_weather': args.no_weather,
               'mask_binary': args.obs_mask, 'placeholder_val': args.placeholder_val, 'normalize': args.normalize,
               'loc_code': args.location, 'cost_measure': args.cost_measure, 'start_type': args.start_type,
-              'random_init': args.random_init, 'm_multiplier': args.m_multiplier, 'measure_all': args.measure_all}
+              'random_init': args.random_init, 'm_multiplier': args.m_multiplier, 'measure_all': args.measure_all,
+              'random_weather': args.random_weather}
 
     # define MeasureOrNot environment if specified
     if not args.measure:

@@ -396,6 +396,7 @@ class EvalCallback(BaseCallback):
         self.env_eval = env_eval
         self.comet_experiment = comet_experiment
         self.po_features = kwargs.get('po_features')
+        self.random_weather = kwargs.get('random_weather', False)
 
         def def_value(): return 0
 
@@ -413,8 +414,10 @@ class EvalCallback(BaseCallback):
         return locations
 
     def get_years(self, log_training=False):
-        if log_training:
+        if log_training and not self.random_weather:
             years = list(set(self.test_years + self.train_years))
+        elif log_training and self.random_weather:
+            years = list(set(self.test_years + list(np.random.choice(self.train_years, 32))))
         else:
             years = list(set(self.test_years))
         return years

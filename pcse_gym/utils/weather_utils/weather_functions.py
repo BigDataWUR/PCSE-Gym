@@ -136,6 +136,19 @@ def convert_date(wg_df: pd.DataFrame):
     return pd.Series(formatted_date)
 
 
+def convert_date_nasa(np_df: pd.DataFrame):
+    formatted_date = []
+    for index, row in np_df.iterrows():
+        day = row.DAY
+
+        date = day.strftime('%Y%m%d')
+        formatted_date.append(date)
+    series = pd.Series(formatted_date)
+
+    np_df.DAY = series
+
+    return np_df
+
 def convert_leap_year(wg_df: pd.DataFrame):
     """
     FUnction to add leap years to generated LARSWG8.0 weather
@@ -210,7 +223,7 @@ def is_leap_year(year):
 
 def get_csv_header(country='NL', lon=5.5, lat=52.5, elev=15.3, anga=0.18, angb=0.55):
     header = f'''## Site Characteristics
-Country = {country}
+Country = '{country}'
 Station = 'Wageningen'
 Description = 'Random weather generated from LARSWG8.0. Years are labeled from 3001.'
 Source = 'LARSWG8.0 and NASA Power'
@@ -241,8 +254,8 @@ def larswg_to_pcse_csv(site_file: str, fill_missing=False):
 
     filename = f'{lat}-{lon}_random_weather'
 
-    # # load nasa power to fill in vap and wind
-    # wdp = pcse.db.NASAPowerWeatherDataProvider(float(lat), float(lon))
+    # load nasa power to fill in
+    wdp = pcse.db.NASAPowerWeatherDataProvider(float(lat), float(lon))
 
     with open(os.path.join("output_larswg", f"{dat_file}.dat"), 'r') as f:
         wg_df = pd.read_csv(f, sep='\t', names=['year', 'doy', 'TMIN', 'TMAX', 'RAIN', 'IRRAD'], index_col=False)
@@ -264,15 +277,35 @@ def larswg_to_pcse_csv(site_file: str, fill_missing=False):
     wg_df = wg_df[cols]
 
     # insert required columns and correct the units
-    wg_df.insert(4, 'VAP', [round(estimate_vapour_pressure(x) * 10, 2) for x in wg_df.TMIN], True)
+    wg_df.insert(4, 'VAP', [estimate_vapour_pressure(x) for x in wg_df.TMIN], True)
     wg_df.insert(5, 'WIND', [2 for _ in wg_df.TMIN], True)
     wg_df.insert(7, 'SNOWDEPTH', ['NaN' for _ in wg_df.TMIN], True)
 
     wg_df.IRRAD = wg_df.IRRAD * 1000  # J to kJ
-    wg_df.RAIN = wg_df.RAIN * 10
+    wg_df.RAIN = wg_df.RAIN  # * 10  # cm to mm
 
-    print(wg_df)
-    header = get_csv_header('The Netherlands', lon=float(lon), lat=float(lat), elev=15.29)
+    # create NASA power df
+    date_range = generate_date_list(datetime.date(1984,1,1),
+                                    datetime.date(2022, 12, 31))
+    tmin = pd.Series([wdp(x).TMIN for x in date_range])
+    tmax = pd.Series([wdp(x).TMAX for x in date_range])
+    rain = pd.Series([wdp(x).RAIN * 10 for x in date_range])  # cm to mm
+    irrad = pd.Series([wdp(x).IRRAD / 1000 for x in date_range])  # J to kJ
+    vap = pd.Series([wdp(x).VAP / 10 for x in date_range])  # hPA to kPa
+    wind = pd.Series([wdp(x).WIND for x in date_range])  # hPA to kPa
+    day = pd.Series([wdp(x).DAY for x in date_range])
+
+    np_df = pd.concat([day, irrad, tmin, tmax, vap, wind, rain], axis=1,
+                      keys=['DAY', 'IRRAD', 'TMIN', 'TMAX', 'VAP', 'WIND', 'RAIN'])
+    np_df.insert(7, 'SNOWDEPTH', ['NaN' for _ in np_df.TMIN], True)
+    np_df = convert_date_nasa(np_df)
+
+    # insert nasa power df on top of wg df
+    wg_df.index = [x + len(np_df.index) for x in wg_df.index]
+    wg_df = pd.concat([np_df, wg_df])
+
+    # get header for csv
+    header = get_csv_header('NL', lon=float(lon), lat=float(lat), elev=15.29)
 
     with open(os.path.join('random_weather_csv', f'{filename}.csv'), 'w', newline='') as file:
         file.write(header + '\n')
@@ -341,8 +374,8 @@ def histogram_check():
         date_range = generate_date_list(datetime.date(1984, 1, 1),
                                         datetime.date(2022, 12, 31))
         rain = [wdp(x).RAIN for x in date_range]
-        wind = [wdp(x).WIND for x in date_range]
-        print(mean(wind))
+        vap = [wdp(x).VAP for x in date_range]
+        # print(mean(wind))
         plt.hist(df.RAIN, bins=100)
         plt.title('LARSWG')
         plt.ylim((0, 100000))
@@ -353,8 +386,15 @@ def histogram_check():
         plt.ylim((0, 1000))
         plt.show()
 
-        plt.hist(wind, bins=100)
-        plt.title('WIND NASA POWER')
+        vap_wg = [estimate_vapour_pressure(x) * 10 for x in df.TMIN]
+
+        plt.hist(vap, bins=100)
+        plt.title('VAP NASAPOWER')
+        plt.ylim((0, 1000))
+        plt.show()
+
+        plt.hist(vap_wg, bins=100)
+        plt.title('VAP LARSWG')
         plt.ylim((0, 1000))
         plt.show()
 
