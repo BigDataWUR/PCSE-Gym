@@ -142,7 +142,9 @@ class TestEnvFeatures(unittest.TestCase):
         self.env = init_env.initialize_env_random_init()
 
     def test_different_initial_conditions(self):
-        site_params = yaml.safe_load(open(os.path.abspath('../pcse_gym/envs/configs/site/arminda_site.yaml')))
+        dir_root = os.path.dirname(os.path.realpath(__file__))[:-5]
+        site_params = yaml.safe_load(open(os.path.join(dir_root,
+                                                       'pcse_gym', 'envs', 'configs', 'site', 'arminda_site.yaml')))
         self.assertEqual(site_params, self.env.sb3_env.model.parameterprovider._sitedata)
         self.env.reset()
         self.assertNotEqual(site_params, self.env.sb3_env.model.parameterprovider._sitedata)
