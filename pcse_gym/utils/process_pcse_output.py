@@ -14,9 +14,9 @@ def get_var_names(pcse_output):
 
 
 def get_name_storage_organ(var_names):
-    if 'TWSO' in var_names:
-        return 'TWSO'
-    elif 'WSO' in var_names:
+    # if 'TWSO' in var_names:
+    #     return 'TWSO'
+    if 'WSO' in var_names:
         return 'WSO'
     raise Exception(" (T)WSO not found")
 

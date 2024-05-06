@@ -19,12 +19,13 @@ def reward_functions_end():
 
 
 class Rewards:
-    def __init__(self, reward_var, timestep, costs_nitrogen=10.0, vrr=0.7):
+    def __init__(self, reward_var, timestep, costs_nitrogen=10.0, vrr=0.7, with_year=False):
         self.reward_var = reward_var
         self.timestep = timestep
         self.costs_nitrogen = costs_nitrogen
         self.vrr = vrr
         self.profit = 0
+        self.with_year = with_year
 
     def growth_storage_organ(self, output, amount, multiplier=1):
         growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
@@ -103,14 +104,14 @@ class Rewards:
     def reset(self):
         self.profit = 0
 
-    def calculate_profit(self, output, amount, year, multiplier, country='NL'):
+    def calculate_profit(self, output, amount, year, multiplier, with_year=False, country='NL'):
         
-        profit, _ = calculate_net_profit(output, amount, year, multiplier, self.timestep, country)
+        profit, _ = calculate_net_profit(output, amount, year, multiplier, self.timestep, with_year=with_year, country=country)
 
         return profit
 
     def update_profit(self, output, amount, year, multiplier, country='NL'):
-        self.profit += self.calculate_profit(output, amount, year, multiplier)
+        self.profit += self.calculate_profit(output, amount, year, multiplier, with_year=self.with_year)
 
     def calculate_nue_on_terminate(self, n_input, n_so, year, start=None, end=None, country='NL'):
         return calculate_nue(n_input, n_so, year=year, start=start, end=end)
@@ -177,10 +178,7 @@ class Rewards:
 
         def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
             obj.calculate_amount(amount)
-            if amount == 0:
-                cost_deployment = 0
-            else:
-                cost_deployment = self.various_costs()['to_the_field']
+            cost_deployment = 0 if amount == 0 else self.various_costs()['to_the_field']
 
             growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
             # growth_baseline = process_pcse.compute_growth_storage_organ(output_baseline, self.timestep)
@@ -330,7 +328,7 @@ class Rewards:
 
             year = process_pcse.get_year_in_step(output)
 
-            reward, growth = calculate_net_profit(output, amount, year, multiplier, self.timestep, self.country)
+            reward, growth = calculate_net_profit(output, amount, year, multiplier, self.timestep, with_year=False)
 
             return reward, growth
 
@@ -508,7 +506,7 @@ def input_nue(n_input, year=None, start=None, end=None, n_seed=3.5):
 
 def get_deposition_amount(year) -> tuple:
     """Currently only supports amount from the Netherlands"""
-    if year is None:
+    if year is None or year > 2500:
         NO3 = 12.5
         NH4 = 12.5
     else:
@@ -580,19 +578,19 @@ def compute_economic_reward(wso, fertilizer, price_yield_ton=400.0, price_fertil
     return 0.001 * (convert_wso * wso - convert_fert * fertilizer)
 
 
-def calculate_net_profit(output, amount, year, multiplier, timestep, country='NL'):
+def calculate_net_profit(output, amount, year, multiplier, timestep, with_year=False, with_labour=False, country='NL'):
 
     '''Get growth of Crop'''
     growth = process_pcse.compute_growth_storage_organ(output, timestep, multiplier)
 
     '''Convert growth to wheat price in the year'''
-    wso_conv_eur = growth * get_wheat_price_in_kgs(year)
+    wso_conv_eur = growth * get_wheat_price_in_kgs(year, with_year=with_year)
 
     '''Convert price of used fertilizer in the year'''
-    n_conv_eur = get_fertilizer_price(amount, year)
+    n_conv_eur = get_fertilizer_price(amount, year, with_year=with_year)
 
     '''Convert labour price based on year'''
-    labour_conv_eur = get_labour_price(year)
+    labour_conv_eur = get_labour_price(year, with_labour=with_labour)
 
     '''Flag for fertilization action'''
     labour_flag = 1 if amount else 0
@@ -614,11 +612,15 @@ def annual_price_wheat_per_ton(year):
     return prices[year]
 
 
-def get_wheat_price_in_kgs(year):
+def get_wheat_price_in_kgs(year, with_year=False, price_per_ton=157.75):
+    if not with_year:
+        return price_per_ton * 0.001
     return annual_price_wheat_per_ton(year) * 0.001
 
 
-def get_nitrogen_price_in_kgs(year):
+def get_nitrogen_price_in_kgs(year, with_year=False, price_per_quintal=20.928):
+    if not with_year:
+        return price_per_quintal * 0.01
     return annual_price_nitrogen_per_quintal(year) * 0.01
 
 
@@ -650,7 +652,7 @@ Calculations for getting prices in the year
 """
 
 
-def get_fertilizer_price(action, year):
+def get_fertilizer_price(action, year, with_year=False):
     """
     Price of N fertilizer per kg in the year
 
@@ -659,12 +661,12 @@ def get_fertilizer_price(action, year):
     :return: nitrogen price per kg
     """
     amount = action * 10  # action to kg/ha
-    price = get_nitrogen_price_in_kgs(year)
+    price = get_nitrogen_price_in_kgs(year, with_year)
 
     return amount * price
 
 
-def get_labour_price(year, base_labour_cost_index=28.9, time_per_hectare=0.0834):
+def get_labour_price(year, base_labour_cost_index=28.9, time_per_hectare=0.0834, with_labour=False):
     """
     Price of hourly labour per year, considering the European labour cost index
 
@@ -673,5 +675,8 @@ def get_labour_price(year, base_labour_cost_index=28.9, time_per_hectare=0.0834)
             5 minutes per hectare.
     :return: price of labour in euros
     """
+
+    if with_labour:
+        return 0
 
     return (base_labour_cost_index * labour_index_per_year(year) + base_labour_cost_index) * time_per_hectare

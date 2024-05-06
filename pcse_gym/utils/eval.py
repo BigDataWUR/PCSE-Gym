@@ -10,6 +10,7 @@ from collections import defaultdict
 from scipy.optimize import minimize_scalar
 from bisect import bisect_left
 from typing import Union
+from statistics import mean, median
 from tqdm import tqdm
 import pickle
 from stable_baselines3 import PPO, DQN, A2C
@@ -383,7 +384,8 @@ class EvalCallback(BaseCallback):
     def __init__(self, env_eval=None, train_years=defaults.get_default_train_years(),
                  test_years=defaults.get_default_test_years(),
                  train_locations=defaults.get_default_location(), test_locations=defaults.get_default_location(),
-                 n_eval_episodes=1, eval_freq=20_000, pcse_model=1, seed=0, comet_experiment=None, **kwargs):
+                 n_eval_episodes=1, eval_freq=20_000, pcse_model=1, seed=0, comet_experiment=None, multiprocess=False,
+                 **kwargs):
         super(EvalCallback, self).__init__()
         self.test_years = test_years
         self.train_years = train_years
@@ -397,6 +399,7 @@ class EvalCallback(BaseCallback):
         self.comet_experiment = comet_experiment
         self.po_features = kwargs.get('po_features')
         self.random_weather = kwargs.get('random_weather', False)
+        self.multiprocess = multiprocess
 
         def def_value(): return 0
 
@@ -459,12 +462,12 @@ class EvalCallback(BaseCallback):
             tensorboard_logdir = self.logger.dir
             model_path = os.path.join(tensorboard_logdir, f'model-{self.n_calls}')
             self.model.save(model_path)
-            if not self.env_eval.normalize:
+            if not self.env_eval.envs[0].unwrapped.normalize:
                 stats_path = os.path.join(tensorboard_logdir, f'env-{self.n_calls}.pkl')
                 self.model.get_env().save(stats_path)
 
             # evaluate model and get rewards and infos
-            episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=self.model.get_env())
+            episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=self.env_eval)
 
             if self.pcse_model:
                 variables = ['action', 'WSO', 'reward', 'IDWST',
@@ -478,7 +481,7 @@ class EvalCallback(BaseCallback):
 
             '''logic for measure graph'''
             if 'measure' in variables:
-                if not self.env_eval.measure_all:
+                if not self.env_eval.envs[0].unwrapped.measure_all:
                     variables, cumulative = self.replace_measure_variable(variables, cumulative)
                     episode_infos = get_measure_graphs(episode_infos)
                 else:
@@ -518,42 +521,46 @@ class EvalCallback(BaseCallback):
             log_training = self.get_do_log_training()
 
             env_pcse_evaluation = self.env_eval
-            if env_pcse_evaluation.normalize:
-                env_pcse_evaluation = DummyVecEnv([lambda: env_pcse_evaluation])
-            else:
-                env_pcse_evaluation = VecNormalize(DummyVecEnv([lambda: env_pcse_evaluation]),
-                                                   norm_obs=True, norm_reward=True,
-                                                   clip_obs=10., clip_reward=50., gamma=1)
+            # if env_pcse_evaluation.normalize:
+            #     env_pcse_evaluation = DummyVecEnv([lambda: env_pcse_evaluation])
+            # else:
+            #     env_pcse_evaluation = VecNormalize(DummyVecEnv([lambda: env_pcse_evaluation]),
+            #                                        norm_obs=True, norm_reward=True,
+            #                                        clip_obs=10., clip_reward=50., gamma=1)
             env_pcse_evaluation.training = False
             n_year_loc = 0
 
+            total_eval = len(self.get_years(log_training)*len(self.get_locations(log_training)))
             print("evaluating environment with learned policy...")
-            for year in tqdm(self.get_years(log_training)):
-                for test_location in self.get_locations(log_training):
+            years_bar = tqdm(self.get_years(log_training))
+            for iy, year in enumerate(years_bar, 1):
+                for il, test_location in enumerate(self.get_locations(log_training), 1):
+                    years_bar.set_description(f'Evaluating {year}, {str(test_location): <{10}} | '
+                                              f'{str(il+(len(self.get_locations(log_training))*iy)): <{3}}/{total_eval}')
                     env_pcse_evaluation.env_method('overwrite_year', year)
                     env_pcse_evaluation.env_method('overwrite_location', test_location)
                     env_pcse_evaluation.reset()
-                    if not self.env_eval.normalize:
+                    if not self.env_eval.envs[0].unwrapped.normalize:
                         sync_envs_normalization(self.model.get_env(), env_pcse_evaluation)
                     episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=env_pcse_evaluation)
                     my_key = (year, test_location)
                     reward[my_key] = episode_rewards[0].item()
+                    # years_bar.set_description(f'Reward {year}, {str(test_location): <{12}}: {reward[my_key]}')
                     if self.po_features:
                         episode_infos = get_measure_graphs(episode_infos)
                     fertilizer[my_key] = sum(episode_infos[0]['fertilizer'].values())
                     WSO[my_key] = list(episode_infos[0]['WSO'].values())[-1]
                     profit[my_key] = list(episode_infos[0]['profit'].values())[-1]
                     NUE[my_key] = self.get_nue(episode_infos)
-                    # if self.env_eval.random_init:
+                    # if self.env_eval.envs[0].unwrapped.random_init:
                         # init_no3[my_key] = episode_infos[0]['init_n']['no3']
                         # init_nh4[my_key] = episode_infos[0]['init_n']['nh4']
                     # self.logger.record(f'eval/reward-{my_key}', reward[my_key])
                     # self.logger.record(f'eval/nitrogen-{my_key}', fertilizer[my_key])
                     result_model[my_key] = episode_infos
-                    if log_training:
-                        n_year_loc = 0
-                    else:
-                        n_year_loc += 1
+                    n_year_loc = 0 if log_training else n_year_loc + 1
+                avg_rew = mean([x for x in reward.values()])
+                years_bar.set_description(f'Evaluation step {self.num_timesteps} | Avg. reward: {avg_rew:.4f}')
 
             for test_location in list(set(self.test_locations)):
                 test_keys = [(a, test_location) for a in self.test_years]
@@ -601,14 +608,14 @@ class EvalCallback(BaseCallback):
                     variables.append('measure')
                     # for p in self.po_features:
                     #     variables.append(p)
-                if self.env_eval.reward_function == 'ANE': variables.append('moving_ANE')
+                if self.env_eval.envs[0].unwrapped.reward_function == 'ANE': variables.append('moving_ANE')
             else:
                 variables = ['action', 'WSO', 'reward', 'TNSOIL', 'val']
                 if self.po_features: variables.append('measure')
 
-            if 'measure' in variables and not self.env_eval.measure_all:
+            if 'measure' in variables and not self.env_eval.envs[0].unwrapped.measure_all:
                 variables = self.replace_measure_variable(variables)
-                for variable in self.env_eval.po_features:  # TODO make tidier
+                for variable in self.env_eval.envs[0].unwrapped.po_features:  # TODO make tidier
                     variable = 'prob_' + variable
                     variables += [variable]
 

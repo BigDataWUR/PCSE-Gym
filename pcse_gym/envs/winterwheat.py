@@ -57,6 +57,9 @@ class WinterWheat(gym.Env):
         self.list_n_i = [self.eval_nh4i, self.eval_no3i]
         self.rng, self.seed = gym.utils.seeding.np_random(seed=seed)
 
+        """LINTUL or WOFOST"""
+        self.pcse_env = 0 if 'Lintul' in kwargs.get('model_config') else 1
+
         """ Initialize SB3 env wrapper """
 
         if self.reward_function in reward_functions_with_baseline():
@@ -68,8 +71,9 @@ class WinterWheat(gym.Env):
 
         """ Get number of soil layers if using WOFOST snomin"""
 
-        self.len_soil_layers = self.get_len_soil_layers
-        self.soil_layers_dis = [self.len_soil_layers * 1.5 - i for i, n in enumerate(range(self.len_soil_layers))]
+        if self.pcse_env:
+            self.len_soil_layers = self.get_len_soil_layers
+            self.soil_layers_dis = [self.len_soil_layers * 1.5 - i for i, n in enumerate(range(self.len_soil_layers))]
 
         """ Initialize reward function """
 
@@ -184,7 +188,8 @@ class WinterWheat(gym.Env):
         info['growth'][self.date] = growth
 
         # used for reward functions that rely on rewards at terminate
-        reward, info = self.terminate_reward_signal(output, reward, terminated, info)
+        if self.pcse_env:
+            reward, info = self.terminate_reward_signal(output, reward, terminated, info)
 
         # normalize observations and reward if not using VecNormalize wrapper
         if self.normalize:
@@ -242,9 +247,9 @@ class WinterWheat(gym.Env):
             info['NUE'] = {}
         info['NUE'][self.date] = self.rewards_obj.calculate_nue_on_terminate(n_input=self.reward_container.get_total_fertilization * 10,
                                                                              n_so=process_pcse.get_n_storage_organ(output),
-                                                                             year=self.date.year,
-                                                                             start=self.sb3_env.agmt.get_start_date,
-                                                                             end=self.sb3_env.agmt.get_end_date)
+                                                                             year=None,  # self.date.year,
+                                                                             start=None,  #self.sb3_env.agmt.get_start_date,
+                                                                             end=None)  # self.sb3_env.agmt.get_end_date)
 
         if terminated and (self.reward_function in reward_functions_end() or self.reward_function == 'HAR'):
             reward = self.reward_container.dump_cumulative_positive_reward - abs(reward)
@@ -252,16 +257,17 @@ class WinterWheat(gym.Env):
         elif terminated and self.reward_function == 'NUE':
             reward = (self.reward_container.calculate_reward_nue(n_input=self.reward_container.get_total_fertilization * 10,
                                                                  n_output=process_pcse.get_n_storage_organ(output),
-                                                                 year=self.date.year,
-                                                                 start=self.sb3_env.agmt.get_start_date,
-                                                                 end=self.sb3_env.agmt.get_end_date) - abs(reward))
+                                                                 year=None,  # self.date.year,
+                                                                 start=None,  # self.sb3_env.agmt.get_start_date,
+                                                                 end=None,)  #self.sb3_env.agmt.get_end_date)
+                        - abs(reward))
             if 'Nsurplus' not in info.keys():
                 info['Nsurplus'] = {}
             info['Nsurplus'][self.date] = get_surplus_n(self.reward_container.get_total_fertilization,
                                                         n_so=process_pcse.get_n_storage_organ(output),
-                                                        year=self.date.year,
-                                                        start=self.sb3_env.agmt.get_start_date,
-                                                        end=self.sb3_env.agmt.get_end_date)
+                                                        year=None,  # self.date.year,
+                                                        start=None,  # self.sb3_env.agmt.get_start_date,
+                                                        end=None,)  # self.sb3_env.agmt.get_end_date)
 
         if 'profit' not in info.keys():
             info['profit'] = {}

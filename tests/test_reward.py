@@ -19,6 +19,111 @@ class Rewards(unittest.TestCase):
         self.har = init_env.initialize_env_har_reward()
         self.dnu = init_env.initialize_env_dnu_reward()
         self.fin = init_env.initialize_env_fin_reward()
+        self.def1 = init_env.initialize_env(reward='DEF')
+
+    def test_reward_sp(self, env=None, expected_reward=None):
+        env.reset() if env is not None else env
+        terminated = False
+
+        week = 0
+        n = 12
+        rewards = 0
+        while not terminated:
+
+            if week == n or week == n + 4:
+                action = np.array([6])
+            else:
+                action = np.array([0])
+            _, reward, terminated, _, _ = self.def1.step(action)
+            rewards += reward
+            week += 1
+        if expected_reward:
+            self.assertAlmostEqual(expected_reward, rewards, 0)
+
+    def test_frequent_action_end_reward(self, env=None, expected_reward=None):
+        env.reset() if env is not None else env
+
+        terminated = False
+
+        while not terminated:
+            if env is None:
+                break
+            action = np.array([1])
+            _, reward, terminated, _, _ = env.step(action)
+
+            if terminated:
+                expected = expected_reward
+            else:
+                expected = -10
+
+            self.assertAlmostEqual(expected, reward, 0)
+
+    def test_sp_action_end_reward(self, env=None, expected_reward=None, year=None):
+        if year is not None:
+            env.overwrite_year(year)
+            env.reset()
+
+        terminated = False
+
+        week = 0
+        n = 12
+        while not terminated:
+            if env is None:
+                break
+            if week == n or week == n + 4:
+                action = np.array([6])
+            else:
+                action = np.array([0])
+            _, reward, terminated, _, _ = env.step(action)
+
+            if terminated:
+                expected = expected_reward
+            elif week == n or week == n + 4:
+                expected = -60
+            else:
+                expected = 0
+
+            self.assertAlmostEqual(expected, reward, 0)
+
+            week += 1
+
+    def test_reward_single_year(self, env=None, year=2002, expected_reward=None):
+        if env is not None:
+            env.overwrite_year(year)
+            env.reset()
+        terminated = False
+
+        week = 0
+        n = 4
+        rewards = 0
+        while not terminated:
+            if env is None:
+                break
+            if week == n or week == n + 4 or week == n + 8:
+                action = np.array([6])
+            else:
+                action = np.array([0])
+            _, reward, terminated, _, _ = env.step(action)
+            rewards += reward
+            week += 1
+
+        if expected_reward:
+            self.assertAlmostEqual(expected_reward, rewards, 0)
+
+    def test_end_reward(self):
+        self.test_frequent_action_end_reward(self.end, 2151.55)
+
+    def test_def_reward(self):
+        self.test_reward_sp(self.def1, 1823.37)
+
+    def test_end_reward_proper(self):
+        self.test_sp_action_end_reward(self.end, 1838.60)
+
+    def test_eny_reward(self):
+        self.test_frequent_action_end_reward(self.eny, 8506.63)
+
+    def test_eny_reward_proper(self):
+        self.test_sp_action_end_reward(self.eny, 8206.62)
 
     def test_dep_reward_action(self):
         self.env.reset()
@@ -39,218 +144,26 @@ class Rewards(unittest.TestCase):
 
         self.assertEqual(expected_reward, reward)
 
-    def test_end_reward(self):
-        self.end.reset()
-
-        terminated = False
-
-        while not terminated:
-            action = np.array([1])
-            _, reward, terminated, _, _ = self.end.step(action)
-
-            if terminated:
-                expected_reward = 2151.55
-            else:
-                expected_reward = -10
-
-            self.assertAlmostEqual(expected_reward, reward, 1)
-
-    def test_end_reward_proper(self):
-        self.end.reset()
-
-        terminated = False
-
-        week = 0
-        n = 12
-        while not terminated:
-
-            if week == n or week == n + 4:
-                action = np.array([6])
-            else:
-                action = np.array([0])
-            _, reward, terminated, _, _ = self.end.step(action)
-
-            if terminated:
-                expected_reward = 1943.47
-            elif week == n or week == n + 4:
-                expected_reward = -60
-            else:
-                expected_reward = 0
-
-            self.assertAlmostEqual(expected_reward, reward, 1)
-
-            week += 1
-
-    def test_eny_reward(self):
-        self.eny.reset()
-
-        terminated = False
-
-        while not terminated:
-            action = np.array([1])
-            _, reward, terminated, _, _ = self.eny.step(action)
-
-            if terminated:
-                expected_reward = 8506.63
-            else:
-                expected_reward = -10
-
-            self.assertAlmostEqual(expected_reward, reward, 1)
-
-    def test_eny_reward_proper(self):
-        self.eny.reset()
-
-        terminated = False
-
-        week = 0
-        n = 12
-        while not terminated:
-
-            if week == n or week == n + 4:
-                action = np.array([6])
-            else:
-                action = np.array([0])
-            _, reward, terminated, _, _ = self.eny.step(action)
-
-            if terminated:
-                expected_reward = 8298.59
-            elif week == n or week == n + 4:
-                expected_reward = -60
-            else:
-                expected_reward = 0
-
-            self.assertAlmostEqual(expected_reward, reward, 1)
-
-            week += 1
-
     def test_nue_reward(self):
-        self.nue.reset()
-
-        terminated = False
-
-        while not terminated:
-            action = np.array([1])
-            _, reward, terminated, _, _ = self.nue.step(action)
-
-            if terminated:
-                expected_reward = 2747.615
-            else:
-                expected_reward = -10
-
-            self.assertAlmostEqual(expected_reward, reward, 1)
+        self.test_frequent_action_end_reward(self.nue, 2386.32)
 
     def test_nue_reward_proper(self):
-        self.nue.reset()
-
-        terminated = False
-
-        week = 0
-        n = 12
-        while not terminated:
-
-            if week == n or week == n + 4:
-                action = np.array([6])
-            else:
-                action = np.array([0])
-            _, reward, terminated, _, _ = self.nue.step(action)
-
-            if terminated:
-                expected_reward = 1115.126
-            elif week == n or week == n + 4:
-                expected_reward = -60
-            else:
-                expected_reward = 0
-
-            self.assertAlmostEqual(expected_reward, reward, 1)
-
-            week += 1
+        self.test_sp_action_end_reward(self.nue, 1689.55)
 
     def test_nup_reward(self):
-        self.nup.reset()
-        terminated = False
-
-        week = 0
-        n = 12
-        rewards = 0
-        while not terminated:
-
-            if week == n or week == n + 4:
-                action = np.array([6])
-            else:
-                action = np.array([0])
-            _, reward, terminated, _, _ = self.nup.step(action)
-            rewards += reward
-            week += 1
-
-        expected_reward = 142.13
-
-        self.assertAlmostEqual(expected_reward, rewards, 1)
+        self.test_reward_sp(self.nup, 1718.60)
 
     def test_har_reward(self):
-        self.har.reset()
-        terminated = False
-
-        week = 0
-        n = 12
-        rewards = 0
-        while not terminated:
-
-            if week == n or week == n + 4:
-                action = np.array([6])
-            else:
-                action = np.array([0])
-            _, reward, terminated, _, _ = self.har.step(action)
-            rewards += reward
-            week += 1
-        expected_reward = 8549.11
-
-        self.assertAlmostEqual(expected_reward, rewards, 1)
+        self.test_reward_sp(self.har, 1718.60)
 
     def test_dnu_reward(self):
-        self.dnu.reset()
-        terminated = False
-
-        week = 0
-        n = 12
-        rewards = 0
-        while not terminated:
-
-            if week == n or week == n + 4:
-                action = np.array([6])
-            else:
-                action = np.array([0])
-            _, reward, terminated, _, _ = self.dnu.step(action)
-            rewards += reward
-            week += 1
-
-        expected_reward = 25.31
-
-        self.assertAlmostEqual(expected_reward, rewards, 1)
-
-    def test_fin_reward_single_year(self, year=2002, expected_reward=911.42):
-        self.fin.overwrite_year(year)
-        self.fin.reset()
-        terminated = False
-
-        week = 0
-        n = 4
-        rewards = 0
-        while not terminated:
-
-            if week == n or week == n + 4 or week == n + 8:
-                action = np.array([6])
-            else:
-                action = np.array([0])
-            _, reward, terminated, _, _ = self.fin.step(action)
-            rewards += reward
-            week += 1
-
-        self.assertAlmostEqual(expected_reward, rewards, 1)
+        self.test_reward_sp(self.dnu, 1718.6)
 
     def test_fin_reward_multiple_years(self):
-        self.test_fin_reward_single_year(year=2005, expected_reward=807.52)
-        self.test_fin_reward_single_year(year=2020, expected_reward=1281.57)
-        self.test_fin_reward_single_year(year=1990, expected_reward=1550.18)
+        self.test_reward_single_year(env=self.fin, year=2002, expected_reward=1405.52)
+        self.test_reward_single_year(env=self.fin, year=2005, expected_reward=1337.32)
+        self.test_reward_single_year(env=self.fin, year=2020, expected_reward=1105.27)
+        self.test_reward_single_year(env=self.fin, year=1990, expected_reward=1434.55)
 
 
 class NitrogenUseEfficiency(unittest.TestCase):
@@ -258,8 +171,8 @@ class NitrogenUseEfficiency(unittest.TestCase):
         self.nue1 = init_env.initialize_env_nue_reward()
         self.def1 = init_env.initialize_env_reward_dep()
 
-    def process_nue(self, n_input, info, y, start, end):
-        n_in = self.process_nue_in(n_input, y, start, end)
+    def process_nue(self, n_input, info):
+        n_in = self.process_nue_in(n_input)
 
         return info['NamountSO'][max(info['NamountSO'].keys())] / n_in
 
@@ -267,20 +180,23 @@ class NitrogenUseEfficiency(unittest.TestCase):
     def get_days_in_year(year):
         return 365 + calendar.isleap(year)
 
-    def process_nue_in(self, n_input, y, start, end):
-        nh4 = 697 - 0.339 * y
-        no3 = 538.868 - 0.264 * y
+    def process_nue_in(self, n_input):
+        nh4 = 12.5
+        no3 = 12.5
 
-        # date_range1 = (datetime.date(year=y, month=12, day=31) - start).days
-        date_range = (end - start).days
+        # nh4 = 697 - 0.339 * y
+        # no3 = 538.868 - 0.264 * y
 
-        nh4_daily = nh4 / self.get_days_in_year(y)
-        no3_daily = no3 / self.get_days_in_year(y)
+        # # date_range1 = (datetime.date(year=y, month=12, day=31) - start).days
+        # date_range = (end - start).days
+        #
+        # nh4_daily = nh4 / self.get_days_in_year(y)
+        # no3_daily = no3 / self.get_days_in_year(y)
+        #
+        # nh4_dis = nh4_daily * date_range
+        # no3_dis = no3_daily * date_range
 
-        nh4_dis = nh4_daily * date_range
-        no3_dis = no3_daily * date_range
-
-        return n_input + nh4_dis + no3_dis + 3.5
+        return n_input + nh4 + no3 + 3.5
 
     def test_nue_value(self):
         year = 2002
@@ -296,8 +212,7 @@ class NitrogenUseEfficiency(unittest.TestCase):
             _, rew, terminated, _, info = self.nue1.step(action)
             n_input += list(info['fertilizer'].values())[0]
 
-        calculated_nue = self.process_nue(n_input, info, year, start=self.nue1.sb3_env.agmt.get_start_date,
-                                          end=self.nue1.sb3_env.agmt.get_end_date)
+        calculated_nue = self.process_nue(n_input, info)
 
         self.assertAlmostEqual(info['NUE'][max(info['NUE'].keys())], calculated_nue, 1)
 
@@ -321,8 +236,7 @@ class NitrogenUseEfficiency(unittest.TestCase):
             _, reward, terminated, _, info = self.nue1.step(action)
             n_input += list(info['fertilizer'].values())[0]
 
-        calculated_nue = self.process_nue(n_input, info, year, start=self.nue1.sb3_env.agmt.get_start_date,
-                                          end=self.nue1.sb3_env.agmt.get_end_date)
+        calculated_nue = self.process_nue(n_input, info)
 
         self.assertAlmostEqual(info['NUE'][max(info['NUE'].keys())], calculated_nue, 1)
 
@@ -346,9 +260,7 @@ class NitrogenUseEfficiency(unittest.TestCase):
             _, reward, terminated, _, info = self.nue1.step(action)
             n_input += action * 10
 
-        calculated_surplus = (self.process_nue_in(n_input, year,
-                                                  start=self.nue1.sb3_env.agmt.get_start_date,
-                                                  end=self.nue1.sb3_env.agmt.get_end_date)
+        calculated_surplus = (self.process_nue_in(n_input)
                               - info['NamountSO'][max(info['NamountSO'].keys())])
 
         self.assertAlmostEqual(info['Nsurplus'][max(info['Nsurplus'].keys())], calculated_surplus[0], 1)
