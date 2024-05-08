@@ -222,7 +222,7 @@ def train(log_dir, n_steps,
 
         # wrap comet after VecEnvs
         comet_log = None
-        use_comet = kwargs.get('comet')
+        use_comet = kwargs.get('comet', True)
         if use_comet:
             with open(os.path.join(rootdir, 'comet', 'comet_key'), 'r') as f:
                 api_key = f.readline()
@@ -240,6 +240,8 @@ def train(log_dir, n_steps,
 
             env_pcse_train = CometLogger(env_pcse_train, comet_log)
             comet_log.add_tags(['sb3', agent, seed, loc_code, reward])
+
+            print('Using Comet!')
 
         compute_baselines = False
         if compute_baselines:

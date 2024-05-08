@@ -604,6 +604,8 @@ class EvalCallback(BaseCallback):
                              'fertilizer', 'val', 'IDWST', 'prob_measure',
                              'NLOSSCUM', 'WC', 'Ndemand', 'NAVAIL', 'NuptakeTotal',
                              'SM', 'TAGP', 'LAI']
+                if self.env_eval.envs[0].unwrapped.reward_function not in ['NUE', 'HAR', 'END', 'ENY']:
+                    variables = variables.remove('reward')
                 if self.po_features:
                     variables.append('measure')
                     # for p in self.po_features:
@@ -655,27 +657,6 @@ class EvalCallback(BaseCallback):
                 else:
                     self.logger.record(f'figures/med-{variable}', Figure(fig, close=True))
                 plt.close()
-
-                # # measure frequency vs variance
-                # if variable.startswith('measure_') or variable.startswith('prob_') and not self.env_eval.measure_all:
-                #     fig, ax = plt.subplots(figsize=(9,6))
-                #     plot_var_vs_freq_scatter(results_figure, variable=variable, ax=ax)
-                #     self.logger.record(f'figures/var-freq-{variable}', Figure(fig, close=True))
-                #     plt.close()
-            #
-            # # create heatmap plot
-            # if self.po_features:
-            #     assert 'DVS' in variables
-            #
-            #     variables = ([list(filter(lambda x: x.startswith('measure_'), variables))] +
-            #                  [x for x in variables if not x.startswith('measure_')])
-            #
-            #     fig, ax = plt.subplots(len(variables), 1, sharex='all', figsize=(12, 18))
-            #     for i, loc_year in enumerate(keys_figure):
-            #
-            #         plot_year_loc_heatmap(results_figure, variables, loc_year, ax=ax, fig=fig)
-            #         self.logger.record(f'figures/measure-{loc_year}', Figure(fig, close=True))
-            #         plt.close()
 
             self.logger.dump(step=self.num_timesteps)
 

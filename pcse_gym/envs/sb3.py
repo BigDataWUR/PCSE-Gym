@@ -373,6 +373,7 @@ class ZeroNitrogenEnvStorage:
         if key not in self.results.keys():
             results = self.run_episode(env)
             self.results[key] = results
+        assert bool(self.results[key]), "key empty; check PCSE output"
         return self.results[key]
 
     @property

@@ -14,6 +14,10 @@ def reward_functions_with_baseline():
     return ['DEF', 'ANE', 'END']
 
 
+def reward_function_list():
+    return ['DEF', 'GRO', 'DEP', 'ENY', 'NUE', 'DNU', 'HAR', 'NUP', 'END', 'FIN']
+
+
 def reward_functions_end():
     return ['END', 'ENY']
 
@@ -229,7 +233,7 @@ class Rewards:
             obj.calculate_amount(amount)
             obj.calculate_cost_cumulative(amount)
             obj.calculate_positive_reward_cumulative(output, output_baseline, multiplier)
-            reward = 0 - amount * self.costs_nitrogen
+            reward = 0  # - amount * self.costs_nitrogen
             growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
 
             return reward, growth
@@ -289,9 +293,10 @@ class Rewards:
             super().__init__(timestep, costs_nitrogen)
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
-            self.n_so_mod = 1
+            self.n_so_mod = 5
             self.n_dep_mod = 1
-            self.n_loss_mod = 1
+            self.n_loss_mod = 5
+            self.n_fert_mod = 2
 
         def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
             obj.calculate_amount(amount)
@@ -300,13 +305,13 @@ class Rewards:
             # N loss
             n_loss = process_pcse.compute_growth_var(output, self.timestep, 'NLOSSCUM')
             # N deposition
-            nh4, no3 = get_disaggregated_deposition(year=process_pcse.get_year_in_step(output),
-                                                    start_date=
-                                                    output[process_pcse.get_previous_index(output, self.timestep)][
-                                                        'day'],
-                                                    end_date=output[-1]['day'])
-            n_dep = nh4 + no3
-            reward = (n_so * self.n_so_mod - amount * self.costs_nitrogen
+            # nh4, no3 = get_disaggregated_deposition(year=process_pcse.get_year_in_step(output),
+            #                                         start_date=
+            #                                         output[process_pcse.get_previous_index(output, self.timestep)][
+            #                                             'day'],
+            #                                         end_date=output[-1]['day'])
+            n_dep = 25
+            reward = (n_so * self.n_so_mod - amount * self.n_fert_mod
                       - n_dep * self.n_dep_mod - n_loss * self.n_loss_mod)
             growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
 

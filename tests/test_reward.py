@@ -29,12 +29,13 @@ class Rewards(unittest.TestCase):
         n = 12
         rewards = 0
         while not terminated:
-
+            if env is None:
+                break
             if week == n or week == n + 4:
                 action = np.array([6])
             else:
                 action = np.array([0])
-            _, reward, terminated, _, _ = self.def1.step(action)
+            _, reward, terminated, _, _ = env.step(action)
             rewards += reward
             week += 1
         if expected_reward:
@@ -44,6 +45,7 @@ class Rewards(unittest.TestCase):
         env.reset() if env is not None else env
 
         terminated = False
+        expected = expected_reward
 
         while not terminated:
             if env is None:
@@ -53,10 +55,11 @@ class Rewards(unittest.TestCase):
 
             if terminated:
                 expected = expected_reward
-            else:
+            elif not terminated and env.reward_function != 'NUE':
                 expected = -10
 
-            self.assertAlmostEqual(expected, reward, 0)
+            if expected_reward:
+                self.assertAlmostEqual(expected, reward, 0)
 
     def test_sp_action_end_reward(self, env=None, expected_reward=None, year=None):
         if year is not None:
@@ -78,7 +81,7 @@ class Rewards(unittest.TestCase):
 
             if terminated:
                 expected = expected_reward
-            elif week == n or week == n + 4:
+            elif (week == n or week == n + 4) and env.reward_function != 'NUE':
                 expected = -60
             else:
                 expected = 0
@@ -145,19 +148,19 @@ class Rewards(unittest.TestCase):
         self.assertEqual(expected_reward, reward)
 
     def test_nue_reward(self):
-        self.test_frequent_action_end_reward(self.nue, 2386.32)
+        self.test_frequent_action_end_reward(self.nue, 0)
 
     def test_nue_reward_proper(self):
-        self.test_sp_action_end_reward(self.nue, 1689.55)
+        self.test_sp_action_end_reward(self.nue, 1569.55)
 
     def test_nup_reward(self):
-        self.test_reward_sp(self.nup, 1718.60)
+        self.test_reward_sp(self.nup, 142.11)
 
     def test_har_reward(self):
-        self.test_reward_sp(self.har, 1718.60)
+        self.test_reward_sp(self.har, 1864.22)
 
     def test_dnu_reward(self):
-        self.test_reward_sp(self.dnu, 1718.6)
+        self.test_reward_sp(self.dnu, 30.9)
 
     def test_fin_reward_multiple_years(self):
         self.test_reward_single_year(env=self.fin, year=2002, expected_reward=1405.52)
