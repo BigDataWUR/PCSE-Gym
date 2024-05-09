@@ -1,6 +1,6 @@
 import os
 from collections import OrderedDict, defaultdict
-from datetime import timedelta
+from datetime import timedelta, date
 import gymnasium as gym
 import pandas as pd
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
@@ -187,6 +187,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, self.costs_nitrogen)
         self.index_feature = OrderedDict()
         self.cost_measure = kwargs.get('cost_measure', 'real')
+        self.start_type = kwargs.get('start_type', 'sowing')
         for i, feature in enumerate(self.crop_features):
             if feature in self.po_features:
                 self.index_feature[feature] = i
@@ -302,6 +303,15 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
                     obs[j] = observation['weather'][feature][d]
         return obs
 
+    def get_harvest_year(self):
+        if self.agmt.campaign_date.year < self.agmt.crop_end_date.year and self.start_type == 'sowing':
+            if date(self.date.year, 10, 1) < self.date < date(self.date.year, 12, 31):
+                return self.date.year + 1
+            else:
+                return self.date.year
+        else:
+            return self.date.year
+
     @property
     def model(self):
         return self._model
@@ -364,7 +374,10 @@ class ZeroNitrogenEnvStorage:
         return episode_info
 
     def get_key(self, env):
-        year = env.date.year
+        ''' We label the year based on the harvest date. e.g. sow in Oct 2002, harvest in Aug 2003, means that
+            the labelled year is 2003'''
+        # year = env.date.year
+        year = env.get_harvest_year()
         location = env.loc
         return f'{year}-{location}'
 

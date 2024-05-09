@@ -1,7 +1,7 @@
 import gymnasium as gym
 
 from pcse_gym.envs.winterwheat import WinterWheat
-from pcse_gym.envs.sb3 import get_model_kwargs
+from pcse_gym.envs.sb3 import get_model_kwargs, StableBaselinesWrapper
 import pcse_gym.utils.defaults as defaults
 from pcse_gym.envs.constraints import ActionConstrainer
 
@@ -26,12 +26,13 @@ def get_action_space(nitrogen_levels=7, po_features=[], measure_all=False):
     return space_return
 
 
-def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_default_crop_features(pcse_env=1, minimal=True),
+def initialize_env(pcse_env=1, po_features=[],
+                   crop_features=defaults.get_default_crop_features(pcse_env=1, minimal=True),
                    costs_nitrogen=10, reward='DEF', nitrogen_levels=7, action_multiplier=1.0, add_random=False,
                    years=defaults.get_default_train_years(), locations=defaults.get_default_location(), args_vrr=False,
                    action_limit=0, noisy_measure=False, n_budget=0, no_weather=False, mask_binary=False,
                    placeholder_val=-1.11, normalize=False, loc_code='NL', cost_measure='real', start_type='emergence',
-                   random_init=False, m_multiplier=1, measure_all=False):
+                   random_init=False, m_multiplier=1, measure_all=False, sb3wrapper=False, seed=None):
     if add_random:
         po_features.append('random'), crop_features.append('random')
     action_space = get_action_space(nitrogen_levels=nitrogen_levels, po_features=po_features, measure_all=measure_all)
@@ -40,15 +41,23 @@ def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_defaul
                   mask_binary=mask_binary, placeholder_val=placeholder_val, normalize=normalize, loc_code=loc_code,
                   cost_measure=cost_measure, start_type=start_type, random_init=random_init, m_multiplier=m_multiplier,
                   measure_all=measure_all)
-    env_return = WinterWheat(crop_features=crop_features,
-                             costs_nitrogen=costs_nitrogen,
-                             years=years,
-                             locations=locations,
-                             action_space=action_space,
-                             action_multiplier=action_multiplier,
-                             reward=reward,
-                             **get_model_kwargs(pcse_env, locations, start_type=start_type),
-                             **kwargs)
+    if not sb3wrapper:
+        env_return = WinterWheat(crop_features=crop_features,
+                                 costs_nitrogen=costs_nitrogen,
+                                 years=years,
+                                 locations=locations,
+                                 action_space=action_space,
+                                 action_multiplier=action_multiplier,
+                                 reward=reward,
+                                 **get_model_kwargs(pcse_env, locations, start_type=start_type),
+                                 **kwargs)
+    else:
+        env_return = StableBaselinesWrapper(crop_features=crop_features,
+                                            costs_nitrogen=costs_nitrogen,
+                                            years=years[0],
+                                            locations=locations[0],
+                                            action_space=action_space,
+                                            action_multiplier=action_multiplier, seed=seed, **kwargs)
 
     return env_return
 
