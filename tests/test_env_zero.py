@@ -1,13 +1,13 @@
 import unittest
 import numpy as np
 
-from initialize_env import initialize_env
+import tests.initialize_env as init_env
 
 
 class ZeroEnv(unittest.TestCase):
     def setUp(self) -> None:
         self.years = [*range(1990, 2022)]
-        self.env = initialize_env(reward="DEF", start_type='sowing')
+        self.env = init_env.initialize_env(reward="DEF", start_type='sowing')
 
     def test_zero_env(self):
         """Test whether zero env is referencing the correct year by
