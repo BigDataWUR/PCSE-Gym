@@ -5,11 +5,23 @@ def get_lintul_default_crop_features():
 
 def get_wofost_default_crop_features():
     # See get_titles() for description of variables
-    return ["DVS", "TAGP", "LAI", "NuptakeTotal", "TRA", "NAVAIL", "SM", "RFTRA", "TWSO"]
+    return ["DVS", "TAGP", "LAI", "NuptakeTotal", "TRA", "NAVAIL", "SM", "RFTRA", "WSO"]
 
 
-def get_default_crop_features(pcse_env=1):
-    if pcse_env:
+def get_wofost_minimal_crop_features():
+    # See get_titles() for description of variables
+    return ["DVS", "TAGP", "LAI", "NuptakeTotal", "NAVAIL", "SM"]
+
+
+def get_wofost_default_po_features():
+    # See get_titles() for description of variables
+    return ["TAGP", "LAI", "NAVAIL", "NuptakeTotal", "SM"]
+
+
+def get_default_crop_features(pcse_env=0, minimal=True):
+    if pcse_env and minimal:
+        crop_features = get_wofost_minimal_crop_features()
+    elif pcse_env:
         crop_features = get_wofost_default_crop_features()
     else:
         crop_features = get_lintul_default_crop_features()
@@ -47,5 +59,5 @@ def get_default_test_years():
 
 def get_default_action_space():
     import gymnasium as gym
-    action_spaces = gym.spaces.Discrete(3)
-    return action_spaces
+    action_space = gym.spaces.Discrete(3)
+    return action_space
