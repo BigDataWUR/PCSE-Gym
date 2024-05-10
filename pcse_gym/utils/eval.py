@@ -10,15 +10,20 @@ from collections import defaultdict
 from scipy.optimize import minimize_scalar
 from bisect import bisect_left
 from typing import Union
+from statistics import mean, median
 from tqdm import tqdm
-from stable_baselines3 import PPO, DQN
+import pickle
+from stable_baselines3 import PPO, DQN, A2C
 from stable_baselines3.common.vec_env import VecEnv, DummyVecEnv, VecNormalize, sync_envs_normalization
 from stable_baselines3.common import base_class
 from stable_baselines3.common.callbacks import BaseCallback
 from stable_baselines3.common.logger import Figure
+from stable_baselines3.common.distributions import MultiCategoricalDistribution
+from sb3_contrib.common.recurrent.type_aliases import RNNStates
 from sb3_contrib import RecurrentPPO
 import pcse_gym.utils.defaults as defaults
 from pcse_gym.utils.process_pcse_output import get_dict_lintul_wofost
+from .plotter import plot_variable, get_ylim_dict
 
 
 def compute_median(results_dict: dict, filter_list=None):
@@ -32,16 +37,6 @@ def get_cumulative_variables():
     return ['fertilizer', 'reward']
 
 
-def get_ylim_dict():
-    def def_value():
-        return None
-
-    ylim = defaultdict(def_value)
-    ylim['WSO'] = [0, 1000]
-    ylim['TWSO'] = [0, 10000]
-    return ylim
-
-
 def identity_line(ax=None, ls='--', *args, **kwargs):
     # see: https://stackoverflow.com/q/22104256/3986320
     ax = ax or plt.gca()
@@ -53,62 +48,11 @@ def identity_line(ax=None, ls='--', *args, **kwargs):
         low = min(low_x, low_y)
         high = max(high_x, high_y)
         identity.set_data([low, high], [low, high])
+
     callback(ax)
     ax.callbacks.connect('xlim_changed', callback)
     ax.callbacks.connect('ylim_changed', callback)
     return ax
-
-
-def get_titles():
-    def def_value(): return ("", "")
-
-    return_dict = defaultdict(def_value)
-    return_dict["DVS"] = ("Development stage", "-")
-    return_dict["TGROWTH"] = ("Total biomass (above and below ground)", "g/m2")
-    return_dict["LAI"] = ("Leaf area Index", "-")
-    return_dict["NUPTT"] = ("Total nitrogen uptake", "gN/m2")
-    return_dict["TRAN"] = ("Transpiration", "mm/day")
-    return_dict["TIRRIG"] = ("Total irrigation", "mm")
-    return_dict["TNSOIL"] = ("Total soil inorganic nitrogen", "gN/m2")
-    return_dict["TRAIN"] = ("Total rainfall", "mm")
-    return_dict["TRANRF"] = ("Transpiration reduction factor", "-")
-    return_dict["TRUNOF"] = ("Total runoff", "mm")
-    return_dict["TAGBM"] = ("Total aboveground biomass", "g/m2")
-    return_dict["TTRAN"] = ("Total transpiration", "mm")
-    return_dict["WC"] = ("Soil water content", "m3/m3")
-    return_dict["WLVD"] = ("Weight dead leaves", "g/m2")
-    return_dict["WLVG"] = ("Weight green leaves", "g/m2")
-    return_dict["WRT"] = ("Weight roots", "g/m2")
-    return_dict["WSO"] = ("Weight storage organs", "g/m2")
-    return_dict["TWSO"] = ("Weight storage organs", "kg/ha")
-    return_dict["WST"] = ("Weight stems", "g/m2")
-    return_dict["TGROWTHr"] = ("Growth rate", "g/m2/day")
-    return_dict["NRF"] = ("Nitrogen reduction factor", "-")
-    return_dict["GRF"] = ("Growth reduction factor", "-")
-
-    return_dict["DVS"] = ("Development stage", "-")
-    return_dict["TAGP"] = ("Total above-ground Production", "kg/ha")
-    return_dict["LAI"] = ("Leaf area Index", "-")
-    return_dict["RNuptake"] = ("Total nitrogen uptake", "kgN/ha")
-    return_dict["TRA"] = ("Transpiration", "cm/day")
-    return_dict["NAVAIL"] = ("Total soil inorganic nitrogen", "kgN/ha")
-    return_dict["SM"] = ("Volumatric soul moisture content", "-")
-    return_dict["RFTRA"] = ("Transpiration reduction factor", "-")
-    return_dict["TRUNOF"] = ("Total runoff", "mm")
-    return_dict["TAGBM"] = ("Total aboveground biomass", "kg/ha")
-    return_dict["TTRAN"] = ("Total transpiration", "mm")
-    return_dict["WC"] = ("Soil water content", "m3/m3")
-    return_dict["Ndemand"] = ("Total N demand of crop", "kgN/ha")
-    return_dict["NuptakeTotal"] = ("Total N uptake of crop", "kgN/ha/d")
-    return_dict["FERT_N_SUPPLY"] = ("Total N supplied by actions", "kgN/ha")
-
-    return_dict["fertilizer"] = ("Nitrogen application", "kg/ha")
-    return_dict["TMIN"] = ("Minimum temperature", "°C")
-    return_dict["TMAX"] = ("Maximum temperature", "°C")
-    return_dict["IRRAD"] = ("Incoming global radiation", "J/m2/day")
-    return_dict["RAIN"] = ("Daily rainfall", "cm/day")
-
-    return return_dict
 
 
 def convert_variables(results_storage):
@@ -136,58 +80,6 @@ def report_ci(boot_metric, report_p=False):
         idx = bisect_left(boot_metric_sorted, 0.0, hi=n_boot - 1)
         return_string = return_string + f' one-sided-p={(idx / n_boot):0.4f}'
     return return_string
-
-
-def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumulative_variables(), ax=None, ylim=None,
-                  put_legend=True, plot_average=False):
-    titles = get_titles()
-    xmax = 0
-    for label, results in results_dict.items():
-        x, y = zip(*results[0][variable].items())
-        x = ([i.timetuple().tm_yday for i in x])
-        if variable in cumulative_variables: y = np.cumsum(y)
-        if max(x) > xmax: xmax = max(x)
-        if not plot_average:
-            ax.step(x, y, label=label, where='post')
-
-    if plot_average:
-        plot_df = pd.concat([pd.DataFrame.from_dict(results[0][variable], orient='index', columns=[label])
-                            .rename(lambda i: i.timetuple().tm_yday) for label, results in results_dict.items()],
-                            axis=1)
-        if variable in cumulative_variables: plot_df = plot_df.apply(np.cumsum, axis=0)
-        plot_df.fillna(method='ffill', inplace=True)
-        ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where='post')
-        ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step='post')
-
-    ax.axhline(y=0, color='lightgrey', zorder=1)
-    ax.margins(x=0)
-
-    from matplotlib.ticker import FixedLocator
-    ax.xaxis.set_minor_locator(FixedLocator(range(0, xmax, 7)))
-    ax.xaxis.grid(True, which='minor')
-    ax.tick_params(axis='x', which='minor', grid_alpha=0.7, colors=ax.get_figure().get_facecolor(), grid_ls=":")
-
-    months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sept', 'Oct', 'Nov', 'Dec']
-    month_days = [0, 32, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335]
-    extra_month = next(x[0] for x in enumerate(month_days) if x[1] >= xmax)
-    month_days = month_days[0:extra_month + 1]
-    months = months[0:extra_month + 1]
-    ax.set_xticks(month_days)
-    ax.set_xticklabels(months)
-
-    name, unit = titles[variable]
-    ax.set_title(f"{variable} - {name}")
-    if variable in cumulative_variables:
-        ax.set_title(f"{variable} (cumulative) - {name}")
-    ax.set_ylabel(f"[{unit}]")
-    if ylim is not None:
-        ax.set_ylim(ylim)
-    if put_legend:
-        ax.legend()
-    else:
-        ax.legend()
-        ax.get_legend().set_visible(False)
-    return ax
 
 
 def summarize_results(results_dict):
@@ -228,6 +120,8 @@ def compute_average(results_dict: dict, filter_list=None):
     if filter_list is None:
         filter_list = list(results_dict.keys())
     filtered_results = [results_dict[f] for f in filter_list if f in results_dict.keys()]
+    if len(filtered_results) == 0:
+        return 0
     return sum(filtered_results) / len(filtered_results)
 
 
@@ -259,8 +153,9 @@ def evaluate_policy(
     training = True
 
     if isinstance(policy, base_class.BaseAlgorithm) and policy.get_env() is not None:
-        training = policy.get_env().training
-        policy.get_env().training = False
+        if isinstance(env, DummyVecEnv) and not env.envs[0].unwrapped.normalize:
+            training = policy.get_env().training
+            policy.get_env().training = False
     if isinstance(env, VecEnv):
         assert env.num_envs == 1, "You must pass only one environment when using this function"
 
@@ -277,10 +172,11 @@ def evaluate_policy(
     episode_rewards, episode_infos = [], []
     for i in range(n_eval_episodes):
         if isinstance(policy, base_class.BaseAlgorithm):
-            sync_envs_normalization(policy.get_env(), env)
+            if isinstance(env, DummyVecEnv) and not env.envs[0].unwrapped.normalize:
+                sync_envs_normalization(policy.get_env(), env)
         if not isinstance(env, VecEnv) or i == 0:
             obs = env.reset()
-        terminated, truncated, state, lstm_state = False, False, None, None
+        terminated, truncated, state = False, False, None
         episode_reward = 0.0
         episode_length = 0
         year = env.get_attr("date")[0].year
@@ -288,6 +184,10 @@ def evaluate_policy(
         action = [amount * 0]
         infos_this_episode = []
         prob, val = None, None
+
+        lstm_state = None
+        episode_starts = np.ones((1,), dtype=bool)
+        action_probs = None
 
         while not terminated or truncated:
             if policy == 'start-dump' and (episode_length == 0):
@@ -301,8 +201,24 @@ def evaluate_policy(
                     sb_val = sb_values.detach().item()
                     prob = sb_prob
                     val = sb_val
+                if isinstance(policy, A2C):
+                    action, state = policy.predict(obs, state=state, episode_start=episode_starts,
+                                                   deterministic=deterministic)
+
                 if isinstance(policy, RecurrentPPO):
-                    action, lstm_state = policy.predict(obs, state=lstm_state, deterministic=deterministic)
+                    action, lstm_state = policy.predict(obs, state=lstm_state, episode_start=episode_starts,
+                                                        deterministic=deterministic)
+                    lstm_torch = (torch.from_numpy(lstm_state[0]), torch.from_numpy(lstm_state[1]))
+
+                    dis, _ = policy.policy.get_distribution(torch.from_numpy(obs),
+                                                            lstm_states=lstm_torch,
+                                                            episode_starts=torch.from_numpy(episode_starts))
+
+                    val = policy.policy.predict_values(torch.from_numpy(obs),
+                                                       lstm_states=lstm_torch,
+                                                       episode_starts=torch.from_numpy(episode_starts))
+                    val = val.detach().numpy()[0][0]
+
                 if isinstance(policy, DQN):
                     action = policy.predict(obs, deterministic=deterministic)
 
@@ -310,9 +226,18 @@ def evaluate_policy(
             # see: https://github.com/DLR-RM/stable-baselines3/blob/master/docs/guide/vec_envs.rst
             # TODO: add check on function signature
             obs, rew, terminated, info = env.step(action)
+            episode_starts = terminated
             truncated = info[0].pop("TimeLimit.truncated")
 
-            reward = env.get_original_reward()
+            if isinstance(env, VecNormalize):
+                reward = env.get_original_reward()
+            if isinstance(env, DummyVecEnv) and not env.envs[0].unwrapped.normalize:
+                reward = env.get_original_reward()
+            elif env.envs[0].unwrapped.normalize:
+                # reward = env.envs[0].unwrapped.norm_rew.unnormalize(rew)
+                # reward = rew * np.sqrt(env.envs[0].unwrapped.norm_rew.var + 1e-8)
+                # reward = env.envs[0].unwrapped.norm.unnormalize_rew(rew)
+                reward = env.envs[0].unwrapped.norm.unnormalize_reward(rew)
 
             if prob:
                 action_date = list(info[0]['action'].keys())[0]
@@ -321,6 +246,10 @@ def evaluate_policy(
             if val:
                 val_date = list(info[0]['action'].keys())[0]
                 info[0]['val'] = {val_date: val}
+            if action_probs:
+                action_date = list(info[0]['action'].keys())[0]
+                for key, val in action_probs.items():
+                    info[0][key] = {action_date: val}
 
             action = [amount * 0]
             if policy in ['standard-practice', 'standard-practise']:
@@ -394,10 +323,6 @@ class FindOptimum():
         return res.x
 
 
-def get_cumulative_variables():
-    return ['fertilizer', 'reward']
-
-
 class EvalCallback(BaseCallback):
     """
     Callback for evaluating an agent. Writes the following to tensorboard:
@@ -412,9 +337,11 @@ class EvalCallback(BaseCallback):
     :param eval_freq: (int) Evaluate the agent every eval_freq call of the callback.
     """
 
-    def __init__(self, env_eval=None, train_years=defaults.get_default_train_years(), test_years=defaults.get_default_test_years(),
+    def __init__(self, env_eval=None, train_years=defaults.get_default_train_years(),
+                 test_years=defaults.get_default_test_years(),
                  train_locations=defaults.get_default_location(), test_locations=defaults.get_default_location(),
-                 n_eval_episodes=1, eval_freq=1000, pcse_model=1, seed=0, **kwargs):
+                 n_eval_episodes=1, eval_freq=20_000, pcse_model=1, seed=0, comet_experiment=None, multiprocess=False,
+                 **kwargs):
         super(EvalCallback, self).__init__()
         self.test_years = test_years
         self.train_years = train_years
@@ -425,7 +352,10 @@ class EvalCallback(BaseCallback):
         self.pcse_model = pcse_model
         self.seed = seed
         self.env_eval = env_eval
+        self.comet_experiment = comet_experiment
         self.po_features = kwargs.get('po_features')
+        self.random_weather = kwargs.get('random_weather', False)
+        self.multiprocess = multiprocess
 
         def def_value(): return 0
 
@@ -443,8 +373,10 @@ class EvalCallback(BaseCallback):
         return locations
 
     def get_years(self, log_training=False):
-        if log_training:
+        if log_training and not self.random_weather:
             years = list(set(self.test_years + self.train_years))
+        elif log_training and self.random_weather:
+            years = list(set(self.test_years + list(np.random.choice(self.train_years, 32))))
         else:
             years = list(set(self.test_years))
         return years
@@ -454,28 +386,6 @@ class EvalCallback(BaseCallback):
         if self.n_calls % (5 * self.eval_freq) == 0 or self.n_calls == 1:
             log_training = True
         return log_training
-
-    def replace_measure_variable(self, variables, cumulative=None):
-        variables.remove('measure')
-        for variable in self.env_eval.po_features:
-            variable = 'measure_' + variable
-            variables += [variable]
-            if cumulative:
-                cumulative += [variable]
-        return (variables, cumulative) if cumulative else variables
-
-    def get_measure_graphs(self, episode_infos):
-        measure_graph = {}
-        feature_order = episode_infos[0]['indexes'].keys()
-        for date, measurement in episode_infos[0]['measure'].items():
-            for feature, measure in zip(feature_order, measurement):
-                feature = 'measure_' + feature
-                if feature not in measure_graph.keys():
-                    measure_graph[feature] = {}
-                if date not in measure_graph[feature].keys():
-                    measure_graph[feature][date] = measure
-        episode_infos[0] = episode_infos[0] | measure_graph  # Python 3.9.0
-        return episode_infos
 
     def _on_step(self):
         train_year = self.model.get_env().get_attr("date")[0].year
@@ -493,22 +403,20 @@ class EvalCallback(BaseCallback):
             tensorboard_logdir = self.logger.dir
             model_path = os.path.join(tensorboard_logdir, f'model-{self.n_calls}')
             self.model.save(model_path)
-            stats_path = os.path.join(tensorboard_logdir, f'env-{self.n_calls}.pkl')
-            self.model.get_env().save(stats_path)
-            episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=self.model.get_env())
+            if not self.env_eval.envs[0].unwrapped.normalize:
+                stats_path = os.path.join(tensorboard_logdir, f'env-{self.n_calls}.pkl')
+                self.model.get_env().save(stats_path)
+
+            # evaluate model and get rewards and infos
+            episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=self.env_eval)
+
             if self.pcse_model:
-                variables = ['action', 'TWSO', 'reward']
-                if self.po_features: variables.append('measure')
+                variables = ['action', 'WSO', 'reward', 'IDWST',
+                             'NLOSSCUM']
                 cumulative = ['action', 'reward']
             else:
                 variables = ['action', 'WSO', 'reward']
-                if self.po_features: variables.append('measure')
                 cumulative = ['action', 'reward']
-
-            '''logic for measure graph'''
-            if 'measure' in variables:
-                variables, cumulative = self.replace_measure_variable(variables, cumulative)
-                episode_infos = self.get_measure_graphs(episode_infos)
 
             for i, variable in enumerate(variables):
                 n_timepoints = len(episode_infos[0][variable])
@@ -540,74 +448,131 @@ class EvalCallback(BaseCallback):
             ax.set_xticklabels(list(self.histogram_training_locations.keys()), fontdict=None, minor=False)
             self.logger.record(f'figures/training-locations', Figure(fig, close=True))
 
-            reward, fertilizer, result_model = {}, {}, {}
+            reward, fertilizer, result_model, WSO, profit, init_no3, init_nh4 = {}, {}, {}, {}, {}, {}, {}
             log_training = self.get_do_log_training()
 
             env_pcse_evaluation = self.env_eval
-            env_pcse_evaluation = VecNormalize(DummyVecEnv([lambda: env_pcse_evaluation]),
-                                               norm_obs=True, norm_reward=True,
-                                               clip_obs=10., clip_reward=50., gamma=1)
             env_pcse_evaluation.training = False
+            n_year_loc = 0
 
+            total_eval = len(self.get_years(log_training)*len(self.get_locations(log_training)))
             print("evaluating environment with learned policy...")
-            for year in tqdm(self.get_years(log_training)):
-                for test_location in self.get_locations(log_training):
+            years_bar = tqdm(self.get_years(log_training))
+            for iy, year in enumerate(years_bar, 1):
+                for il, test_location in enumerate(self.get_locations(log_training), 1):
+                    years_bar.set_description(f'Evaluating {year}, {str(test_location): <{10}} | '
+                                              f'{str(il+(len(self.get_locations(log_training))*iy)): <{3}}/{total_eval}')
                     env_pcse_evaluation.env_method('overwrite_year', year)
                     env_pcse_evaluation.env_method('overwrite_location', test_location)
                     env_pcse_evaluation.reset()
-                    sync_envs_normalization(self.model.get_env(), env_pcse_evaluation)
                     episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=env_pcse_evaluation)
                     my_key = (year, test_location)
                     reward[my_key] = episode_rewards[0].item()
-                    if self.po_features:
-                        episode_infos = self.get_measure_graphs(episode_infos)
+                    # years_bar.set_description(f'Reward {year}, {str(test_location): <{12}}: {reward[my_key]}')
                     fertilizer[my_key] = sum(episode_infos[0]['fertilizer'].values())
+                    WSO[my_key] = list(episode_infos[0]['WSO'].values())[-1]
+                    profit[my_key] = list(episode_infos[0]['profit'].values())[-1]
                     self.logger.record(f'eval/reward-{my_key}', reward[my_key])
                     self.logger.record(f'eval/nitrogen-{my_key}', fertilizer[my_key])
                     result_model[my_key] = episode_infos
+                    n_year_loc = 0 if log_training else n_year_loc + 1
+                avg_rew = mean([x for x in reward.values()])
+                years_bar.set_description(f'Evaluation step {self.num_timesteps} | Avg. reward: {avg_rew:.4f}')
 
             for test_location in list(set(self.test_locations)):
                 test_keys = [(a, test_location) for a in self.test_years]
                 self.logger.record(f'eval/reward-average-test-{test_location}', compute_average(reward, test_keys))
                 self.logger.record(f'eval/nitrogen-average-test-{test_location}',
                                    compute_average(fertilizer, test_keys))
+                self.logger.record(f'eval/profit-average-test-{test_location}',
+                                   compute_average(profit, test_keys))
+                self.logger.record(f'eval/WSO-average-test-{test_location}', compute_average(WSO, test_keys))
                 self.logger.record(f'eval/reward-median-test-{test_location}', compute_median(reward, test_keys))
                 self.logger.record(f'eval/nitrogen-median-test-{test_location}', compute_median(fertilizer, test_keys))
+                self.logger.record(f'eval/WSO-median-test-{test_location}', compute_median(WSO, test_keys))
+                self.logger.record(f'eval/profit-median-test-{test_location}', compute_median(profit, test_keys))
 
             if log_training:
                 train_keys = [(a, b) for a in self.train_years for b in self.train_locations]
                 self.logger.record(f'eval/reward-average-train', compute_average(reward, train_keys))
                 self.logger.record(f'eval/nitrogen-average-train', compute_average(fertilizer, train_keys))
+                self.logger.record(f'eval/profit-average-train', compute_average(profit, train_keys))
                 self.logger.record(f'eval/reward-median-train', compute_median(reward, train_keys))
                 self.logger.record(f'eval/nitrogen-median-train', compute_median(fertilizer, train_keys))
+                self.logger.record(f'eval/profit-median-train', compute_median(profit, train_keys))
+
+            self.logger.record(f'eval/reward-average-all', compute_average(reward))
+            self.logger.record(f'eval/nitrogen-average-all', compute_average(fertilizer))
+            self.logger.record(f'eval/WSO-average-all', compute_average(WSO))
+            self.logger.record(f'eval/profit-average-all', compute_average(profit))
+            self.logger.record(f'eval/reward-median-all', compute_median(reward))
+            self.logger.record(f'eval/nitrogen-median-all', compute_median(fertilizer))
+            self.logger.record(f'eval/WSO-median-all', compute_median(WSO))
+            self.logger.record(f'eval/profit-median-all', compute_median(profit))
 
             if self.pcse_model:
-                variables = ['action', 'TWSO', 'reward', 'NAVAIL',
-                             'NuptakeTotal', 'fertilizer', 'val']
-                if self.po_features: variables.append('measure')
+                variables = ['DVS', 'action', 'WSO', 'reward',
+                             'fertilizer', 'val', 'IDWST',
+                             'NLOSSCUM', 'WC', 'Ndemand', 'NAVAIL', 'NuptakeTotal',
+                             'SM', 'TAGP', 'LAI']
+                    # for p in self.po_features:
+                    #     variables.append(p)
             else:
                 variables = ['action', 'WSO', 'reward', 'TNSOIL', 'val']
-                if self.po_features: variables.append('measure')
 
             keys_figure = [(a, b) for a in self.test_years for b in self.test_locations]
             results_figure = {filter_key: result_model[filter_key] for filter_key in keys_figure}
 
+            # pickle info for creating figures
+            dir = self.logger.get_dir()
+            with open(os.path.join(dir, f'infos_{self.num_timesteps}.pkl'), 'wb') as f:
+                pickle.dump(results_figure, f)
+
+            # if using comet, log pickle file and model as asset
+            if self.comet_experiment:
+                self.comet_experiment.log_asset(file_data=os.path.join(dir, f'infos_{self.num_timesteps}.pkl'),
+                                                step=self.num_timesteps,
+                                                file_name=f'infos_{self.num_timesteps}')
+                self.comet_experiment.log_model(self.comet_experiment.get_name(),
+                                                os.path.join(dir, f'model-{self.num_timesteps}.zip'),
+                                                file_name=f'model_{self.num_timesteps}')
+
+            # create variable plot
             for i, variable in enumerate(variables):
                 if variable not in results_figure[list(results_figure.keys())[0]][0].keys():
                     continue
                 plot_individual = False
                 if plot_individual:
                     fig, ax = plt.subplots()
-                    plot_variable(results_figure, variable=variable, ax=ax, ylim=get_ylim_dict()[variable])
+                    plot_variable(results_figure, variable=variable, ax=ax, ylim=get_ylim_dict(n_year_loc, wso=self.env_eval.envs[0].unwrapped.pcse_env)[variable])
                     self.logger.record(f'figures/{variable}', Figure(fig, close=True))
                     plt.close()
 
                 fig, ax = plt.subplots()
-                plot_variable(results_figure, variable=variable, ax=ax, ylim=get_ylim_dict()[variable],
+                plot_variable(results_figure, variable=variable, ax=ax, ylim=get_ylim_dict(n_year_loc)[variable],
                               plot_average=True)
-                self.logger.record(f'figures/avg-{variable}', Figure(fig, close=True))
+                self.logger.record(f'figures/med-{variable}', Figure(fig, close=True))
                 plt.close()
+
             self.logger.dump(step=self.num_timesteps)
+
+        return True
+
+
+class CometCallback(EvalCallback):
+    def __init__(self, *args, comet_experiment, save_path, **kwargs):
+        super(CometCallback, self).__init__(*args, **kwargs)
+        self.comet_experiment = comet_experiment
+        self.save_path = save_path
+
+    def _on_step(self):
+        # Call the original _on_step method
+        super(CometCallback, self)._on_step()
+
+        # Your custom Comet.ml logging logic
+        if self.n_calls % self.eval_freq == 0 or self.n_calls == 1:
+            # Log the .pkl file as an artifact to Comet.ml
+            self.comet_experiment.log_asset(file_path=self.save_path, file_name="CustomEnvironmentData.pkl")
 
         return True
 
