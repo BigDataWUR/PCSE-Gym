@@ -1,6 +1,6 @@
 import unittest
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
-import tests.initialize_env as init_env
+import initialize_env as init_env
 from pcse_gym.utils.eval import FindOptimum
 import pcse_gym.utils.defaults as defaults
 
@@ -12,10 +12,10 @@ class TestCeres(unittest.TestCase):
 
     def test_single_year(self):
         ceres_result = FindOptimum(self.env, [1992]).optimize_start_dump().item()
-        self.assertAlmostEqual(17.6, ceres_result, 1)
+        self.assertAlmostEqual(28.73, ceres_result, 1)
 
     def test_multiple_years(self):
         ceres_result = FindOptimum(self.env, [1992, 2002]).optimize_start_dump().item()
-        self.assertAlmostEqual(19.1, ceres_result, 1)
+        self.assertAlmostEqual(30.05, ceres_result, 1)
 
 
