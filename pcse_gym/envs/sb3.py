@@ -85,7 +85,7 @@ def get_config_dir():
 
 def get_wofost_kwargs(config_dir=get_config_dir()):
     wofost_kwargs = dict(
-        model_config=os.path.join(config_dir, 'Wofost81_NWLP_FD.conf'),
+        model_config=os.path.join(config_dir, 'Wofost80_NWLP_FD.conf'),
         agro_config=os.path.join(config_dir, 'agro', 'wheat_cropcalendar.yaml'),
         crop_parameters=pcse.fileinput.YAMLCropDataProvider(fpath=os.path.join(config_dir, 'crop'), force_reload=True),
         site_parameters=pcse.util.WOFOST80SiteDataProvider(WAV=10, NAVAILI=10, PAVAILI=50, KAVAILI=100),

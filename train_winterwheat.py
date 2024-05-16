@@ -13,7 +13,6 @@ from pcse_gym.envs.sb3 import get_policy_kwargs, get_model_kwargs
 from pcse_gym.utils.eval import EvalCallback, determine_and_log_optimum
 import pcse_gym.utils.defaults as defaults
 
-
 path_to_program = lib_programname.get_path_executed_script()
 rootdir = path_to_program.parents[0]
 
@@ -90,27 +89,26 @@ def train(log_dir, n_steps,
 
     env_pcse_train = Monitor(env_pcse_train)
 
-    match agent:
-        case 'PPO':
-            env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
-                                          clip_obs=10., clip_reward=50., gamma=1)
-            model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
-                        tensorboard_log=log_dir)
-        case 'DQN':
-            env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
-                                          clip_obs=10000., clip_reward=5000., gamma=1)
-            model = DQN('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
-                        tensorboard_log=log_dir)
-        case 'RPPO':
-            env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
-                                          clip_obs=10., clip_reward=50., gamma=1)
-            model = RecurrentPPO('MlpLstmPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
-                                 tensorboard_log=log_dir)
-        case _:
-            env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
-                                          clip_obs=10., clip_reward=50., gamma=1)
-            model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
-                        tensorboard_log=log_dir)
+    if agent == 'PPO':
+        env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
+                                      clip_obs=10., clip_reward=50., gamma=1)
+        model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
+                    tensorboard_log=log_dir)
+    elif agent == 'DQN':
+        env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
+                                      clip_obs=10000., clip_reward=5000., gamma=1)
+        model = DQN('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
+                    tensorboard_log=log_dir)
+    elif agent == 'RPPO':
+        env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
+                                      clip_obs=10., clip_reward=50., gamma=1)
+        model = RecurrentPPO('MlpLstmPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
+                             tensorboard_log=log_dir)
+    else:
+        env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
+                                      clip_obs=10., clip_reward=50., gamma=1)
+        model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
+                    tensorboard_log=log_dir)
 
     compute_baselines = False
     if compute_baselines:
@@ -137,12 +135,11 @@ def train(log_dir, n_steps,
 
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser()
     parser.add_argument("-s", "--seed", type=int, default=0, help="Set seed")
     parser.add_argument("-n", "--nsteps", type=int, default=400000, help="Number of steps")
     parser.add_argument("-c", "--costs_nitrogen", type=float, default=10.0, help="Costs for nitrogen")
-    parser.add_argument("-e", "--environment", type=int, default=1,
+    parser.add_argument("-e", "--environment", type=int, default=0,
                         help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
     parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, or DQN.")
     parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, or GRO")

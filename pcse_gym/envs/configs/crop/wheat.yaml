@@ -615,6 +615,10 @@ CropParameters:
              - 0.8
              - Maximum rate of daily phosphorous uptake
              - ['kg..ha-1.d-1']
+            DVS_NPK_STOP:
+              - 1.3
+              - development stage above which no crop N-P-K uptake does occur
+              - ['NA']
             RKUPTAKEMAX:
              - 7.4
              - Maximum rate of daily potassium uptake

@@ -101,12 +101,11 @@ class WinterWheat(gym.Env):
         return reward, growth
 
     def get_reward_func(self, output, amount, output_baseline=None):
-        match self.reward_function:  # Needs python 3.10+
-            case 'DEF':
+        if self.reward_function == 'DEF':
                 return self.rewards.default_winterwheat_reward(output, output_baseline, amount)
-            case 'GRO':
+        elif self.reward_function == 'GRO':
                 return self.rewards.growth_storage_organ(output, amount)
-            case _:
+        else:
                 return self.rewards.default_winterwheat_reward(output, output_baseline, amount)
 
     def overwrite_year(self, year):
