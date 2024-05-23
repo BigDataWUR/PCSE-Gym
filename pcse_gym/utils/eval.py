@@ -156,7 +156,7 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
                             .rename(lambda i: i.timetuple().tm_yday) for label, results in results_dict.items()],
                             axis=1)
         if variable in cumulative_variables: plot_df = plot_df.apply(np.cumsum, axis=0)
-        plot_df.fillna(method='ffill', inplace=True)
+        plot_df.ffill(axis=0, inplace=True)
         ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where='post')
         ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step='post')
 
