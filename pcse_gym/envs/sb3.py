@@ -106,7 +106,7 @@ def get_config_dir():
     return config_dir
 
 
-def get_wofost_kwargs(config_dir=get_config_dir(), soil_file='ec3.CAB', agro_file='wheat_cropcalendar_sow.yaml'):
+def get_wofost_kwargs(config_dir=get_config_dir(), soil_file='arminda_soil.yaml', agro_file='wheat_cropcalendar.yaml'):
     wofost_kwargs = dict(
         model_config=os.path.join(config_dir, 'Wofost81_NWLP_MLWB_SNOMIN.conf'),
         agro_config=os.path.join(config_dir, 'agro', agro_file),
@@ -129,21 +129,10 @@ def get_lintul_kwargs(config_dir=get_config_dir()):
 
 
 def get_model_kwargs(pcse_model, loc=defaults.get_default_location(), start_type='sowing'):
-    # TODO: possibly tidy up
     if not isinstance(loc, list):
         loc = [loc]
-    if (55.0, 23.5) in loc:
-        soil_file = 'babtai_lt.CAB'
-        if start_type == 'sowing':
-            agro_file = 'wheat_cropcalendar_sow_lt.yaml'
-        else:
-            agro_file = 'wheat_cropcalendar_emergence_lt.yaml'
-    else:
-        soil_file = 'arminda_soil.yaml'
-        if start_type == 'sowing':
-            agro_file = 'wheat_cropcalendar_sow_nl.yaml'
-        else:
-            agro_file = 'wheat_cropcalendar_emergence_nl.yaml'
+    soil_file = 'arminda_soil.yaml'
+    agro_file = 'wheat_cropcalendar.yaml'
 
     if pcse_model == 0:
         return get_lintul_kwargs()
@@ -187,7 +176,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, self.costs_nitrogen)
         self.index_feature = OrderedDict()
         self.cost_measure = kwargs.get('cost_measure', 'real')
-        self.start_type = kwargs.get('start_type', 'sowing')
+        self.start_type = kwargs.get('start_type')
         for i, feature in enumerate(self.crop_features):
             if feature in self.po_features:
                 self.index_feature[feature] = i
@@ -271,8 +260,6 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         obs = super().reset(seed=seed, options=options)
         if isinstance(obs, tuple):
             obs = obs[0]
-        # obs['actions'] = {'cumulative_nitrogen': 0.0}
-        # obs['actions'] = {'cumulative_measurement': 0.0}
         return self._observation(obs)
 
     def _observation(self, observation):
@@ -304,13 +291,12 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         return obs
 
     def get_harvest_year(self):
-        if self.agmt.campaign_date.year < self.agmt.crop_end_date.year and self.start_type == 'sowing':
+        if self.agmt.campaign_date.year < self.agmt.crop_end_date.year:
             if date(self.date.year, 10, 1) < self.date < date(self.date.year, 12, 31):
                 return self.date.year + 1
             else:
                 return self.date.year
-        else:
-            return self.date.year
+        return self.date.year
 
     @property
     def model(self):
@@ -379,7 +365,9 @@ class ZeroNitrogenEnvStorage:
         # year = env.date.year
         year = env.get_harvest_year()
         location = env.loc
-        return f'{year}-{location}'
+        key = f'{year}-{location}'
+        assert 'None' not in key
+        return key
 
     def get_episode_output(self, env):
         key = self.get_key(env)
