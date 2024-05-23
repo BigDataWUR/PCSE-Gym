@@ -5,6 +5,7 @@ import gymnasium as gym
 import numpy as np
 import matplotlib.pyplot as plt
 import torch
+from statistics import mean
 from torch.utils.tensorboard import SummaryWriter
 from collections import defaultdict
 from scipy.optimize import minimize_scalar
@@ -556,9 +557,13 @@ class EvalCallback(BaseCallback):
                                                clip_obs=10., clip_reward=50., gamma=1)
             env_pcse_evaluation.training = False
 
+            total_eval = len(self.get_years(log_training)) * len(self.get_locations(log_training))
             print("evaluating environment with learned policy...")
-            for year in tqdm(self.get_years(log_training)):
-                for test_location in self.get_locations(log_training):
+            years_bar = tqdm(self.get_years(log_training))
+            for iy, year in enumerate(years_bar, 1):
+                for il, test_location in enumerate(self.get_locations(log_training), 1):
+                    years_bar.set_description(f'Evaluating {year}, {str(test_location): <{11}} | '
+                                              f'{str(il + (len(self.get_locations(log_training)) * iy)): <{3}}/{total_eval}')
                     env_pcse_evaluation.env_method('overwrite_year', year)
                     env_pcse_evaluation.env_method('overwrite_location', test_location)
                     env_pcse_evaluation.reset()
@@ -572,6 +577,9 @@ class EvalCallback(BaseCallback):
                     self.logger.record(f'eval/reward-{my_key}', reward[my_key])
                     self.logger.record(f'eval/nitrogen-{my_key}', fertilizer[my_key])
                     result_model[my_key] = episode_infos
+            else:
+                avg_rew = mean([x for x in reward.values()])
+                print(f'Evaluation step {self.num_timesteps} | Avg. reward: {avg_rew:.4f}')
 
             for test_location in list(set(self.test_locations)):
                 test_keys = [(a, test_location) for a in self.test_years]
