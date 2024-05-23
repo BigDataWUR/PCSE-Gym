@@ -293,12 +293,19 @@ def evaluate_policy(
             if policy == 'start-dump' and (episode_length == 0):
                 action = [amount * 1]
             if isinstance(policy, base_class.BaseAlgorithm):
+                device = policy.device.type
                 if isinstance(policy, PPO):
                     action, state = policy.predict(obs, state=state, deterministic=deterministic)
-                    sb_actions, sb_values, sb_log_probs = policy.policy(torch.from_numpy(obs),
-                                                                        deterministic=deterministic)
-                    sb_prob = np.exp(sb_log_probs.detach().numpy()).item()
-                    sb_val = sb_values.detach().item()
+                    if 'cuda' in device:
+                        sb_actions, sb_values, sb_log_probs = policy.policy(torch.from_numpy(obs).to(device),
+                                                                            deterministic=deterministic)
+                        sb_prob = np.exp(sb_log_probs.detach().cpu().numpy()).item()
+                        sb_val = sb_values.detach().cpu().item()
+                    else:
+                        sb_actions, sb_values, sb_log_probs = policy.policy(torch.from_numpy(obs),
+                                                                            deterministic=deterministic)
+                        sb_prob = np.exp(sb_log_probs.detach().numpy()).item()
+                        sb_val = sb_values.detach().item()
                     prob = sb_prob
                     val = sb_val
                 if isinstance(policy, RecurrentPPO):

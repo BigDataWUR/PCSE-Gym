@@ -1,3 +1,4 @@
+import torch.cuda
 from stable_baselines3 import PPO, DQN
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 from stable_baselines3.common.monitor import Monitor
@@ -89,26 +90,32 @@ def train(log_dir, n_steps,
 
     env_pcse_train = Monitor(env_pcse_train)
 
+    device = kwargs.get('device')
+    if device == 'cuda':
+        print('CUDA not available... Using CPU!') if not torch.cuda.is_available() else print('using CUDA!')
+    else:
+        print('Using CPU!')
+
     if agent == 'PPO':
         env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
                                       clip_obs=10., clip_reward=50., gamma=1)
         model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
-                    tensorboard_log=log_dir)
+                    tensorboard_log=log_dir, device=device)
     elif agent == 'DQN':
         env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
                                       clip_obs=10000., clip_reward=5000., gamma=1)
         model = DQN('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
-                    tensorboard_log=log_dir)
+                    tensorboard_log=log_dir, device=device)
     elif agent == 'RPPO':
         env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
                                       clip_obs=10., clip_reward=50., gamma=1)
         model = RecurrentPPO('MlpLstmPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
-                             tensorboard_log=log_dir)
+                             tensorboard_log=log_dir, device=device)
     else:
         env_pcse_train = VecNormalize(DummyVecEnv([lambda: env_pcse_train]), norm_obs=True, norm_reward=True,
                                       clip_obs=10., clip_reward=50., gamma=1)
         model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
-                    tensorboard_log=log_dir)
+                    tensorboard_log=log_dir, device=device)
 
     compute_baselines = False
     if compute_baselines:
@@ -143,6 +150,7 @@ if __name__ == '__main__':
                         help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
     parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, or DQN.")
     parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, or GRO")
+    parser.add_argument('-d', "--device", type=str, default="cpu")
 
     parser.set_defaults(measure=True, vrr=False)
 
@@ -170,4 +178,4 @@ if __name__ == '__main__':
           action_features=defaults.get_default_action_features(),
           action_space=defaults.get_default_action_space(),
           pcse_model=args.environment, agent=args.agent,
-          reward=args.reward)
+          reward=args.reward, device=args.device)
