@@ -85,6 +85,28 @@ class AgroManagementContainer:
         self.build_structure()
         return self.structure
 
+    def replace_variety_name(self, name='Arminda'):
+        self.crop_variety = name
+
+        self.build_structure()
+        return self.structure
+
+    def start_sowing(self):
+        if self.campaign_date.year == self.crop_end_date.year:
+            self.campaign_date = datetime.date(self.crop_end_date.year - 1, 10, 1)
+            self.crop_start_date = datetime.date(self.crop_end_date.year - 1, 10, 1)
+
+        self.build_structure()
+
+    def start_emergence(self):
+        self.campaign_date = datetime.date(self.crop_end_date.year, 1, 1)
+        self.crop_start_date = datetime.date(self.crop_end_date.year, 1, 1)
+
+        self.build_structure()
+
+    def get_start_type(self, start_type):
+        self.start_emergence() if start_type == 'emergence' else self.start_sowing()
+
     @property
     def get_structure(self):
         return self.structure
@@ -136,7 +158,8 @@ def replace_years_(agro_management, years):  # deprecated
     return updated_agro_management
 
 
-def get_weather_data_provider(location, random_weather=False) -> pcse.db.NASAPowerWeatherDataProvider or pcse.fileinput.CSVWeatherDataProvider:
+def get_weather_data_provider(location,
+                              random_weather=False) -> pcse.db.NASAPowerWeatherDataProvider or pcse.fileinput.CSVWeatherDataProvider:
     if random_weather:
         wdp = get_random_weather_provider(location)
     else:
@@ -179,6 +202,7 @@ class Engine(pcse.engine.Engine):
         # Agromanagement decisions
         self.agromanager(self.day, self.drv)
 
+        # Do actions
         if action > 0:
             self._send_signal(signal=pcse.signals.apply_n,
                               amount=action,
@@ -306,6 +330,8 @@ class PCSEEnv(gym.Env):
 
         # Initialize Agromanagement Container Class
         self.agmt = AgroManagementContainer(self._agro_management)
+
+        self.agmt.get_start_type(kwargs.get('start_type'))
 
         if years is not None:
             self._agro_management = self.agmt.replace_years(years)
