@@ -32,6 +32,57 @@ if os.path.join(rootdir, "pcse_gym") not in sys.path:
     sys.path.insert(0, os.path.join(rootdir, "pcse_gym"))
 
 
+def args_func(parser):
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-s", "--seed", type=int, default=0, help="Set seed")
+    parser.add_argument("-n", "--nsteps", type=int, default=400000, help="Number of steps")
+    parser.add_argument("-c", "--costs-nitrogen", type=float, default=10.0, help="Costs for nitrogen")
+    parser.add_argument("-p", "--multiprocess", action='store_true', dest='multiproc',
+                        help="Use stable-baselines3 multiprocessing")
+    parser.add_argument("--nenvs", type=int, default=4, help="Number of parallel envs")
+    parser.add_argument("--eval-freq", type=int, default=20_000, dest='eval_freq')
+    parser.add_argument("--no-comet", action='store_false', dest='comet')
+    parser.add_argument("--gpu", action='store_true', dest='use gpu')
+    parser.add_argument("-e", "--environment", type=int, default=1,
+                        help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
+    parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, GRU,"
+                                                                       "IndRNN, DiffNC, PosMLP, ATM or DQN")
+    parser.add_argument("-r", "--reward", type=str, default="DEF",
+                        help="Reward function. DEF, DEP, GRO, END, NUE or ANE")
+    parser.add_argument("-b", "--n-budget", type=int, default=0, help="Nitrogen budget. kg/ha")
+    parser.add_argument("--action_limit", type=int, default=0, help="Limit fertilization frequency."
+                                                                    "Recommended 4 times")
+    parser.add_argument("-m", "--measure", action='store_true', help="--measure or --no-measure."
+                                                                     "Train an agent in a partially"
+                                                                     "observable environment that"
+                                                                     "decides when to measure"
+                                                                     "certain crop features")
+    parser.add_argument("-l", "--location", type=str, default="NL", help="location to train the agent. NL or LT.")
+    parser.add_argument("--random-init", action='store_true', dest='random_init')
+    parser.add_argument("--random-weather", action='store_true', dest='random_weather')
+    parser.add_argument("--no-measure", action='store_false', dest='measure')
+    parser.add_argument("--noisy-measure", action='store_true', dest='noisy_measure')
+    parser.add_argument("--variable-recovery-rate", action='store_true', dest='vrr')
+    parser.add_argument("--no-weather", action='store_true', dest='no_weather')
+    parser.add_argument("--random-feature", action='store_true', dest='random_feature')
+    parser.add_argument("--mask-binary", action='store_true', dest='obs_mask')
+    parser.add_argument("--placeholder-0", action='store_const', const=0.0, dest='placeholder_val')
+    parser.add_argument("--normalize", action='store_true', dest='normalize')
+    parser.add_argument("--cost-measure", type=str, default='real', dest='cost_measure', help='real, no, or same')
+    parser.add_argument("--start-type", type=str, default='sowing', dest='start_type', help='sowing or emergence')
+    parser.add_argument("--measure-cost-multiplier", type=int, default=1, dest='m_multiplier',
+                        help="multiplier for the measuring cost")
+    parser.add_argument("--measure-all", action='store_true', dest='measure_all')
+    parser.set_defaults(measure=True, vrr=False, noisy_measure=False, framework='sb3',
+                        no_weather=False, random_feature=False, obs_mask=False, placeholder_val=-1.11,
+                        normalize=False, random_init=False, m_multiplier=1, measure_all=False, random_weather=False,
+                        multiproc=False, comet=True, gpu=False)
+
+    args = parser.parse_args()
+
+    return args
+
+
 def wrapper_vectorized_env(env_pcse_train, flag_po, flag_eval=False, multiproc=False, n_envs=4, normalize=False):
     from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv, SubprocVecEnv
     if normalize:
@@ -126,7 +177,7 @@ def train(log_dir, n_steps,
           action_space=defaults.get_default_action_space(),
           pcse_model=0, agent='PPO', reward=None,
           seed=0, tag="Exp", costs_nitrogen=10.0,
-          multiprocess=False,
+          multiprocess=False, eval_freq=20_000,
           **kwargs):
     """
     Train a PPO agent (Stable Baselines3).
@@ -170,256 +221,118 @@ def train(log_dir, n_steps,
     measure_all = kwargs.get('measure_all', None)
     n_envs = kwargs.get('n_envs', 4)
 
-    if framework == 'sb3':
-        from stable_baselines3 import PPO, DQN, A2C
-        from stable_baselines3.common.monitor import Monitor
-        from stable_baselines3.common.sb2_compat.rmsprop_tf_like import RMSpropTFLike
+    from stable_baselines3 import PPO, DQN, A2C
+    from stable_baselines3.common.monitor import Monitor
+    from stable_baselines3.common.sb2_compat.rmsprop_tf_like import RMSpropTFLike
 
-        print('Using the StableBaselines3 framework')
-        print(f'Train model {pcse_model_name} with {agent} algorithm and seed {seed}. Logdir: {log_dir}')
+    print('Using the StableBaselines3 framework')
+    print(f'Train model {pcse_model_name} with {agent} algorithm and seed {seed}. Logdir: {log_dir}')
 
-        hyperparams = get_hyperparams(agent, no_weather, flag_po, mask_binary)
+    hyperparams = get_hyperparams(agent, no_weather, flag_po, mask_binary)
 
-        # TODO register env initialization for robustness
-        # register_cropgym_env = register_cropgym_envs()
+    # TODO register env initialization for robustness
+    # register_cropgym_env = register_cropgym_envs()
 
-        env_pcse_train = WinterWheat(crop_features=crop_features, action_features=action_features,
-                                     weather_features=weather_features,
-                                     costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
-                                     action_space=action_space, action_multiplier=1.0, seed=seed,
-                                     reward=reward, **get_model_kwargs(pcse_model, train_locations,
-                                                                       start_type=kwargs.get('start_type', 'sowing')),
-                                     **kwargs)
+    env_pcse_train = WinterWheat(crop_features=crop_features, action_features=action_features,
+                                 weather_features=weather_features,
+                                 costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
+                                 action_space=action_space, action_multiplier=1.0, seed=seed,
+                                 reward=reward, **get_model_kwargs(pcse_model, train_locations,
+                                                                   start_type=kwargs.get('start_type', 'sowing')),
+                                 **kwargs)
 
-        env_pcse_train = Monitor(env_pcse_train)
+    env_pcse_train = Monitor(env_pcse_train)
 
-        env_pcse_train = ActionConstrainer(env_pcse_train, action_limit=action_limit, n_budget=n_budget)
+    env_pcse_train = ActionConstrainer(env_pcse_train, action_limit=action_limit, n_budget=n_budget)
 
-        device = kwargs.get('gpu', False)
-        device = 'cuda' if device else 'cpu'
+    device = kwargs.get('gpu', False)
+    device = 'cuda' if device else 'cpu'
 
-        if agent == 'PPO':
-            env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po,
-                                                    multiproc=multiprocess, normalize=normalize, n_envs=n_envs)
-            model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
-                        tensorboard_log=log_dir, device=device)
-        elif agent == 'DQN':
-            env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po,
-                                                    multiproc=multiprocess, normalize=normalize, n_envs=n_envs)
-            model = DQN('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
-                        tensorboard_log=log_dir, device=device)
-        elif agent == 'A2C':
-            env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po,
-                                                    multiproc=multiprocess, normalize=normalize, n_envs=n_envs)
-            model = A2C('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
-                        tensorboard_log=log_dir, device=device)
-        elif agent == 'RPPO':
-            from sb3_contrib import RecurrentPPO
-            env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po,
-                                                    multiproc=multiprocess, normalize=normalize, n_envs=n_envs)
-            model = RecurrentPPO('MlpLstmPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
-                                 tensorboard_log=log_dir, device=device)
+    if agent == 'PPO':
+        env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po,
+                                                multiproc=multiprocess, normalize=normalize, n_envs=n_envs)
+        model = PPO('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
+                    tensorboard_log=log_dir, device=device)
+    elif agent == 'DQN':
+        env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po,
+                                                multiproc=multiprocess, normalize=normalize, n_envs=n_envs)
+        model = DQN('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
+                    tensorboard_log=log_dir, device=device)
+    elif agent == 'A2C':
+        env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po,
+                                                multiproc=multiprocess, normalize=normalize, n_envs=n_envs)
+        model = A2C('MlpPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
+                    tensorboard_log=log_dir, device=device)
+    elif agent == 'RPPO':
+        from sb3_contrib import RecurrentPPO
+        env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po,
+                                                multiproc=multiprocess, normalize=normalize, n_envs=n_envs)
+        model = RecurrentPPO('MlpLstmPolicy', env_pcse_train, gamma=1, seed=seed, verbose=0, **hyperparams,
+                             tensorboard_log=log_dir, device=device)
 
-        # wrap comet after VecEnvs
-        comet_log = None
-        use_comet = kwargs.get('comet', True)
-        if use_comet:
-            with open(os.path.join(rootdir, 'comet', 'comet_key'), 'r') as f:
-                api_key = f.readline()
-            comet_log = Experiment(
-                api_key=api_key,
-                project_name="cropGym_new_wofost",
-                workspace="pcse-gym",
-                log_code=True,
-                log_graph=True,
-                auto_metric_logging=True,
-                auto_histogram_tensorboard_logging=True
-            )
-            comet_log.log_code(folder=os.path.join(rootdir, 'pcse_gym'))
-            comet_log.log_parameters(hyperparams)
-
-            env_pcse_train = CometLogger(env_pcse_train, comet_log)
-            comet_log.add_tags(['sb3', agent, seed, loc_code, reward])
-
-            print('Using Comet!')
-
-        compute_baselines = False
-        if compute_baselines:
-            determine_and_log_optimum(log_dir, env_pcse_train,
-                                      train_years=train_years, test_years=test_years,
-                                      train_locations=train_locations, test_locations=test_locations,
-                                      n_steps=args.nsteps)
-
-        env_pcse_eval = WinterWheat(crop_features=crop_features, action_features=action_features,
-                                    weather_features=weather_features,
-                                    costs_nitrogen=costs_nitrogen, years=test_years, locations=test_locations,
-                                    action_space=action_space, action_multiplier=1.0, reward=reward,
-                                    **get_model_kwargs(pcse_model, train_locations, start_type=kwargs.get('start_type', 'sowing')),
-                                    **kwargs, seed=seed)
-        if action_limit or n_budget > 0:
-            env_pcse_eval = ActionConstrainer(env_pcse_eval, action_limit=action_limit, n_budget=n_budget)
-
-        env_pcse_eval = wrapper_vectorized_env(env_pcse_eval, flag_po,
-                                               multiproc=multiprocess, normalize=normalize, flag_eval=True)
-
-        if measure_all:
-            cost_measure = 'all'
-        tb_log_name = f'{tag}-nsteps-{n_steps}-{agent}-{reward}'
-        if use_comet:
-            comet_log.set_name(f'{tag}-{agent}-{reward}')
-            comet_log.add_tag(cost_measure)
-        tb_log_name = tb_log_name + '-run'
-
-        # json_config = get_json_config(n_steps, crop_features, weather_features, train_years, test_years,
-        #                               train_locations, test_locations, action_space, pcse_model, agent,
-        #                               reward, seed, costs_nitrogen, kwargs)
-        # json_config = locals()
-        #
-        # print(json_config)
-
-        model.learn(total_timesteps=n_steps,
-                    callback=EvalCallback(env_eval=env_pcse_eval, test_years=test_years,
-                                          train_years=train_years, train_locations=train_locations,
-                                          test_locations=test_locations, seed=seed, pcse_model=pcse_model,
-                                          comet_experiment=comet_log, multiprocess=multiprocess, **kwargs),
-                    tb_log_name=tb_log_name)
-
-        # from stable_baselines3.common.utils import get_latest_run_id
-        # latest_run_id = get_latest_run_id(log_dir, tb_log_name)
-        # tb_log_name = f'{tb_log_name}_{latest_run_id}'
-        #
-        # with open(os.path.join(log_dir, tb_log_name, 'config_of_run.json'), 'w') as f:
-        #     json.dump(json_config, f)
-    elif framework == 'rllib':
-        import ray
-        from ray import tune
-        from ray.tune.registry import register_env
-        from pcse_gym.utils.rllib_helpers import (get_algo_config, winterwheat_config_maker, get_algo, ww_lim,
-                                                  ww_lim_norm,
-                                                  ww_nor, ww_unwrapped_unnormalized, modify_algo_config)
-
-        print('Using the RLlib framework')
-        log_dir_ = os.path.join(rootdir, "tensorboard_logs/rllib")
-        print(f'Train model {pcse_model_name} with {agent} algorithm and seed {seed}. Logdir: {log_dir_}')
-        env_config = winterwheat_config_maker(crop_features=crop_features, action_features=action_features,
-                                              weather_features=weather_features,
-                                              costs_nitrogen=costs_nitrogen, years=train_years,
-                                              eval_years=test_years, locations=train_locations,
-                                              eval_locations=test_locations, action_space=action_space,
-                                              action_multiplier=1.0, seed=seed,
-                                              reward=reward, pcse_model=pcse_model,
-                                              **get_model_kwargs(pcse_model, train_locations,
-                                                                 start_type=kwargs.get('start_type', 'sowing')),
-                                              **kwargs)
-
-        def trial_str_creator(trial):
-            prefix = args.agent + "_" + "seed_" + str(seed) + "_" + pcse_model_name
-            trialname = prefix + "_" + time.strftime("%Y-%m-%d_%H-%M-%S") + trial.trial_id
-            return trialname
-
-        register_env('WinterWheatRay', ww_lim)
-
-        algo_config = get_algo_config(get_algo(agent), env_config, 'WinterWheatRay')
-        modify_algo_config(algo_config, agent)
-
-        # algo_config['observation_filter'] = "MeanStdFilter"
-
-        use_comet_ = False
-        comet_callback = None
-        if use_comet_:
-            from ray.air.integrations.comet import CometLoggerCallback
-            with open(os.path.join(rootdir, 'comet', 'comet_key'), 'r') as f:
-                api_key = f.readline()
-            comet_callback = [CometLoggerCallback(
-                api_key=api_key,
-                project_name='cropGym_1',
-                workspace="pcse-gym",
-                tags=['rllib', agent, seed, loc_code],
-                log_code=True,
-                log_graph=True,
-                auto_metric_logging=True,
-                auto_histogram_tensorboard_logging=True
-            )]
-
-        ray.init()
-
-        tune.run(
-            "PPO",
-            config=algo_config,
-            stop={
-                # "training_iteration": args.nsteps/1_000
-                "timesteps_total": args.nsteps
-            },
-            local_dir=log_dir_,
-            trial_name_creator=trial_str_creator,
-            callbacks=comet_callback,
-            checkpoint_freq=10,
-            checkpoint_at_end=True,
+    # wrap comet after VecEnvs
+    comet_log = None
+    use_comet = kwargs.get('comet', True)
+    if use_comet:
+        with open(os.path.join(rootdir, 'comet', 'comet_key'), 'r') as f:
+            api_key = f.readline()
+        comet_log = Experiment(
+            api_key=api_key,
+            project_name="cropGym_new_wofost",
+            workspace="pcse-gym",
+            log_code=True,
+            log_graph=True,
+            auto_metric_logging=True,
+            auto_histogram_tensorboard_logging=True
         )
-    elif framework == 'ACNO-MDP':
-        raise NotImplementedError
-        from pcse_gym.agents.BAM_QMDP import BAM_QMDP as ATM
-        from pcse_gym.envs.acno_mdp_wrapper import am_env
-        from pcse_gym.train_acno_mdp_agents import run_training
+        comet_log.log_code(folder=os.path.join(rootdir, 'pcse_gym'))
+        comet_log.log_parameters(hyperparams)
 
-        env = WinterWheat(crop_features=crop_features, action_features=action_features,
-                          weather_features=weather_features,
-                          costs_nitrogen=costs_nitrogen, years=train_years, locations=train_locations,
-                          action_space=action_space, action_multiplier=1.0, seed=seed,
-                          reward=reward, **get_model_kwargs(pcse_model, train_locations), **kwargs)
-        env = am_env(env, 0)
+        env_pcse_train = CometLogger(env_pcse_train, comet_log)
+        comet_log.add_tags(['sb3', agent, seed, loc_code, reward])
 
-        model = ATM(env, offline_training_steps=0)
+        print('Using Comet!')
 
-        run_training(model, agent, pcse_model_name, n_runs=n_steps / 40, n_eps=20, args=args, do_save=False)
-    else:
-        raise Exception("Framework choice error!")
+    compute_baselines = False
+    if compute_baselines:
+        determine_and_log_optimum(log_dir, env_pcse_train,
+                                  train_years=train_years, test_years=test_years,
+                                  train_locations=train_locations, test_locations=test_locations,
+                                  n_steps=args.nsteps)
+
+    env_pcse_eval = WinterWheat(crop_features=crop_features, action_features=action_features,
+                                weather_features=weather_features,
+                                costs_nitrogen=costs_nitrogen, years=test_years, locations=test_locations,
+                                action_space=action_space, action_multiplier=1.0, reward=reward,
+                                **get_model_kwargs(pcse_model, train_locations, start_type=kwargs.get('start_type', 'sowing')),
+                                **kwargs, seed=seed)
+    if action_limit or n_budget > 0:
+        env_pcse_eval = ActionConstrainer(env_pcse_eval, action_limit=action_limit, n_budget=n_budget)
+
+    env_pcse_eval = wrapper_vectorized_env(env_pcse_eval, flag_po,
+                                           multiproc=multiprocess, normalize=normalize, flag_eval=True)
+
+    if measure_all:
+        cost_measure = 'all'
+    tb_log_name = f'{tag}-nsteps-{n_steps}-{agent}-{reward}'
+    if use_comet:
+        comet_log.set_name(f'{tag}-{agent}-{reward}')
+        comet_log.add_tag(cost_measure)
+    tb_log_name = tb_log_name + '-run'
+
+    model.learn(total_timesteps=n_steps,
+                callback=EvalCallback(env_eval=env_pcse_eval, test_years=test_years,
+                                      train_years=train_years, train_locations=train_locations,
+                                      test_locations=test_locations, seed=seed, pcse_model=pcse_model,
+                                      comet_experiment=comet_log, multiprocess=multiprocess, eval_freq=eval_freq,
+                                      **kwargs),
+                tb_log_name=tb_log_name)
 
 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-s", "--seed", type=int, default=0, help="Set seed")
-    parser.add_argument("-n", "--nsteps", type=int, default=400000, help="Number of steps")
-    parser.add_argument("-c", "--costs-nitrogen", type=float, default=10.0, help="Costs for nitrogen")
-    parser.add_argument("-p", "--multiprocess", action='store_true', dest='multiproc', help="Use stable-baselines3 multiprocessing")
-    parser.add_argument("--nenvs", type=int, default=4, help="Number of parallel envs")
-    parser.add_argument("--no-comet", action='store_false', dest='comet')
-    parser.add_argument("--gpu", action='store_true', dest='use gpu')
-    parser.add_argument("-e", "--environment", type=int, default=1,
-                        help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
-    parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, GRU,"
-                                                                       "IndRNN, DiffNC, PosMLP, ATM or DQN")
-    parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, DEP, GRO, END, NUE or ANE")
-    parser.add_argument("-b", "--n-budget", type=int, default=0, help="Nitrogen budget. kg/ha")
-    parser.add_argument("--action_limit", type=int, default=0, help="Limit fertilization frequency."
-                                                                    "Recommended 4 times")
-    parser.add_argument("-m", "--measure", action='store_true', help="--measure or --no-measure."
-                                                                     "Train an agent in a partially"
-                                                                     "observable environment that"
-                                                                     "decides when to measure"
-                                                                     "certain crop features")
-    parser.add_argument("-l", "--location", type=str, default="NL", help="location to train the agent. NL or LT.")
-    parser.add_argument("--random-init", action='store_true', dest='random_init')
-    parser.add_argument("--random-weather", action='store_true', dest='random_weather')
-    parser.add_argument("--no-measure", action='store_false', dest='measure')
-    parser.add_argument("--noisy-measure", action='store_true', dest='noisy_measure')
-    parser.add_argument("--variable-recovery-rate", action='store_true', dest='vrr')
-    parser.add_argument("--no-weather", action='store_true', dest='no_weather')
-    parser.add_argument("--random-feature", action='store_true', dest='random_feature')
-    parser.add_argument("--mask-binary", action='store_true', dest='obs_mask')
-    parser.add_argument("--placeholder-0", action='store_const', const=0.0, dest='placeholder_val')
-    parser.add_argument("--normalize", action='store_true', dest='normalize')
-    parser.add_argument("--cost-measure", type=str, default='real', dest='cost_measure', help='real, no, or same')
-    parser.add_argument("--start-type", type=str, default='sowing', dest='start_type', help='sowing or emergence')
-    parser.add_argument("--measure-cost-multiplier", type=int, default=1, dest='m_multiplier', help="multiplier for the measuring cost")
-    parser.add_argument("--measure-all", action='store_true', dest='measure_all')
-    parser.set_defaults(measure=True, vrr=False, noisy_measure=False, framework='sb3',
-                        no_weather=False, random_feature=False, obs_mask=False, placeholder_val=-1.11,
-                        normalize=False, random_init=False, m_multiplier=1, measure_all=False, random_weather=False,
-                        multiproc=False, comet=True, gpu=False)
-
-    args = parser.parse_args()
+    args = args_func(parser)
 
     # making sure everything is compatible with the user choices
     if not args.measure and args.noisy_measure:
@@ -511,4 +424,4 @@ if __name__ == '__main__':
           weather_features=weather_features,
           action_features=action_features, action_space=action_spaces,
           pcse_model=args.environment, agent=args.agent,
-          reward=args.reward, multiprocess=args.multiproc, **kwargs)
+          reward=args.reward, multiprocess=args.multiproc, **kwargs, eval_freq=args.eval_freq)
