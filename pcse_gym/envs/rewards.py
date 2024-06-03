@@ -238,6 +238,61 @@ class Rewards:
 
             return reward, growth
 
+    class DNE(Rew):
+        """
+        Dense reward based on calculated nitrogen use efficiency
+        """
+
+        def __init__(self, timestep, costs_nitrogen):
+            super().__init__(timestep, costs_nitrogen)
+            self.timestep = timestep
+            self.costs_nitrogen = costs_nitrogen
+
+        def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
+            obj.calculate_amount(amount)
+            obj.calculate_cost_cumulative(amount)
+            obj.calculate_positive_reward_cumulative(output, output_baseline, multiplier)
+
+            n_so = process_pcse.compute_growth_var(output, self.timestep, 'NamountSO')
+            n_in = obj.actions * 10
+
+            reward = obj.calculate_reward_nue_dense(
+                n_input=n_in,
+                n_output=n_so,
+                pcse_output=output,
+                year=None,
+                start=None,
+                end=None,
+            )
+
+            growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
+
+            return reward, growth
+
+    class DSO(Rew):
+        """
+        Dense reward based on calculated nitrogen use efficiency
+        """
+
+        def __init__(self, timestep, costs_nitrogen, so_weight=5):
+            super().__init__(timestep, costs_nitrogen)
+            self.timestep = timestep
+            self.costs_nitrogen = costs_nitrogen
+            self.so_weight = so_weight
+
+        def return_reward(self, output, amount, output_baseline=None, multiplier=1, obj=None):
+            obj.calculate_amount(amount)
+            obj.calculate_cost_cumulative(amount)
+            obj.calculate_positive_reward_cumulative(output, output_baseline, multiplier)
+
+            n_so = process_pcse.compute_growth_var(output, self.timestep, 'NamountSO') * self.so_weight
+
+            reward = n_so - amount * self.costs_nitrogen
+
+            growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
+
+            return reward, growth
+
     class NUP(Rew):
         """
         Reward based on Nitrogen Uptake, from Gautron et al. (2023)
@@ -278,9 +333,9 @@ class Rewards:
             # Yield growth (Y)
             obj.calculate_positive_reward_cumulative(output)
             # Threshold
-            penalty = obj.calculate_threshold(amount, self.threshold)
+            # penalty = obj.calculate_threshold(amount, self.threshold)
 
-            reward = 0 - amount * self.costs_nitrogen - n_loss * self.loss_modifier - penalty * self.penalty_modifier
+            reward = 0 - amount * self.costs_nitrogen - n_loss * self.loss_modifier  # - penalty * self.penalty_modifier
             growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
 
             return reward, growth
@@ -436,6 +491,12 @@ class Rewards:
 
             return unimodal_function(nue) * end_yield
 
+        def calculate_reward_nue_dense(self, n_input, n_output, pcse_output, year=None, start=None, end=None):
+            nue = calculate_nue(n_input, n_output, year=year, start=start, end=end)
+            yield_t = process_pcse.compute_growth_storage_organ(pcse_output, self.timestep)
+
+            return unimodal_function(nue) * yield_t
+
         def reset(self):
             super().reset()
 
@@ -504,7 +565,10 @@ def input_nue(n_input, year=None, start=None, end=None, n_seed=3.5):
     if start is None or end is None:
         nh4, no3 = get_deposition_amount(year)
     else:
-        nh4, no3 = get_disaggregated_deposition(year=year, start_date=start, end_date=end)
+        if year < 2500:
+            nh4, no3 = get_disaggregated_deposition(year=year, start_date=start, end_date=end)
+        else:
+            nh4, no3 = get_deposition_amount(year)
     n_depo = nh4 + no3
     return n_input + n_seed + n_depo
 
@@ -562,14 +626,16 @@ def get_surplus_n(n_input, n_so, year=None, start=None, end=None, n_seed=3.5):
 #  piecewise conditions
 def unimodal_function(b):
     """
-    For NUE reward, coefficient indicating how close the NUE in the range of 70-90%
+    For NUE reward, coefficient indicating how close the NUE in the range of lower_bound-upper_bound%
     """
-    if b < 0.7:
-        return 0.9 * np.exp(-10 * (0.7 - b)) + 0.1
-    elif 0.7 <= b <= 0.9:
+    lower_bound = 0.6
+    upper_bound = 0.8
+    if b < lower_bound:
+        return upper_bound * np.exp(-10 * (lower_bound - b)) + 0.1
+    elif lower_bound <= b <= upper_bound:
         return 1
-    else:  # b > 0.9
-        return 0.9 * np.exp(-10 * (b - 0.9)) + 0.1
+    else:  # b > upper_bound
+        return upper_bound * np.exp(-10 * (b - upper_bound)) + 0.1
 
 
 def get_days_in_year(year):
@@ -594,13 +660,13 @@ def calculate_net_profit(output, amount, year, multiplier, timestep, with_year=F
     '''Convert price of used fertilizer in the year'''
     n_conv_eur = get_fertilizer_price(amount, year, with_year=with_year)
 
-    '''Convert labour price based on year'''
-    labour_conv_eur = get_labour_price(year, with_labour=with_labour)
+    # '''Convert labour price based on year'''
+    # labour_conv_eur = get_labour_price(year, with_labour=with_labour)
+    #
+    # '''Flag for fertilization action'''
+    # labour_flag = 1 if amount else 0
 
-    '''Flag for fertilization action'''
-    labour_flag = 1 if amount else 0
-
-    reward = wso_conv_eur - n_conv_eur - labour_conv_eur * labour_flag
+    reward = wso_conv_eur - n_conv_eur  # - labour_conv_eur * labour_flag
 
     return reward, growth
 
