@@ -61,7 +61,7 @@ def compute_growth_var(pcse_output, timestep, var):
 
 def compute_growth_storage_organ(pcse_output, timestep, multiplier_amount=1):
     """
-    Computes growth of storage organ in g/m2
+    Computes growth of storage organ in kg/ha if in WOFOST; g/m2 if in LINTUL
     """
     wso_var = "WSO"  # get_name_storage_organ(get_var_names(pcse_output))
     wso_growth = compute_growth_var(pcse_output, timestep, wso_var)
