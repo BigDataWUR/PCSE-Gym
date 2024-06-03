@@ -1,4 +1,5 @@
 import os
+from datetime import date
 from collections import defaultdict
 import gymnasium as gym
 import pandas as pd
@@ -17,14 +18,18 @@ from .rewards import Rewards
 def to_weather_info(days, weather_data, weather_variables):
     weather_observation = []
     for i, d in enumerate(days):
+
         def def_value():
             return 0
+
         w = defaultdict(def_value)
-        w['day'] = d
+        w["day"] = d
         for var in weather_variables:
             w[var] = getattr(weather_data[i], var)
         weather_observation.append(w)
-    weather_info = pd.DataFrame(weather_observation).set_index("day").fillna(value=np.nan)
+    weather_info = (
+        pd.DataFrame(weather_observation).set_index("day").fillna(value=np.nan)
+    )
     return weather_info
 
 
@@ -40,67 +45,88 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
     Processes input features: average pool timeseries (weather) and concat with scalars (crop features)
     """
 
-    def __init__(self, observation_space: gym.spaces.Box, n_timeseries, n_scalars, n_timesteps=7):
+    def __init__(
+        self, observation_space: gym.spaces.Box, n_timeseries, n_scalars, n_timesteps=7
+    ):
         self.n_timeseries = n_timeseries
         self.n_scalars = n_scalars
         self.n_timesteps = n_timesteps
-        super(CustomFeatureExtractor, self).__init__(gym.spaces.Box(0, np.inf, shape=(n_timeseries + n_scalars,)),
-                                                     features_dim=n_timeseries + n_scalars)
-
-        self.avg_timeseries = nn.Sequential(
-            nn.AvgPool1d(kernel_size=self.n_timesteps)
+        super(CustomFeatureExtractor, self).__init__(
+            gym.spaces.Box(0, np.inf, shape=(n_timeseries + n_scalars,)),
+            features_dim=n_timeseries + n_scalars,
         )
+
+        self.avg_timeseries = nn.Sequential(nn.AvgPool1d(kernel_size=self.n_timesteps))
 
     def forward(self, observations) -> th.Tensor:
         # Returns a torch tensor in a format compatible with Stable Baselines3
         batch_size = observations.shape[0]
-        scalars, timeseries = observations[:, 0:self.n_scalars], \
-                              observations[:, self.n_scalars:]
-        reshaped = timeseries.reshape(batch_size, self.n_timesteps, self.n_timeseries).permute(0, 2, 1)
+        scalars, timeseries = (
+            observations[:, 0 : self.n_scalars],
+            observations[:, self.n_scalars :],
+        )
+        reshaped = timeseries.reshape(
+            batch_size, self.n_timesteps, self.n_timeseries
+        ).permute(0, 2, 1)
         x1 = self.avg_timeseries(reshaped)
         x1 = th.squeeze(x1, 2)
         x = th.cat((x1, scalars), dim=1)
         return x
 
 
-def get_policy_kwargs(n_crop_features=len(defaults.get_wofost_default_crop_features()),
-                      n_weather_features=len(defaults.get_default_weather_features()),
-                      n_action_features=len(defaults.get_default_action_features()),
-                      n_timesteps=7):
+def get_policy_kwargs(
+    n_crop_features=len(defaults.get_wofost_default_crop_features()),
+    n_weather_features=len(defaults.get_default_weather_features()),
+    n_action_features=len(defaults.get_default_action_features()),
+    n_timesteps=7,
+):
     # Integration with BaseModel from Stable Baselines3
     policy_kwargs = dict(
         features_extractor_class=CustomFeatureExtractor,
-        features_extractor_kwargs=dict(n_timeseries=n_weather_features,
-                                       n_scalars=n_crop_features + n_action_features,
-                                       n_timesteps=n_timesteps),
+        features_extractor_kwargs=dict(
+            n_timeseries=n_weather_features,
+            n_scalars=n_crop_features + n_action_features,
+            n_timesteps=n_timesteps,
+        ),
     )
     return policy_kwargs
 
 
 def get_config_dir():
     from pathlib import Path
-    config_dir = os.path.join(Path(os.path.realpath(__file__)).parents[1], 'envs', 'configs')
+
+    config_dir = os.path.join(
+        Path(os.path.realpath(__file__)).parents[1], "envs", "configs"
+    )
     return config_dir
 
 
 def get_wofost_kwargs(config_dir=get_config_dir()):
     wofost_kwargs = dict(
-        model_config=os.path.join(config_dir, 'Wofost80_NWLP_FD.conf'),
-        agro_config=os.path.join(config_dir, 'agro', 'wheat_cropcalendar.yaml'),
-        crop_parameters=pcse.fileinput.YAMLCropDataProvider(fpath=os.path.join(config_dir, 'crop'), force_reload=True),
-        site_parameters=pcse.util.WOFOST80SiteDataProvider(WAV=10, NAVAILI=10, PAVAILI=50, KAVAILI=100),
-        soil_parameters=pcse.fileinput.CABOFileReader(os.path.join(config_dir, 'soil', 'ec3.CAB'))
+        model_config=os.path.join(config_dir, "Wofost80_NWLP_FD.conf"),
+        agro_config=os.path.join(config_dir, "agro", "wheat_cropcalendar.yaml"),
+        crop_parameters=pcse.fileinput.YAMLCropDataProvider(
+            fpath=os.path.join(config_dir, "crop"), force_reload=True
+        ),
+        site_parameters=pcse.util.WOFOST80SiteDataProvider(
+            WAV=10, NAVAILI=10, PAVAILI=50, KAVAILI=100
+        ),
+        soil_parameters=pcse.fileinput.CABOFileReader(
+            os.path.join(config_dir, "soil", "ec3.CAB")
+        ),
     )
     return wofost_kwargs
 
 
 def get_lintul_kwargs(config_dir=get_config_dir()):
     lintul_kwargs = dict(
-        model_config=os.path.join(config_dir, 'Lintul3.conf'),
-        agro_config=os.path.join(config_dir, 'agro', 'agromanagement_fertilization.yaml'),
-        crop_parameters=os.path.join(config_dir, 'crop', 'lintul3_winterwheat.crop'),
-        site_parameters=os.path.join(config_dir, 'site', 'lintul3_springwheat.site'),
-        soil_parameters=os.path.join(config_dir, 'soil', 'lintul3_springwheat.soil'),
+        model_config=os.path.join(config_dir, "Lintul3.conf"),
+        agro_config=os.path.join(
+            config_dir, "agro", "agromanagement_fertilization.yaml"
+        ),
+        crop_parameters=os.path.join(config_dir, "crop", "lintul3_winterwheat.crop"),
+        site_parameters=os.path.join(config_dir, "site", "lintul3_springwheat.site"),
+        soil_parameters=os.path.join(config_dir, "soil", "lintul3_springwheat.soil"),
     )
     return lintul_kwargs
 
@@ -123,30 +149,53 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         action_space=gym.spaces.Box(0, np.inf, shape=(1,), action_multiplier=1.0 gives 1.0*x
     """
 
-    def __init__(self, crop_features=defaults.get_wofost_default_crop_features(),
-                 weather_features=defaults.get_default_weather_features(),
-                 action_features=defaults.get_default_action_features(), costs_nitrogen=10.0, timestep=7,
-                 years=None, location=None, seed=0, action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
-                 action_multiplier=1.0, *args, **kwargs):
+    def __init__(
+        self,
+        crop_features=defaults.get_wofost_default_crop_features(),
+        weather_features=defaults.get_default_weather_features(),
+        action_features=defaults.get_default_action_features(),
+        costs_nitrogen=10.0,
+        timestep=7,
+        years=None,
+        location=None,
+        seed=0,
+        action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
+        action_multiplier=1.0,
+        *args,
+        **kwargs,
+    ):
         self.costs_nitrogen = costs_nitrogen
         self.crop_features = crop_features
         self.weather_features = weather_features
         self.action_features = action_features
-        super().__init__(timestep=timestep, years=years, location=location, *args, **kwargs)
+        super().__init__(
+            timestep=timestep, years=years, location=location, *args, **kwargs
+        )
         self.action_space = action_space
         self.action_multiplier = action_multiplier
-        self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, self.costs_nitrogen)
+        self.rewards = Rewards(
+            kwargs.get("reward_var"), self.timestep, self.costs_nitrogen
+        )
         super().reset(seed=seed)
 
     def _get_observation_space(self):
-        nvars = len(self.crop_features) + len(self.action_features) + len(self.weather_features) * self.timestep
+        nvars = (
+            len(self.crop_features)
+            + len(self.action_features)
+            + len(self.weather_features) * self.timestep
+        )
         return gym.spaces.Box(0, np.inf, shape=(nvars,))
 
     def _apply_action(self, action):
         amount = action * self.action_multiplier
         recovery_rate = 0.7
-        self._model._send_signal(signal=pcse.signals.apply_n, N_amount=amount * 10, N_recovery=recovery_rate,
-                                 amount=amount, recovery=recovery_rate)
+        self._model._send_signal(
+            signal=pcse.signals.apply_n,
+            N_amount=amount * 10,
+            N_recovery=recovery_rate,
+            amount=amount,
+            recovery=recovery_rate,
+        )
 
     def _get_reward(self):
         # Reward gets overwritten in step()
@@ -169,15 +218,15 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
 
         # populate info
         crop_info = pd.DataFrame(pcse_output).set_index("day").fillna(value=np.nan)
-        days = [day['day'] for day in pcse_output]
+        days = [day["day"] for day in pcse_output]
         weather_data = [self._weather_data_provider(day) for day in days]
         weather_info = to_weather_info(days, weather_data, self._weather_variables)
         info = {**pd.concat([crop_info, weather_info], axis=1, join="inner").to_dict()}
 
         start_date = process_pcse.get_start_date(pcse_output, self.timestep)
-        info = update_info(info, 'action', start_date, action)
-        info = update_info(info, 'fertilizer', start_date, amount)
-        info = update_info(info, 'reward', self.date, reward)
+        info = update_info(info, "action", start_date, action)
+        info = update_info(info, "fertilizer", start_date, amount)
+        info = update_info(info, "reward", self.date, reward)
 
         return observation, reward, terminated, truncated, info
 
@@ -186,7 +235,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         obs = super().reset(seed=seed)
         if isinstance(obs, tuple):
             obs = obs[0]
-        obs['actions'] = {'cumulative_nitrogen': 0.0}
+        obs["actions"] = {"cumulative_nitrogen": 0.0}
         return self._observation(obs)
 
     def _observation(self, observation):
@@ -198,16 +247,33 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         if isinstance(observation, tuple):
             observation = observation[0]
         for i, feature in enumerate(self.crop_features):
-            obs[i] = observation['crop_model'][feature][-1]
+            obs[i] = observation["crop_model"][feature][-1]
 
         for i, feature in enumerate(self.action_features):
             j = len(self.crop_features) + i
-            obs[j] = observation['actions'][feature]
+            obs[j] = observation["actions"][feature]
         for d in range(self.timestep):
             for i, feature in enumerate(self.weather_features):
-                j = d * len(self.weather_features) + len(self.crop_features) + len(self.action_features) + i
-                obs[j] = observation['weather'][feature][d]
+                j = (
+                    d * len(self.weather_features)
+                    + len(self.crop_features)
+                    + len(self.action_features)
+                    + i
+                )
+                obs[j] = observation["weather"][feature][d]
         return obs
+
+    def get_harvest_year(self):
+        """
+        Get harvest year if growing season traverses through years
+        :return: year of harvest
+        """
+        if self.agmt.campaign_date.year < self.agmt.crop_end_date.year:
+            if date(self.date.year, 10, 1) < self.date < date(self.date.year, 12, 31):
+                return self.date.year + 1
+            else:
+                return self.date.year
+        return self.date.year
 
     @property
     def model(self):
@@ -267,15 +333,20 @@ class ZeroNitrogenEnvStorage:
         return episode_info
 
     def get_key(self, env):
-        year = env.date.year
+        """We label the year based on the harvest date. e.g. sow in Oct 2002, harvest in Aug 2003, means that
+        the labelled year is 2003"""
+        year = env.get_harvest_year()
         location = env.loc
-        return f'{year}-{location}'
+        key = f"{year}-{location}"
+        assert "None" not in key
+        return key
 
     def get_episode_output(self, env):
         key = self.get_key(env)
         if key not in self.results.keys():
             results = self.run_episode(env)
             self.results[key] = results
+        assert bool(self.results[key]), "key empty; check PCSE output"
         return self.results[key]
 
     @property
