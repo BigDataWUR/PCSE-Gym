@@ -5,7 +5,7 @@ import gymnasium as gym
 from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv
 from stable_baselines3 import PPO
 from pcse_gym.utils.eval import evaluate_policy, summarize_results
-import initialize_env as init_env
+import tests.initialize_env as init_env
 import pcse_gym.utils.defaults as defaults
 
 
