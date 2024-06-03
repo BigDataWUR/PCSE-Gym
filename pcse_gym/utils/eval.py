@@ -210,12 +210,19 @@ def evaluate_policy(
             if policy == 'start-dump' and (episode_length == 0):
                 action = [amount * 1]
             if isinstance(policy, base_class.BaseAlgorithm):
+                device = policy.device.type
                 if isinstance(policy, PPO):
                     action, state = policy.predict(obs, state=state, deterministic=deterministic)
-                    sb_actions, sb_values, sb_log_probs = policy.policy(torch.from_numpy(obs),
-                                                                        deterministic=deterministic)
-                    sb_prob = np.exp(sb_log_probs.detach().numpy()).item()
-                    sb_val = sb_values.detach().item()
+                    if 'cuda' in device:
+                        sb_actions, sb_values, sb_log_probs = policy.policy(torch.from_numpy(obs).to(device),
+                                                                            deterministic=deterministic)
+                        sb_prob = np.exp(sb_log_probs.detach().cpu().numpy()).item()
+                        sb_val = sb_values.detach().cpu().item()
+                    else:
+                        sb_actions, sb_values, sb_log_probs = policy.policy(torch.from_numpy(obs),
+                                                                            deterministic=deterministic)
+                        sb_prob = np.exp(sb_log_probs.detach().numpy()).item()
+                        sb_val = sb_values.detach().item()
                     prob = sb_prob
                     val = sb_val
                 if isinstance(policy, A2C):
@@ -225,20 +232,34 @@ def evaluate_policy(
                 if isinstance(policy, RecurrentPPO):
                     action, lstm_state = policy.predict(obs, state=lstm_state, episode_start=episode_starts,
                                                         deterministic=deterministic)
-                    lstm_torch = (torch.from_numpy(lstm_state[0]), torch.from_numpy(lstm_state[1]))
 
-                    dis, _ = policy.policy.get_distribution(torch.from_numpy(obs),
-                                                            lstm_states=lstm_torch,
-                                                            episode_starts=torch.from_numpy(episode_starts))
+                    if 'cuda' in device:
+                        lstm_torch = (torch.from_numpy(lstm_state[0]).to(device),
+                                      torch.from_numpy(lstm_state[1]).to(device))
+
+                        dis, _ = policy.policy.get_distribution(torch.from_numpy(obs).to(device),
+                                                                lstm_states=lstm_torch,
+                                                                episode_starts=torch.from_numpy(episode_starts).to(device))
+                        val = policy.policy.predict_values(torch.from_numpy(obs).to(device),
+                                                           lstm_states=lstm_torch,
+                                                           episode_starts=torch.from_numpy(episode_starts).to(device))
+                        val = val.detach().cpu().numpy()[0][0]
+                    else:
+                        lstm_torch = (torch.from_numpy(lstm_state[0]),
+                                      torch.from_numpy(lstm_state[1]))
+
+                        dis, _ = policy.policy.get_distribution(torch.from_numpy(obs),
+                                                                lstm_states=lstm_torch,
+                                                                episode_starts=torch.from_numpy(episode_starts))
+                        val = policy.policy.predict_values(torch.from_numpy(obs),
+                                                           lstm_states=lstm_torch,
+                                                           episode_starts=torch.from_numpy(episode_starts))
+                        val = val.detach().numpy()[0][0]
 
                     action_probs = get_action_probs(dis, env.envs[0].unwrapped.po_features,
                                                     env.envs[0].unwrapped.crop_features,
                                                     env.envs[0].unwrapped.measure_all)
 
-                    val = policy.policy.predict_values(torch.from_numpy(obs),
-                                                       lstm_states=lstm_torch,
-                                                       episode_starts=torch.from_numpy(episode_starts))
-                    val = val.detach().numpy()[0][0]
 
                 if isinstance(policy, DQN):
                     action = policy.predict(obs, deterministic=deterministic)
@@ -400,6 +421,7 @@ class EvalCallback(BaseCallback):
         self.po_features = kwargs.get('po_features')
         self.random_weather = kwargs.get('random_weather', False)
         self.multiprocess = multiprocess
+        self.n_envs = kwargs.get('n_envs')
 
         def def_value(): return 0
 
@@ -559,8 +581,14 @@ class EvalCallback(BaseCallback):
                     # self.logger.record(f'eval/nitrogen-{my_key}', fertilizer[my_key])
                     result_model[my_key] = episode_infos
                     n_year_loc = 0 if log_training else n_year_loc + 1
+            else:
                 avg_rew = mean([x for x in reward.values()])
-                years_bar.set_description(f'Evaluation step {self.num_timesteps} | Avg. reward: {avg_rew:.4f}')
+                avg_nue = mean([x for x in NUE.values()])
+                avg_profit = mean([x for x in profit.values()])
+                print(f'Evaluation step {self.num_timesteps}'
+                      f'Avg. reward: {avg_rew:.4f}\n'
+                      f'Avg. profit: {avg_profit:.4f}\n'
+                      f'Avg. NUE: {avg_nue:.4f}')
 
             for test_location in list(set(self.test_locations)):
                 test_keys = [(a, test_location) for a in self.test_years]
@@ -604,8 +632,8 @@ class EvalCallback(BaseCallback):
                              'fertilizer', 'val', 'IDWST', 'prob_measure',
                              'NLOSSCUM', 'WC', 'Ndemand', 'NAVAIL', 'NuptakeTotal',
                              'SM', 'TAGP', 'LAI']
-                if self.env_eval.envs[0].unwrapped.reward_function not in ['NUE', 'HAR', 'END', 'ENY']:
-                    variables = variables.remove('reward')
+                if self.env_eval.envs[0].unwrapped.reward_function in ['NUE', 'HAR', 'END', 'ENY']:
+                    variables.remove('reward')
                 if self.po_features:
                     variables.append('measure')
                     # for p in self.po_features:
@@ -631,12 +659,21 @@ class EvalCallback(BaseCallback):
 
             # if using comet, log pickle file and model as asset
             if self.comet_experiment:
+                # need to check if always true
+                model_num = self.num_timesteps / self.n_envs if self.multiprocess else self.num_timesteps
+                list_dir = os.listdir(dir)
+                model_files = [(file, int(file.split('-')[1].split('.')[0])) for file in list_dir if file.startswith('model-') and file.endswith("zip")]
+                max_model_file = max(model_files, key=lambda x: x[1])
+                latest_model_step = max_model_file[1]
                 self.comet_experiment.log_asset(file_data=os.path.join(dir, f'infos_{self.num_timesteps}.pkl'),
                                                 step=self.num_timesteps,
                                                 file_name=f'infos_{self.num_timesteps}')
+                self.comet_experiment.log_asset(file_data=os.path.join(dir, f'env-{latest_model_step}.pkl'),
+                                                step=self.num_timesteps,
+                                                file_name=f'env-{latest_model_step}')
                 self.comet_experiment.log_model(self.comet_experiment.get_name(),
-                                                os.path.join(dir, f'model-{self.num_timesteps}.zip'),
-                                                file_name=f'model_{self.num_timesteps}')
+                                                os.path.join(dir, f'model-{latest_model_step}.zip'),
+                                                file_name=f'model_{latest_model_step}')
 
             # create variable plot
             for i, variable in enumerate(variables):
