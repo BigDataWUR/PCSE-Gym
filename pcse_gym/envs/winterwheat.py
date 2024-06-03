@@ -51,6 +51,7 @@ class WinterWheat(gym.Env):
         self.measure_cost_multiplier = kwargs.get('m_multiplier', 1)
         self.measure_all = kwargs.get('measure_all', False)
         self.random_weather = kwargs.get('random_weather', False)
+        self.start_type = kwargs.get('start_type')
         self.list_wav_nav = None
         self.eval_nh4i = None
         self.eval_no3i = None
@@ -70,10 +71,19 @@ class WinterWheat(gym.Env):
         self.zero_nitrogen_env_storage = ZeroNitrogenEnvStorage()
 
         """ Get number of soil layers if using WOFOST snomin"""
+        self.mean_total_N = None
+        self.std_dev_total_N = None
+        self.percentage_NO3 = None
+        self.percentage_NH4 = None
+        self.top_30cm_fraction = None
+        self.bottom_70cm_fraction = None
+        self.len_soil_layers = None
+        self.len_top_layers = None
 
         if self.pcse_env:
             self.len_soil_layers = self.get_len_soil_layers
-            self.soil_layers_dis = [self.len_soil_layers * 1.5 - i for i, n in enumerate(range(self.len_soil_layers))]
+            self.init_random_init_conditions_params()
+            # self.soil_layers_dis = [self.len_soil_layers * 1.5 - i for i, n in enumerate(range(self.len_soil_layers))]
 
         """ Initialize reward function """
 
@@ -126,12 +136,20 @@ class WinterWheat(gym.Env):
             self.reward_class = self.rewards_obj.NUE(self.timestep, costs_nitrogen)
             self.reward_container = self.rewards_obj.ContainerNUE(self.timestep, costs_nitrogen)
 
+        elif self.reward_function == 'DNE':
+            self.reward_class = self.rewards_obj.DNE(self.timestep, costs_nitrogen)
+            self.reward_container = self.rewards_obj.ContainerNUE(self.timestep, costs_nitrogen)
+
+        elif self.reward_function == 'DSO':
+            self.reward_class = self.rewards_obj.DSO(self.timestep, costs_nitrogen)
+            self.reward_container = self.rewards_obj.ContainerNUE(self.timestep, costs_nitrogen)
+
         elif self.reward_function == 'NUP':
             self.reward_class = self.rewards_obj.NUP(self.timestep, costs_nitrogen)
 
         elif self.reward_function == 'HAR':
             self.yield_modifier = 0.2
-            self.reward_class = self.rewards_obj.HAR(self.timestep, costs_nitrogen, 200, 5, 1)
+            self.reward_class = self.rewards_obj.HAR(self.timestep, costs_nitrogen, 200, 20, 1)
             self.reward_container = self.rewards_obj.ContainerEND(self.timestep, costs_nitrogen)
 
         elif self.reward_function == 'DNU':
@@ -250,9 +268,9 @@ class WinterWheat(gym.Env):
         info['NUE'][self.date] = self.rewards_obj.calculate_nue_on_terminate(
             n_input=self.reward_container.get_total_fertilization * 10,
             n_so=process_pcse.get_n_storage_organ(output),
-            year=None,  # self.date.year,
-            start=None,  # self.sb3_env.agmt.get_start_date,
-            end=None)  # self.sb3_env.agmt.get_end_date)
+            year=self.date.year,
+            start=self.sb3_env.agmt.get_start_date,
+            end=self.sb3_env.agmt.get_end_date)
 
         if terminated and self.reward_function in reward_functions_end():
             reward = self.reward_container.dump_cumulative_positive_reward - abs(reward)
@@ -267,7 +285,8 @@ class WinterWheat(gym.Env):
                 year=None,  # self.date.year,
                 start=None,  # self.sb3_env.agmt.get_start_date,
                 end=None, )  # self.sb3_env.agmt.get_end_date)
-                      - abs(self.reward_container.get_total_fertilization * 10))
+                      #  - abs(self.reward_container.get_total_fertilization * 10)
+                )
             if 'Nsurplus' not in info.keys():
                 info['Nsurplus'] = {}
             info['Nsurplus'][self.date] = get_surplus_n(self.reward_container.get_total_fertilization,
@@ -308,21 +327,70 @@ class WinterWheat(gym.Env):
         self.locations = location
         self.set_location(location)
 
-    def overwrite_initial_conditions(self, n_layers=None):
-        """ method to overwrite a random N initial condition for every call of reset() """
-        list_nh4i = [np.clip(self.rng.normal(s - r, 10), 0.0, 100.0) for s, r in
-                     zip(self.soil_layers_dis, reversed(range(n_layers)))]
-        list_no3i = [np.clip(self.rng.normal(s - r, 10), 0.0, 100.0) for s, r in
-                     zip(self.soil_layers_dis, reversed(range(n_layers)))]
+    def overwrite_initial_conditions(self):
+        list_nh4i, list_no3i = self.generate_realistic_n()
+
         self.eval_nh4i = list_nh4i
         self.eval_no3i = list_no3i
         site_parameters = {'NH4I': list_nh4i, 'NO3I': list_no3i}
         return site_parameters
 
+    def init_random_init_conditions_params(self):
+        self.mean_total_N = 35  # kg/ha
+        self.std_dev_total_N = 15  # kg/ha
+        self.percentage_NO3 = 0.85
+        self.percentage_NH4 = 0.15
+        self.top_30cm_fraction = 0.7
+        self.bottom_70cm_fraction = 0.3
+        # Sanity check
+        # If soil profile is 1m, 30% will have 70% of the total inorganic N
+        self.len_top_layers = int(np.ceil(self.len_soil_layers * 0.3))
+
+    def generate_realistic_n(self) -> tuple[list, list]:
+        """ method to overwrite a random N initial condition for every call of reset()
+            Implemented based on discussions with Herman Berghuijs, for NL conditions
+        """
+
+        '''Comments for sanity check'''
+        # Generate total inorganic N from seeded normal distribution and clip so that no outliers become negative
+        total_inorganic_n = self.rng.normal(self.mean_total_N, self.std_dev_total_N)
+        total_inorganic_n = np.clip(total_inorganic_n, 0, 100)
+
+        # Split total inorganic N into NO3 and NH4
+        total_no3 = total_inorganic_n * self.percentage_NO3
+        total_nh4 = total_inorganic_n * self.percentage_NH4
+
+        # Distribute 70% of the total inorganic N in the upper 30 cm and 30% in the lower 70 cm
+        no3_top = total_no3 * self.top_30cm_fraction
+        no3_bottom = total_no3 * self.bottom_70cm_fraction
+        nh4_top = total_nh4 * self.top_30cm_fraction
+        nh4_bottom = total_nh4 * self.bottom_70cm_fraction
+
+        # Create lists of per layer N content
+        no3_distribution = np.zeros(self.len_soil_layers)
+        nh4_distribution = np.zeros(self.len_soil_layers)
+
+        # Considering 1m soil profile
+        # Upper 30 cm distribution (first layers), multiply list of dirichlet with fraction of total in topsoil layers
+        no3_distribution[:self.len_top_layers] = self.rng.dirichlet(np.ones(self.len_top_layers), size=1) * no3_top
+        nh4_distribution[:self.len_top_layers] = self.rng.dirichlet(np.ones(self.len_top_layers), size=1) * nh4_top
+
+        # Lower 70 cm distribution (last layers), same for remaining bottom layers
+        no3_distribution[self.len_top_layers:] = self.rng.dirichlet(np.ones(self.len_soil_layers - self.len_top_layers),
+                                                                    size=1) * no3_bottom
+        nh4_distribution[self.len_top_layers:] = self.rng.dirichlet(np.ones(self.len_soil_layers - self.len_top_layers),
+                                                                    size=1) * nh4_bottom
+
+        # Ensure no negative values in the distributions, might skew the distribution by a teeny bit
+        list_nh4i = np.maximum(no3_distribution, 0)
+        list_no3i = np.maximum(nh4_distribution, 0)
+
+        return list_nh4i, list_no3i
+
     def reset(self, seed=None, options=None, **kwargs):
         site_params = None
         if self.random_init:
-            site_params = self.overwrite_initial_conditions(self.len_soil_layers)
+            site_params = self.overwrite_initial_conditions()
 
         if isinstance(self.years, list):
             year = self.np_random.choice(self.years)
