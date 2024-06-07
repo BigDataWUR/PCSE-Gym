@@ -585,7 +585,7 @@ class EvalCallback(BaseCallback):
                 avg_rew = mean([x for x in reward.values()])
                 avg_nue = mean([x for x in NUE.values()])
                 avg_profit = mean([x for x in profit.values()])
-                print(f'Evaluation step {self.num_timesteps}'
+                print(f'\nEvaluation step {self.num_timesteps}\n'
                       f'Avg. reward: {avg_rew:.4f}\n'
                       f'Avg. profit: {avg_profit:.4f}\n'
                       f'Avg. NUE: {avg_nue:.4f}')
