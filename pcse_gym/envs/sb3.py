@@ -276,7 +276,10 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
                 obs[i] = np.clip(self.rng.normal(10, 10), 0.0, None)
             else:
                 if feature in ['SM', 'NH4', 'NO3', 'WC']:
-                    obs[i] = observation['crop_model'][feature][-1][0]
+                    if feature in ['NH4', 'NO3']:
+                        obs[i] = sum(observation['crop_model'][feature][-1])
+                    else:
+                        obs[i] = observation['crop_model'][feature][-1][0]
                 else:
                     obs[i] = observation['crop_model'][feature][-1]
 
