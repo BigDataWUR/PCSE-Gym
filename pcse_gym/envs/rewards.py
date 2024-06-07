@@ -274,7 +274,7 @@ class Rewards:
         Dense reward based on calculated nitrogen use efficiency
         """
 
-        def __init__(self, timestep, costs_nitrogen, so_weight=5):
+        def __init__(self, timestep, costs_nitrogen, so_weight=20):
             super().__init__(timestep, costs_nitrogen)
             self.timestep = timestep
             self.costs_nitrogen = costs_nitrogen
