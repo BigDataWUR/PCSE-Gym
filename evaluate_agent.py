@@ -1,12 +1,17 @@
 import os
 import argparse
 import pickle
+from statistics import mean
 
 import gymnasium as gym
 import lib_programname
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from datetime import datetime
+
+from stable_baselines3 import PPO
+from sb3_contrib import RecurrentPPO
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -192,8 +197,8 @@ if __name__ == "__main__":
         else:
             eval_year = args.year
     else:
-        eval_year = [year for year in [*range(1990, 2024)] if year % 2 == 0]
-
+        # eval_year = [year for year in [*range(1990, 2024)] if year % 2 == 0]
+        eval_year = [*range(1990, 2024)]
     crop_features = defaults.get_default_crop_features(pcse_env=args.environment, minimal=False)
     weather_features = defaults.get_default_weather_features()
     action_features = defaults.get_default_action_features()
@@ -221,8 +226,8 @@ if __name__ == "__main__":
         action_spaces = gym.spaces.MultiDiscrete(a_shape)
 
     checkpoint_path = os.path.join(rootdir, "tensorboard_logs", framework_path, args.checkpoint_path,
-                                   f'model-{args.step}')
-    stats_path = os.path.join(rootdir, "tensorboard_logs", framework_path, args.checkpoint_path, f'env-{args.step}.pkl')
+                                   f'{args.reward.lower()}')
+    stats_path = os.path.join(rootdir, "tensorboard_logs", framework_path, args.checkpoint_path, f'env_{args.reward.lower()}.pkl')
 
     agent = None
     if args.framework == 'rllib':
@@ -252,7 +257,10 @@ if __name__ == "__main__":
         env = VecNormalize.load(stats_path, env)
         cust_objects = {"lr_schedule": lambda x: 0.0001, "clip_range": lambda x: 0.4,
                         "action_space": action_spaces}
-        agent = RecurrentPPO.load(checkpoint_path, custom_objects=cust_objects, device='cuda', print_system_info=True)
+        if args.agent == 'RPPO':
+            agent = RecurrentPPO.load(checkpoint_path, custom_objects=cust_objects, device='cuda', print_system_info=True)
+        elif args.agent == 'PPO':
+            agent = PPO.load(checkpoint_path, custom_objects=cust_objects, device='cuda', print_system_info=True)
         policy = agent
 
     evaluate_dir = os.path.join(evaluate_dir, args.checkpoint_path)
@@ -260,9 +268,13 @@ if __name__ == "__main__":
 
     reward, fertilizer, result_model, WSO, NUE, profit, init_no3, init_nh4 = {}, {}, {}, {}, {}, {}, {}, {}
 
+    total_eval = len(eval_year) * len(eval_locations)
     print("evaluating environment with learned policy...")
-    for year in eval_year:
-        for test_location in eval_locations:
+    years_bar = tqdm(eval_year)
+    for iy, year in enumerate(years_bar, 1):
+        for il, test_location in enumerate(eval_locations, 1):
+            years_bar.set_description(f'Evaluating {year}, {str(test_location): <{10}} | '
+                                      f'{str(il + (len(eval_locations) * iy)): <{3}}/{total_eval}')
             if args.framework == 'sb3':
                 env.env_method('overwrite_year', year)
                 env.env_method('overwrite_location', test_location)
@@ -292,6 +304,11 @@ if __name__ == "__main__":
             writer.add_scalar(f'eval/profit-{my_key}', profit[my_key])
             writer.add_scalar(f'eval/NUE-{my_key}', NUE[my_key])
             result_model[my_key] = episode_infos
+    else:
+        print(f'\nEvaluation step {self.num_timesteps}\n'
+              f'Avg. reward: {avg_rew:.4f}\n'
+              f'Avg. profit: {avg_profit:.4f}\n'
+              f'Avg. NUE: {avg_nue:.4f}')
 
     # #measuring history
     # for year in eval_year:
