@@ -8,6 +8,7 @@ import json
 from comet_ml import Experiment
 from comet_ml.integration.gymnasium import CometLogger
 import torch.nn as nn
+import torch
 
 import gymnasium.spaces
 from gymnasium.envs.registration import register
@@ -33,7 +34,6 @@ if os.path.join(rootdir, "pcse_gym") not in sys.path:
 
 
 def args_func(parser):
-    parser = argparse.ArgumentParser()
     parser.add_argument("-s", "--seed", type=int, default=0, help="Set seed")
     parser.add_argument("-n", "--nsteps", type=int, default=400000, help="Number of steps")
     parser.add_argument("-c", "--costs-nitrogen", type=float, default=10.0, help="Costs for nitrogen")
@@ -42,7 +42,7 @@ def args_func(parser):
     parser.add_argument("--nenvs", type=int, default=4, help="Number of parallel envs")
     parser.add_argument("--eval-freq", type=int, default=20_000, dest='eval_freq')
     parser.add_argument("--no-comet", action='store_false', dest='comet')
-    parser.add_argument("--gpu", action='store_true', dest='use gpu')
+    parser.add_argument('-d', "--device", type=str, default="cpu")
     parser.add_argument("-e", "--environment", type=int, default=1,
                         help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
     parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, GRU,"
@@ -76,7 +76,7 @@ def args_func(parser):
     parser.set_defaults(measure=True, vrr=False, noisy_measure=False, framework='sb3',
                         no_weather=False, random_feature=False, obs_mask=False, placeholder_val=-1.11,
                         normalize=False, random_init=False, m_multiplier=1, measure_all=False, random_weather=False,
-                        multiproc=False, comet=True, gpu=False)
+                        multiproc=False, comet=True)
 
     args = parser.parse_args()
 
@@ -245,8 +245,11 @@ def train(log_dir, n_steps,
 
     env_pcse_train = ActionConstrainer(env_pcse_train, action_limit=action_limit, n_budget=n_budget)
 
-    device = kwargs.get('gpu', False)
-    device = 'cuda' if device else 'cpu'
+    device = kwargs.get('device')
+    if device == 'cuda':
+        print('CUDA not available... Using CPU!') if not torch.cuda.is_available() else print('using CUDA!')
+    else:
+        print('Using CPU!')
 
     if agent == 'PPO':
         env_pcse_train = wrapper_vectorized_env(env_pcse_train, flag_po,
@@ -330,7 +333,6 @@ def train(log_dir, n_steps,
 
 
 if __name__ == '__main__':
-
     parser = argparse.ArgumentParser()
     args = args_func(parser)
 
@@ -390,7 +392,7 @@ if __name__ == '__main__':
               'mask_binary': args.obs_mask, 'placeholder_val': args.placeholder_val, 'normalize': args.normalize,
               'loc_code': args.location, 'cost_measure': args.cost_measure, 'start_type': args.start_type,
               'random_init': args.random_init, 'm_multiplier': args.m_multiplier, 'measure_all': args.measure_all,
-              'random_weather': args.random_weather, 'comet': args.comet, 'n_envs': args.nenvs, 'gpu': args.gpu}
+              'random_weather': args.random_weather, 'comet': args.comet, 'n_envs': args.nenvs}
 
     # define MeasureOrNot environment if specified
     if not args.measure:
@@ -424,4 +426,5 @@ if __name__ == '__main__':
           weather_features=weather_features,
           action_features=action_features, action_space=action_spaces,
           pcse_model=args.environment, agent=args.agent,
-          reward=args.reward, multiprocess=args.multiproc, **kwargs, eval_freq=args.eval_freq)
+          reward=args.reward, multiprocess=args.multiproc, **kwargs,
+          eval_freq=args.eval_freq, device=args.device)
