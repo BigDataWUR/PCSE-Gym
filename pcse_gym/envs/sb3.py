@@ -110,7 +110,7 @@ def get_wofost_kwargs(config_dir=get_config_dir(), soil_file='arminda_soil.yaml'
     wofost_kwargs = dict(
         model_config=os.path.join(config_dir, 'Wofost81_NWLP_MLWB_SNOMIN.conf'),
         agro_config=os.path.join(config_dir, 'agro', agro_file),
-        crop_parameters=pcse.fileinput.YAMLCropDataProvider(fpath=os.path.join(config_dir, 'crop'), force_reload=True),
+        crop_parameters=pcse.input.YAMLCropDataProvider(fpath=os.path.join(config_dir, 'crop'), force_reload=True),
         site_parameters=yaml.safe_load(open(os.path.join(config_dir, 'site', 'arminda_site.yaml'))),
         soil_parameters=yaml.safe_load(open(os.path.join(config_dir, 'soil', 'arminda_soil.yaml')))
     )

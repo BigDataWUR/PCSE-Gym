@@ -482,7 +482,11 @@ SoilProfileDescription:
     Thickness: 25.0
   SubSoilType:
     CONDfromPF: *id001
+    CNRatioSOMI: 18.0
+    FSOMI: 0.001
+    RHOD: 1.53775796536093
     CRAIRC: 0.09
+    Soil_pH: 7.4
     GroundWater: null
     SMfromPF: *id002
     Thickness: 200.0

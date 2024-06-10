@@ -159,20 +159,20 @@ def replace_years_(agro_management, years):  # deprecated
 
 
 def get_weather_data_provider(location,
-                              random_weather=False) -> pcse.db.NASAPowerWeatherDataProvider or pcse.fileinput.CSVWeatherDataProvider:
+                              random_weather=False) -> pcse.input.NASAPowerWeatherDataProvider or pcse.fileinput.CSVWeatherDataProvider:
     if random_weather:
         wdp = get_random_weather_provider(location)
     else:
-        wdp = pcse.db.NASAPowerWeatherDataProvider(*location)
+        wdp = pcse.input.NASAPowerWeatherDataProvider(*location)
     return wdp
 
 
-def get_random_weather_provider(location) -> pcse.fileinput.CSVWeatherDataProvider:
+def get_random_weather_provider(location) -> pcse.input.CSVWeatherDataProvider:
     path_to_file = os.path.dirname(os.path.realpath(__file__))
     lat, lon = location
     csv_name = f'{lat}-{lon}_random_weather.csv'
     filename = os.path.join(path_to_file[:-4], 'utils', 'weather_utils', 'random_weather_csv', csv_name)
-    wdp = pcse.fileinput.CSVWeatherDataProvider(filename)
+    wdp = pcse.input.CSVWeatherDataProvider(filename)
     return wdp
 
 
@@ -303,11 +303,11 @@ class PCSEEnv(gym.Env):
 
         # If any parameter files are specified as path, convert them to a suitable object for pcse
         if isinstance(crop_parameters, str):
-            crop_parameters = pcse.fileinput.PCSEFileReader(crop_parameters)
+            crop_parameters = pcse.input.PCSEFileReader(crop_parameters)
         if isinstance(site_parameters, str):
-            site_parameters = pcse.fileinput.PCSEFileReader(site_parameters)
+            site_parameters = pcse.input.PCSEFileReader(site_parameters)
         if isinstance(soil_parameters, str):
-            soil_parameters = pcse.fileinput.PCSEFileReader(soil_parameters)
+            soil_parameters = pcse.input.PCSEFileReader(soil_parameters)
 
         # Set location
         if location is None:
@@ -346,7 +346,7 @@ class PCSEEnv(gym.Env):
         self._model = self._init_pcse_model()
 
         # Use the config files to extract relevant settings
-        model_config = pcse.util.ConfigurationLoader(model_config)
+        model_config = pcse.base.ConfigurationLoader(model_config)
         self._output_variables = model_config.OUTPUT_VARS  # variables given by the PCSE model output
         self._summary_variables = model_config.SUMMARY_OUTPUT_VARS  # Summary variables are given at the end of a run
         self._weather_variables = list(pcse.base.weather.WeatherDataContainer.required)
