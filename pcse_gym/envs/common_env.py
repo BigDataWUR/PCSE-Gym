@@ -204,7 +204,7 @@ class Engine(pcse.engine.Engine):
 
         # Do actions
         if action > 0:
-            self._send_signal(signal=pcse.signals.apply_n,
+            self._send_signal(signal=pcse.signals.apply_n_snomin,
                               amount=action,
                               application_depth=10.,
                               cnratio=0.,
