@@ -17,7 +17,7 @@ jobs:
           pip install flake8 pytest pytest-cov
           pip uninstall -y --quiet pcse
           git clone https://github.com/ajwdewit/pcse.git /tmp/pcse
-          cd /tmp/pcse && pip install --quiet -e . && cd ${GITHUB_WORKSPACE}
+          cd /tmp/pcse && git reset --hard 4ef02c7 && pip install --quiet -e . && cd ${GITHUB_WORKSPACE}
           pip install stable_baselines3 sb3-contrib gymnasium lib_programname tensorboard scipy tqdm pandas numpy
       - name: Lint with flake8
         run: |
