@@ -196,6 +196,15 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
             amount=amount,
             recovery=recovery_rate,
         )
+        self._model._send_signal(
+            signal=pcse.signals.apply_npk,
+            N_amount=amount * 10,
+            N_recovery=recovery_rate,
+            P_amount = 100,
+            P_recovery = 1.0,
+            K_amount=100,
+            K_recovery=1.0,
+        )
 
     def _get_reward(self):
         # Reward gets overwritten in step()
