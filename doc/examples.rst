@@ -6,7 +6,7 @@ Examples
 Basic
 *****
 
-Here we show a basic example of how to use the PCSE Environment
+Here we show a basic example of how to use the PCSE Environment. This example requires pcse at commit 4ef02c7.
 
 .. code:: python
 
