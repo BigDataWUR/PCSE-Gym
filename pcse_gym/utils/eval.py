@@ -585,10 +585,12 @@ class EvalCallback(BaseCallback):
                 avg_rew = mean([x for x in reward.values()])
                 avg_nue = mean([x for x in NUE.values()])
                 avg_profit = mean([x for x in profit.values()])
-                print(f'\nEvaluation step {self.num_timesteps}\n'
+                avg_wso = mean([x for x in WSO.values()])
+                print(f'Evaluation step {self.num_timesteps}\n'
                       f'Avg. reward: {avg_rew:.4f}\n'
                       f'Avg. profit: {avg_profit:.4f}\n'
-                      f'Avg. NUE: {avg_nue:.4f}')
+                      f'Avg. NUE: {avg_nue:.4f}\n'
+                      f'Avg. WSO: {avg_wso:.4f}\n')
 
             for test_location in list(set(self.test_locations)):
                 test_keys = [(a, test_location) for a in self.test_years]
