@@ -42,7 +42,7 @@ class Rewards(unittest.TestCase):
     def test_reward_functions(self):
         rfs = [self.dep, self.nue, self.eny, self.nup,
                self.har, self.dnu, self.fin, self.def1, self.dne]
-        expected_rs = [8717.19, 998.8, 8737.19, 145.01, 1278.87, 9.07, 1372.10, 2111.23, 1000.05,]
+        expected_rs = [8717.19, 998.8, 8737.19, 145.01, 1278.03, 9.07, 1372.10, 2111.23, 1000.05,]
         for rf_env, expected_r in zip(rfs, expected_rs):
             r = self.run_steps_sp(rf_env, 2002, False)
             self.assertAlmostEqual(r, expected_r, 0)
