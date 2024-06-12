@@ -23,7 +23,7 @@ class WinterWheat(gym.Env):
     Year and location of episode is randomly picked from years and locations through reset().
     """
 
-    def __init__(self, crop_features=defaults.get_wofost_default_crop_features(),
+    def __init__(self, crop_features=defaults.get_wofost_default_crop_features(2),
                  action_features=defaults.get_default_action_features(),
                  weather_features=defaults.get_default_weather_features(),
                  seed=0, costs_nitrogen=None, timestep=7, years=None, locations=None,
@@ -59,7 +59,12 @@ class WinterWheat(gym.Env):
         self.rng, self.seed = gym.utils.seeding.np_random(seed=seed)
 
         """LINTUL or WOFOST"""
-        self.pcse_env = 0 if 'Lintul' in kwargs.get('model_config') else 1
+        if 'Lintul' in kwargs.get('model_config'):
+            self.pcse_env = 0
+        elif 'CNB' in kwargs.get('model_config'):
+            self.pcse_env = 1
+        elif 'SNOMIN' in kwargs.get('model_config'):
+            self.pcse_env = 2
 
         """ Initialize SB3 env wrapper """
 
@@ -80,10 +85,9 @@ class WinterWheat(gym.Env):
         self.len_soil_layers = None
         self.len_top_layers = None
 
-        if self.pcse_env:
+        if self.pcse_env == 2:
             self.len_soil_layers = self.get_len_soil_layers
             self.init_random_init_conditions_params()
-            # self.soil_layers_dis = [self.len_soil_layers * 1.5 - i for i, n in enumerate(range(self.len_soil_layers))]
 
         """ Initialize reward function """
 
@@ -285,8 +289,8 @@ class WinterWheat(gym.Env):
                 year=None,  # self.date.year,
                 start=None,  # self.sb3_env.agmt.get_start_date,
                 end=None, )  # self.sb3_env.agmt.get_end_date)
-                      #  - abs(self.reward_container.get_total_fertilization * 10)
-                )
+                #  - abs(self.reward_container.get_total_fertilization * 10)
+            )
             if 'Nsurplus' not in info.keys():
                 info['Nsurplus'] = {}
             info['Nsurplus'][self.date] = get_surplus_n(self.reward_container.get_total_fertilization,
@@ -329,7 +333,7 @@ class WinterWheat(gym.Env):
 
     def overwrite_initial_conditions(self):
         list_nh4i, list_no3i = self.generate_realistic_n()
-
+        list_nh4i, list_no3i = list(list_nh4i), list(list_no3i)
         self.eval_nh4i = list_nh4i
         self.eval_no3i = list_no3i
         site_parameters = {'NH4I': list_nh4i, 'NO3I': list_no3i}
@@ -389,7 +393,7 @@ class WinterWheat(gym.Env):
 
     def reset(self, seed=None, options=None, **kwargs):
         site_params = None
-        if self.random_init:
+        if self.random_init and self.pcse_env == 2:
             site_params = self.overwrite_initial_conditions()
 
         if isinstance(self.years, list):

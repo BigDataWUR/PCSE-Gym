@@ -212,7 +212,10 @@ class Engine(pcse.engine.Engine):
                               f_NH4N=0.5,
                               f_NO3N=0.5,
                               initial_age=0,
-                              recovery=0.7
+                              )
+            self._send_signal(signal=pcse.signals.apply_n,
+                              N_amount=action,
+                              N_recovery=0.7
                               )
 
         # Rate calculation

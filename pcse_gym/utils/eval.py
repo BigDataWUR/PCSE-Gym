@@ -491,8 +491,8 @@ class EvalCallback(BaseCallback):
             # evaluate model and get rewards and infos
             episode_rewards, episode_infos = evaluate_policy(policy=self.model, env=self.env_eval)
 
-            if self.pcse_model:
-                variables = ['action', 'WSO', 'reward', 'IDWST',
+            if self.pcse_model == 2:
+                variables = ['action', 'WSO', 'reward',
                              'NLOSSCUM']
                 if self.po_features: variables.append('measure')
                 cumulative = ['action', 'reward']

@@ -14,7 +14,6 @@ import gymnasium.spaces
 from gymnasium.envs.registration import register
 import gymnasium as gym
 
-
 from pcse_gym.envs.constraints import ActionConstrainer
 from pcse_gym.envs.winterwheat import WinterWheat
 from pcse_gym.envs.sb3 import get_policy_kwargs, get_model_kwargs
@@ -43,8 +42,8 @@ def args_func(parser):
     parser.add_argument("--eval-freq", type=int, default=20_000, dest='eval_freq')
     parser.add_argument("--no-comet", action='store_false', dest='comet')
     parser.add_argument('-d', "--device", type=str, default="cpu")
-    parser.add_argument("-e", "--environment", type=int, default=1,
-                        help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST")
+    parser.add_argument("-e", "--environment", type=int, default=2,
+                        help="Crop growth model. 0 for LINTUL-3, 1 for WOFOST Classic N, 2 for WOFOST SNOMIN N")
     parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, GRU,"
                                                                        "IndRNN, DiffNC, PosMLP, ATM or DQN")
     parser.add_argument("-r", "--reward", type=str, default="DEF",
@@ -73,7 +72,7 @@ def args_func(parser):
     parser.add_argument("--measure-cost-multiplier", type=int, default=1, dest='m_multiplier',
                         help="multiplier for the measuring cost")
     parser.add_argument("--measure-all", action='store_true', dest='measure_all')
-    parser.set_defaults(measure=True, vrr=False, noisy_measure=False, framework='sb3',
+    parser.set_defaults(measure=False, vrr=False, noisy_measure=False, framework='sb3',
                         no_weather=False, random_feature=False, obs_mask=False, placeholder_val=-1.11,
                         normalize=False, random_init=False, m_multiplier=1, measure_all=False, random_weather=False,
                         multiproc=False, comet=True)
@@ -159,15 +158,15 @@ def get_hyperparams(agent, no_weather, flag_po, mask_binary):
 def get_json_config(n_steps, crop_features, weather_features, train_years, test_years, train_locations, test_locations,
                     action_space, pcse_model, agent, reward, seed, costs_nitrogen, kwargs):
     return dict(
-        n_steps=n_steps,crop_features=crop_features,weather_features=weather_features,
-        train_years=train_years,test_years=test_years,train_locations=train_locations,
-        test_locations=test_locations,action_space=action_space,pcse_model=pcse_model,agent=agent,reward=reward,
-        seed=seed,costs_nitrogen=costs_nitrogen,kwargs=kwargs
+        n_steps=n_steps, crop_features=crop_features, weather_features=weather_features,
+        train_years=train_years, test_years=test_years, train_locations=train_locations,
+        test_locations=test_locations, action_space=action_space, pcse_model=pcse_model, agent=agent, reward=reward,
+        seed=seed, costs_nitrogen=costs_nitrogen, kwargs=kwargs
     )
 
 
 def train(log_dir, n_steps,
-          crop_features=defaults.get_wofost_default_crop_features(),
+          crop_features=defaults.get_wofost_default_crop_features(2),
           weather_features=defaults.get_default_weather_features(),
           action_features=defaults.get_default_action_features(),
           train_years=defaults.get_default_train_years(),
@@ -307,7 +306,8 @@ def train(log_dir, n_steps,
                                 weather_features=weather_features,
                                 costs_nitrogen=costs_nitrogen, years=test_years, locations=test_locations,
                                 action_space=action_space, action_multiplier=1.0, reward=reward,
-                                **get_model_kwargs(pcse_model, train_locations, start_type=kwargs.get('start_type', 'sowing')),
+                                **get_model_kwargs(pcse_model, train_locations,
+                                                   start_type=kwargs.get('start_type', 'sowing')),
                                 **kwargs, seed=seed)
     if action_limit or n_budget > 0:
         env_pcse_eval = ActionConstrainer(env_pcse_eval, action_limit=action_limit, n_budget=n_budget)
@@ -366,7 +366,6 @@ if __name__ == '__main__':
         train_years = [year for year in all_years if year % 2 == 1]
         test_years = [year for year in all_years if year % 2 == 0]
 
-
         # define training and testing locations
         if args.location == "NL":
             """The Netherlands"""
@@ -394,11 +393,12 @@ if __name__ == '__main__':
               'random_init': args.random_init, 'm_multiplier': args.m_multiplier, 'measure_all': args.measure_all,
               'random_weather': args.random_weather, 'comet': args.comet, 'n_envs': args.nenvs}
 
+    assert not (args.environment == 2 and args.measure is True), "WOFOST SNOMIN doesn't support AFA-POMDPs yet"
     # define MeasureOrNot environment if specified
     if not args.measure:
         action_spaces = gymnasium.spaces.Discrete(7)  # 7 levels of fertilizing
     else:
-        if args.environment:
+        if args.environment == 1:
             po_features = ['TAGP', 'LAI', 'NAVAIL', 'NuptakeTotal', 'SM']
             if args.random_feature:
                 po_features.append('random')
