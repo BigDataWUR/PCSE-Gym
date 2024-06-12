@@ -291,7 +291,13 @@ def train(log_dir, n_steps,
         comet_log.log_parameters(hyperparams)
 
         env_pcse_train = CometLogger(env_pcse_train, comet_log)
-        comet_log.add_tags(['sb3', agent, seed, loc_code, reward])
+        if pcse_model == 0:
+            tag_env = "LINTUL3"
+        elif pcse_model == 1:
+            tag_env = "WOFOST Classic"
+        else:
+            tag_env = "WOFOST SNOMIN"
+        comet_log.add_tags(['sb3', agent, seed, loc_code, reward, tag_env])
 
         print('Using Comet!')
 
