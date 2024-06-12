@@ -214,6 +214,8 @@ class Engine(pcse.engine.Engine):
                               initial_age=0,
                               )
             self._send_signal(signal=pcse.signals.apply_n,
+                              amount=action,
+                              recovery=0.7,
                               N_amount=action,
                               N_recovery=0.7
                               )
