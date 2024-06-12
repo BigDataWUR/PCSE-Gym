@@ -305,8 +305,7 @@ if __name__ == "__main__":
             writer.add_scalar(f'eval/NUE-{my_key}', NUE[my_key])
             result_model[my_key] = episode_infos
     else:
-        print(f'\nEvaluation step {self.num_timesteps}\n'
-              f'Avg. reward: {avg_rew:.4f}\n'
+        print(f'Avg. reward: {avg_rew:.4f}\n'
               f'Avg. profit: {avg_profit:.4f}\n'
               f'Avg. NUE: {avg_nue:.4f}')
 
