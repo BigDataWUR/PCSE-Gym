@@ -36,4 +36,20 @@ class ZeroEnv(unittest.TestCase):
         dvs_rl, dvs_zero = self.try_years(self.env_emerge)
         self.assertListEqual(dvs_rl, dvs_zero)
 
+    def test_baseline_env(self):
+        self.env_sow.overwrite_year(2002)
+        self.env_sow.reset()
+
+        week = 0
+        terminated = False
+
+        while not terminated:
+            # action = np.array([4]) if week == 8 else np.array([0])
+            _, _, terminated, _, info = self.env_sow.step(np.array([6]))
+            week += 1
+
+        wso_rl = self.env_sow.sb3_env.model.get_output()[-1:][0]['WSO']
+        wso_baseline = self.env_sow.baseline_env.model.get_output()[-1:][0]['WSO']
+        print(wso_rl, wso_baseline)
+        self.assertNotEqual(wso_rl, wso_baseline)
 
