@@ -63,23 +63,19 @@ def initialize_env(pcse_env=1, po_features=[],
 
 
 def initialize_env_po():
-    return initialize_env(po_features=get_po_features(), placeholder_val=0.0)
+    return initialize_env(po_features=get_po_features(), placeholder_val=0.0, pcse_env=1)
 
 
 def initialize_env_po_noisy():
-    return initialize_env(po_features=get_po_features(), noisy_measure=True)
+    return initialize_env(po_features=get_po_features(), noisy_measure=True, pcse_env=1)
 
 
 def initialize_env_no_baseline():
-    return initialize_env(reward='GRO', action_multiplier=2.0)
+    return initialize_env(reward='GRO', action_multiplier=2.0, pcse_env=2)
 
 
 def initialize_env_random():
-    return initialize_env(po_features=get_po_features(), add_random=True)
-
-
-def initialize_env_rr():
-    return initialize_env(reward='GRO', args_vrr=True)
+    return initialize_env(po_features=get_po_features(), add_random=True, pcse_env=1)
 
 
 def initialize_env_action_limit_no_measure(limit):
@@ -107,11 +103,11 @@ def initialize_env_action_limit_budget_measure(limit, budget):
 
 
 def initialize_env_reward_dep():
-    return initialize_env(reward='DEP', args_vrr=True)
+    return initialize_env(reward='DEP', args_vrr=True, pcse_env=2)
 
 
 def initialize_env_reward_ane():
-    return initialize_env(reward='ANE')
+    return initialize_env(reward='ANE', pcse_env=2)
 
 
 def initialize_env_measure_po_extend():
@@ -144,7 +140,7 @@ def initialize_env_emergence():
 
 
 def initialize_env_random_init():
-    return initialize_env(random_init=True)
+    return initialize_env(random_init=True, pcse_env=2)
 
 
 def initialize_env_multiplier():
@@ -156,28 +152,28 @@ def initialize_env_non_selective():
 
 
 def initialize_env_end_reward():
-    return initialize_env(reward='END')
+    return initialize_env(reward='END', pcse_env=2)
 
 
 def initialize_env_eny_reward():
-    return initialize_env(reward='ENY')
+    return initialize_env(reward='ENY', pcse_env=2)
 
 
 def initialize_env_nue_reward():
-    return initialize_env(reward='NUE')
+    return initialize_env(reward='NUE', pcse_env=2)
 
 
 def initialize_env_nup_reward():
-    return initialize_env(reward='NUP')
+    return initialize_env(reward='NUP', pcse_env=2)
 
 
 def initialize_env_har_reward():
-    return initialize_env(reward='HAR')
+    return initialize_env(reward='HAR', pcse_env=2)
 
 
 def initialize_env_dnu_reward():
-    return initialize_env(reward='DNU')
+    return initialize_env(reward='DNU', pcse_env=2)
 
 
 def initialize_env_fin_reward():
-    return initialize_env(reward='FIN')
+    return initialize_env(reward='FIN', pcse_env=2)

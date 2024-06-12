@@ -17,8 +17,8 @@ class Rewards(unittest.TestCase):
         self.har = init_env.initialize_env_har_reward()
         self.dnu = init_env.initialize_env_dnu_reward()
         self.fin = init_env.initialize_env_fin_reward()
-        self.def1 = init_env.initialize_env(reward='DEF')
-        self.dne = init_env.initialize_env(reward='DNE')
+        self.def1 = init_env.initialize_env(reward='DEF', pcse_env=2)
+        self.dne = init_env.initialize_env(reward='DNE', pcse_env=2)
 
     @staticmethod
     def run_steps_sp(env, year, terminated):
@@ -71,7 +71,7 @@ class NitrogenUseEfficiency(unittest.TestCase):
         self.assertEqual(expected_no3, no3_dis)
 
     def test_nue_calc_in_other_rf(self, reward_func='DEP'):
-        self.env_rew = init_env.initialize_env(reward=reward_func)
+        self.env_rew = init_env.initialize_env(reward=reward_func, pcse_env=2)
         self.env_rew.overwrite_year(2002)
         self.env_rew.reset()
         terminated = False
