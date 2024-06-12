@@ -221,7 +221,7 @@ def doy_generator():
         yield current_value
 
 def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumulative_variables(), ax=None, ylim=None,
-                  put_legend=True, plot_average=False, plot_heatmap=False):
+                  put_legend=True, plot_average=False, pcse_env=2, plot_heatmap=False):
     titles = get_titles()
     xmax = 0
     xmin = 9999
@@ -249,7 +249,11 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
 
     if plot_average:
         # get top soil layer
-        if variable in ['SM', 'NH4', 'NO3', 'WC']:
+        if variable in ['NH4', 'NO3'] and pcse_env == 2:
+            for k, v in results_dict.items():
+                for key in v[0][variable].keys():
+                    results_dict[k][0][variable][key] = sum(results_dict[k][0][variable][key])
+        elif variable in ['SM', 'WC'] and pcse_env == 2:
             for k, v in results_dict.items():
                 for key in v[0][variable].keys():
                     results_dict[k][0][variable][key] = results_dict[k][0][variable][key][0]

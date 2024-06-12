@@ -690,7 +690,7 @@ class EvalCallback(BaseCallback):
 
                 fig, ax = plt.subplots()
                 plot_variable(results_figure, variable=variable, ax=ax, ylim=get_ylim_dict(n_year_loc)[variable],
-                              plot_average=True)
+                              plot_average=True, pcse_env=self.pcse_model)
                 if variable.startswith('measure'):
                     self.logger.record(f'figures/sum-{variable}', Figure(fig, close=True))
                 else:
