@@ -305,9 +305,14 @@ if __name__ == "__main__":
             writer.add_scalar(f'eval/NUE-{my_key}', NUE[my_key])
             result_model[my_key] = episode_infos
     else:
+        avg_rew = mean([x for x in reward.values()])
+        avg_nue = mean([x for x in NUE.values()])
+        avg_profit = mean([x for x in profit.values()])
+        avg_wso = mean([x for x in WSO.values()])
         print(f'Avg. reward: {avg_rew:.4f}\n'
               f'Avg. profit: {avg_profit:.4f}\n'
-              f'Avg. NUE: {avg_nue:.4f}')
+              f'Avg. NUE: {avg_nue:.4f}\n'
+              f'Avg. WSO: {avg_wso:.4f}\n')
 
     # #measuring history
     # for year in eval_year:
