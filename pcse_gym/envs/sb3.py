@@ -107,8 +107,8 @@ def get_config_dir():
 
 
 def get_wofost_kwargs(config_dir=get_config_dir(), soil_file='arminda_soil.yaml', agro_file='wheat_cropcalendar.yaml',
-                      model_file='Wofost81_NWLP_MLWB_SNOMIN.conf'):
-    if '.yaml' in soil_file:
+                      model_file='Wofost81_NWLP_MLWB_SNOMIN.conf', pcse_model=2):
+    if pcse_model == 2:
         soil_params = yaml.safe_load(open(os.path.join(config_dir, 'soil', 'arminda_soil.yaml')))
         site_params = yaml.safe_load(open(os.path.join(config_dir, 'site', 'arminda_site.yaml')))
     else:
@@ -146,13 +146,13 @@ def get_model_kwargs(pcse_model, loc=defaults.get_default_location(), start_type
         soil_file = 'ec_3.CAB'
         model_file = 'Wofost81_NWLP_CWB_CNB.conf'
         print(f'using agro file {agro_file} and soil file {soil_file} with WOFOST CN')
-        return get_wofost_kwargs(soil_file=soil_file, agro_file=agro_file, model_file=model_file)
+        return get_wofost_kwargs(soil_file=soil_file, agro_file=agro_file, model_file=model_file, pcse_model=pcse_model)
     elif pcse_model == 2:
         model_file = 'Wofost81_NWLP_MLWB_SNOMIN.conf'
         soil_file = 'arminda_soil.yaml'
         agro_file = 'wheat_cropcalendar.yaml'
         print(f'using agro file {agro_file} and soil file {soil_file} with WOFOST SNOMIN')
-        return get_wofost_kwargs(soil_file=soil_file, agro_file=agro_file, model_file=model_file)
+        return get_wofost_kwargs(soil_file=soil_file, agro_file=agro_file, model_file=model_file, pcse_model=pcse_model)
     else:
         raise Exception("Choose 0 or 1, or 2 for the environment")
 
