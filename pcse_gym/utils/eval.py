@@ -633,7 +633,7 @@ class EvalCallback(BaseCallback):
                 variables = ['DVS', 'action', 'WSO', 'reward',
                              'fertilizer', 'val', 'IDWST', 'prob_measure',
                              'NLOSSCUM', 'WC', 'Ndemand', 'NAVAIL', 'NuptakeTotal',
-                             'SM', 'TAGP', 'LAI']
+                             'SM', 'TAGP', 'LAI', 'NO3', 'NH4']
                 if self.env_eval.envs[0].unwrapped.reward_function in ['NUE', 'HAR', 'END', 'ENY']:
                     variables.remove('reward')
                 if self.po_features:
