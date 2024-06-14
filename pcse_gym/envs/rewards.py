@@ -628,7 +628,7 @@ def unimodal_function(b):
     """
     For NUE reward, coefficient indicating how close the NUE in the range of lower_bound-upper_bound%
     """
-    lower_bound = 0.6
+    lower_bound = 0.7
     upper_bound = 0.8
     if b < lower_bound:
         return upper_bound * np.exp(-10 * (lower_bound - b)) + 0.1
