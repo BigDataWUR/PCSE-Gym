@@ -147,11 +147,10 @@ def evaluate_policy(policy, env, n_eval_episodes=1, framework='sb3'):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--checkpoint_path", type=str)
-    parser.add_argument("--step", type=int, default=400000)
+    parser.add_argument("--step", type=int, default=250000)
     parser.add_argument("-c", "--costs_nitrogen", type=float, default=10.0, help="Costs for nitrogen")
-    parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, GRU,"
-                                                                       "IndRNN, DiffNC, PosMLP, ATM or DQN")
-    parser.add_argument("-e", "--environment", type=int, default=1)
+    parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, DQN")
+    parser.add_argument("-e", "--environment", type=int, default=2)
     parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, DEP, GRO, or ANE")
     parser.add_argument("-b", "--n_budget", type=int, default=0, help="Nitrogen budget. kg/ha")
     parser.add_argument("--action_limit", type=int, default=0, help="Limit fertilization frequency."
@@ -225,9 +224,15 @@ if __name__ == "__main__":
         a_shape = [7] + [m_shape] * len(po_features)
         action_spaces = gym.spaces.MultiDiscrete(a_shape)
 
+    checkpoint_folder = os.path.join(rootdir, "tensorboard_logs", framework_path, args.checkpoint_path)
+    model_file_to_load = os.listdir(checkpoint_folder)
+    model_zip_name = [a for a in model_file_to_load if a.endswith(".zip")][0]
+    env_pkl_name = [a for a in model_file_to_load if a.endswith(".pkl")][0]
+
     checkpoint_path = os.path.join(rootdir, "tensorboard_logs", framework_path, args.checkpoint_path,
-                                   f'{args.reward.lower()}')
-    stats_path = os.path.join(rootdir, "tensorboard_logs", framework_path, args.checkpoint_path, f'env_{args.reward.lower()}.pkl')
+                                   model_zip_name)
+    stats_path = os.path.join(rootdir, "tensorboard_logs", framework_path, args.checkpoint_path,
+                              env_pkl_name)
 
     agent = None
     if args.framework == 'rllib':
@@ -251,6 +256,7 @@ if __name__ == "__main__":
                              years=eval_year,
                              locations=eval_locations,
                              reward=args.reward,
+                             pcse_env=args.environment,
                              **kwargs)
         env = ActionConstrainer(env, action_limit=args.action_limit, n_budget=args.n_budget)
         env = DummyVecEnv([lambda: env])
@@ -332,7 +338,7 @@ if __name__ == "__main__":
         variables = ['DVS', 'action', 'WSO', 'reward',
                      'fertilizer', 'val', 'IDWST', 'prob_measure',
                      'NLOSSCUM', 'WC', 'Ndemand', 'NAVAIL', 'NuptakeTotal',
-                     'SM', 'TAGP', 'LAI', 'NUE']
+                     'SM', 'TAGP', 'LAI', 'NO3', 'NH4']
         if env.unwrapped.envs[0].unwrapped.po_features: variables.append('measure')
     else:
         variables = ['action', 'WSO', 'reward', 'TNSOIL', 'val']
