@@ -252,19 +252,7 @@ class Rewards:
             obj.calculate_amount(amount)
             obj.calculate_cost_cumulative(amount)
             obj.calculate_positive_reward_cumulative(output, output_baseline, multiplier)
-
-            n_so = process_pcse.compute_growth_var(output, self.timestep, 'NamountSO')
-            n_in = obj.actions * 10
-
-            reward = obj.calculate_reward_nue_dense(
-                n_input=n_in,
-                n_output=n_so,
-                pcse_output=output,
-                year=None,
-                start=None,
-                end=None,
-            )
-
+            reward = 0 - amount * self.costs_nitrogen
             growth = process_pcse.compute_growth_storage_organ(output, self.timestep, multiplier)
 
             return reward, growth

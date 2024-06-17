@@ -282,7 +282,7 @@ class WinterWheat(gym.Env):
         elif terminated and self.reward_function == 'HAR':
             reward = self.yield_modifier * self.reward_container.dump_cumulative_positive_reward - abs(reward)
 
-        elif terminated and self.reward_function == 'NUE':
+        elif terminated and self.reward_function in ['NUE', 'DNE']:
             reward = (self.reward_container.calculate_reward_nue(
                 n_input=self.reward_container.get_total_fertilization * 10,
                 n_output=process_pcse.get_n_storage_organ(output),
