@@ -1,6 +1,7 @@
 import datetime
 import os
 import copy
+import functools
 
 import numpy as np
 import yaml
@@ -167,9 +168,14 @@ def get_weather_data_provider(location,
     return wdp
 
 
+@functools.cache
 def get_random_weather_provider(location) -> pcse.input.CSVWeatherDataProvider:
     path_to_file = os.path.dirname(os.path.realpath(__file__))
     lat, lon = location
+    if '.' not in str(lat):
+        lat = str(lat) + '.0'
+    if '.' not in str(lon):
+        lon = str(lon) + '.0'
     csv_name = f'{lat}-{lon}_random_weather.csv'
     filename = os.path.join(path_to_file[:-4], 'utils', 'weather_utils', 'random_weather_csv', csv_name)
     wdp = pcse.input.CSVWeatherDataProvider(filename)
