@@ -8,6 +8,7 @@ import pcse_gym.envs.common_env as common_env
 import pcse_gym.utils.defaults as defaults
 import pcse_gym.utils.process_pcse_output as process_pcse
 from pcse_gym.utils.normalization import NormalizeMeasureObservations, RunningReward, MinMaxReward
+from pcse_gym.utils.nitrogen_helpers import convert_year_to_n_concentration
 from .constraints import VariableRecoveryRate
 from .measure import MeasureOrNot
 from .sb3 import ZeroNitrogenEnvStorage, StableBaselinesWrapper
@@ -333,11 +334,18 @@ class WinterWheat(gym.Env):
         self.set_location(location)
 
     def overwrite_initial_conditions(self):
+        # N initial conditions
         list_nh4i, list_no3i = self.generate_realistic_n()
         list_nh4i, list_no3i = list(list_nh4i), list(list_no3i)
         self.eval_nh4i = list_nh4i
         self.eval_no3i = list_no3i
-        site_parameters = {'NH4I': list_nh4i, 'NO3I': list_no3i}
+
+        # N deposition
+        # TODO detach from this function
+        nh4concr, no3concr = convert_year_to_n_concentration(self.sb3_env.agmt.crop_end_date.year,
+                                                             random_weather=self.random_weather, )
+
+        site_parameters = {'NH4I': list_nh4i, 'NO3I': list_no3i, 'NH4ConcR': nh4concr, 'NO3ConcR': no3concr, }
         return site_parameters
 
     def init_random_init_conditions_params(self):
@@ -462,7 +470,7 @@ class WinterWheat(gym.Env):
         return self.sb3_env.model.day
 
     @property
-    def loc(self) -> datetime.date:
+    def loc(self) -> tuple:
         return self.sb3_env.loc
 
     @property

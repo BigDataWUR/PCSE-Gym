@@ -15,6 +15,7 @@ import pcse_gym.envs.common_env as common_env
 import pcse_gym.utils.defaults as defaults
 import pcse_gym.utils.process_pcse_output as process_pcse
 from .rewards import Rewards
+from pcse_gym.utils.nitrogen_helpers import aggregate_n_depo_days
 
 
 def to_weather_info(days, weather_data, weather_variables):
@@ -183,6 +184,12 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         if 'random' in self.po_features:
             self.random_feature = True
         self.rng, self.seed = gym.utils.seeding.np_random(seed=seed)
+        if 'Lintul' in kwargs.get('model_config'):
+            self.pcse_env = 0
+        elif 'CNB' in kwargs.get('model_config'):
+            self.pcse_env = 1
+        elif 'SNOMIN' in kwargs.get('model_config'):
+            self.pcse_env = 2
         super().__init__(timestep=timestep, years=years, location=location, *args, **kwargs)
         self.action_space = action_space
         self.action_multiplier = action_multiplier
@@ -191,12 +198,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         self.index_feature = OrderedDict()
         self.cost_measure = kwargs.get('cost_measure', 'real')
         self.start_type = kwargs.get('start_type')
-        if 'Lintul' in kwargs.get('model_config'):
-            self.pcse_env = 0
-        elif 'CNB' in kwargs.get('model_config'):
-            self.pcse_env = 1
-        elif 'SNOMIN' in kwargs.get('model_config'):
-            self.pcse_env = 2
+
         for i, feature in enumerate(self.crop_features):
             if feature in self.po_features:
                 self.index_feature[feature] = i
@@ -220,6 +222,8 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
             nvars = len(self.crop_features) + len(self.weather_features) * self.timestep
         if self.mask_binary:
             nvars = nvars + len(self.po_features)
+        if self.pcse_env == 2:
+            nvars = nvars + 2  # NH4_depo and NO3_depo
         return gym.spaces.Box(-10, np.inf, shape=(nvars,))
 
     def _apply_action(self, action):
@@ -315,6 +319,14 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
                 for i, feature in enumerate(self.weather_features):
                     j = d * len(self.weather_features) + len(self.crop_features) + i
                     obs[j] = observation['weather'][feature][d]
+
+        if self.pcse_env == 2:
+            list_rain = [observation['weather']['RAIN'][d] for d in range(self.timestep)]
+            n_depos = aggregate_n_depo_days(self.timestep, list_rain, self._site_params)
+            for i, n_depo in enumerate(n_depos):
+                k = len(self.crop_features) + len(self.weather_features) * self.timestep + i
+                obs[k] = n_depo
+
         return obs
 
     def get_harvest_year(self):
