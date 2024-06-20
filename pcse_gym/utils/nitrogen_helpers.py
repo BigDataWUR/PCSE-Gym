@@ -87,7 +87,7 @@ def aggregate_n_depo_days(
     timestep: int,
     day_rain: list[float],
     site_params: dict,
-):
+) -> tuple[float, float]:
     aggregated_nh4_depo, aggregated_no3_depo = 0.0, 0.0
     for _, rain in zip(range(1, timestep + 1), day_rain):
         nh4_day_depo, no3_day_depo = calculate_day_n_deposition(rain, site_params)
