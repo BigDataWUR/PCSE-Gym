@@ -563,9 +563,9 @@ def input_nue(n_input, year=None, start=None, end=None, n_seed=3.5):
 
 def get_deposition_amount(year) -> tuple:
     """Currently only supports amount from the Netherlands"""
-    if year is None or year > 2500:
-        NO3 = 12.5
-        NH4 = 12.5
+    if year is None or 1900 < year > 2030:
+        NO3 = 3
+        NH4 = 9
     else:
         ''' Linear functions of N deposition based on
             data in the Netherlands from CLO (2022)'''
