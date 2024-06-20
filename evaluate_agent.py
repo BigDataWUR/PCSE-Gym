@@ -49,7 +49,7 @@ def initialize_env(pcse_env=1, po_features=[],
                    costs_nitrogen=10, reward='DEF', nitrogen_levels=7, action_multiplier=1.0, add_random=False,
                    years=defaults.get_default_train_years(), locations=defaults.get_default_location(), args_vrr=False,
                    action_limit=0, noisy_measure=False, n_budget=0, no_weather=False, framework='sb3',
-                   mask_binary=False,
+                   mask_binary=False, random_weather=False,
                    placeholder_val=-1.11, normalize=False, loc_code='NL', cost_measure='real', start_type='sowing',
                    random_init=False, m_multiplier=1, measure_all=False, seed=None):
     if add_random:
@@ -59,7 +59,7 @@ def initialize_env(pcse_env=1, po_features=[],
                   action_limit=action_limit, noisy_measure=noisy_measure, n_budget=n_budget, no_weather=no_weather,
                   mask_binary=mask_binary, placeholder_val=placeholder_val, normalize=normalize, loc_code=loc_code,
                   cost_measure=cost_measure, start_type=start_type, random_init=random_init, m_multiplier=m_multiplier,
-                  measure_all=measure_all)
+                  measure_all=measure_all, random_weather=random_weather,)
     if framework == 'sb3':
         env_return = WinterWheat(crop_features=crop_features,
                                  costs_nitrogen=costs_nitrogen,
@@ -155,6 +155,7 @@ if __name__ == "__main__":
     parser.add_argument("-b", "--n_budget", type=int, default=0, help="Nitrogen budget. kg/ha")
     parser.add_argument("--action_limit", type=int, default=0, help="Limit fertilization frequency."
                                                                     "Recommended 4 times")
+    parser.add_argument("--random-weather", action='store_true', dest='random_weather')
     parser.add_argument("-m", "--measure", action='store_true')
     parser.add_argument("--no-measure", action='store_false', dest='measure')
     parser.add_argument("-l", "--location", type=str, default="NL", help="NL or LT.")
@@ -164,7 +165,7 @@ if __name__ == "__main__":
     parser.add_argument("--no-weather", action='store_true', dest='no_weather')
     parser.add_argument("--random_feature", action='store_true', dest='random_feature')
     parser.set_defaults(measure=False, vrr=False, noisy_measure=False, framework='sb3', no_weather=False,
-                        random_feature=False)
+                        random_feature=False, random_weather=False)
     args = parser.parse_args()
 
     framework_path = "WOFOST_experiments"
@@ -203,9 +204,10 @@ if __name__ == "__main__":
     action_features = defaults.get_default_action_features()
 
     kwargs = {'args_vrr': args.vrr, 'action_limit': args.action_limit, 'noisy_measure': args.noisy_measure,
-              'n_budget': args.n_budget, 'framework': args.framework, 'no_weather': args.no_weather}
+              'n_budget': args.n_budget, 'framework': args.framework, 'no_weather': args.no_weather,
+              'random_weather': args.random_weather}
     if not args.measure:
-        action_spaces = gym.spaces.Discrete(7)
+        action_spaces = gym.spaces.Discrete(9)
     else:
         if args.environment:
             po_features = ['TAGP', 'LAI', 'NAVAIL', 'NuptakeTotal', 'SM']
@@ -251,12 +253,14 @@ if __name__ == "__main__":
         from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv, sync_envs_normalization
         from stable_baselines3.common.monitor import Monitor
 
+        nitrogen_levels = 9  # 0 - 80 kg/ha
         env = initialize_env(crop_features=crop_features,
                              costs_nitrogen=args.costs_nitrogen,
                              years=eval_year,
                              locations=eval_locations,
                              reward=args.reward,
                              pcse_env=args.environment,
+                             nitrogen_levels=nitrogen_levels,
                              **kwargs)
         env = ActionConstrainer(env, action_limit=args.action_limit, n_budget=args.n_budget)
         env = DummyVecEnv([lambda: env])
@@ -272,7 +276,7 @@ if __name__ == "__main__":
     evaluate_dir = os.path.join(evaluate_dir, args.checkpoint_path)
     writer = SummaryWriter(log_dir=evaluate_dir)
 
-    reward, fertilizer, result_model, WSO, NUE, profit, init_no3, init_nh4 = {}, {}, {}, {}, {}, {}, {}, {}
+    reward, fertilizer, result_model, WSO, NUE, profit = {}, {}, {}, {}, {}, {}
 
     total_eval = len(eval_year) * len(eval_locations)
     print("evaluating environment with learned policy...")

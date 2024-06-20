@@ -280,7 +280,7 @@ def train(log_dir, n_steps,
             api_key = f.readline()
         comet_log = Experiment(
             api_key=api_key,
-            project_name="cropGym_new_wofost",
+            project_name="cropGym_nue_paper",
             workspace="pcse-gym",
             log_code=True,
             log_graph=True,
@@ -402,7 +402,7 @@ if __name__ == '__main__':
     assert not (args.environment == 2 and args.measure is True), "WOFOST SNOMIN doesn't support AFA-POMDPs yet"
     # define MeasureOrNot environment if specified
     if not args.measure:
-        action_spaces = gymnasium.spaces.Discrete(7)  # 7 levels of fertilizing
+        action_spaces = gymnasium.spaces.Discrete(9)  # 9 levels of fertilizing
     else:
         if args.environment == 1:
             po_features = ['TAGP', 'LAI', 'NAVAIL', 'NuptakeTotal', 'SM']
