@@ -2,8 +2,8 @@ import pcse_gym.utils.process_pcse_output as process_pcse
 import numpy as np
 
 from abc import ABC, abstractmethod
-import datetime
-import calendar
+
+from utils.nitrogen_helpers import input_nue
 
 
 def reward_functions_without_baseline():
@@ -549,68 +549,6 @@ def calculate_nue(n_input, n_so, year=None, start=None, end=None, n_seed=3.5):
     return nue
 
 
-def input_nue(n_input, year=None, start=None, end=None, n_seed=3.5):
-    if start is None or end is None:
-        nh4, no3 = get_deposition_amount(year)
-    else:
-        if year < 2500:
-            nh4, no3 = get_disaggregated_deposition(year=year, start_date=start, end_date=end)
-        else:
-            nh4, no3 = get_deposition_amount(year)
-    n_depo = nh4 + no3
-    return n_input + n_seed + n_depo
-
-
-def get_deposition_amount(year) -> tuple:
-    """Currently only supports amount from the Netherlands"""
-    if year is None or 1900 < year > 2030:
-        NO3 = 3
-        NH4 = 9
-    else:
-        ''' Linear functions of N deposition based on
-            data in the Netherlands from CLO (2022)'''
-        NO3 = 538.868 - 0.264 * year
-        NH4 = 697 - 0.339 * year
-
-    return NH4, NO3
-
-
-def get_disaggregated_deposition(year, start_date, end_date):
-    """
-    Function to linearly disaggregate annual N deposition amount
-    """
-
-    assert start_date < end_date
-
-    if start_date.year != end_date.year:
-        nh4_s, no3_s = get_disaggregated_deposition(start_date.year, start_date,
-                                                    datetime.date(year=start_date.year, month=12, day=31))
-        nh4_e, no3_e = get_disaggregated_deposition(end_date.year, datetime.date(year=end_date.year, month=1, day=1),
-                                                    end_date)
-        nh4_dis = nh4_s + nh4_e
-        no3_dis = no3_s + no3_e
-
-        return nh4_dis, no3_dis
-
-    date_range = (end_date - start_date).days
-
-    nh4_full, no3_full = get_deposition_amount(year)
-
-    daily_nh4 = nh4_full / get_days_in_year(year)
-    daily_no3 = no3_full / get_days_in_year(year)
-
-    nh4_dis = daily_nh4 * date_range
-    no3_dis = daily_no3 * date_range
-
-    return nh4_dis, no3_dis
-
-
-def get_surplus_n(n_input, n_so, year=None, start=None, end=None, n_seed=3.5):
-    n_i = input_nue(n_input, year=year, start=start, end=end, n_seed=n_seed)
-
-    return n_i - n_so
-
-
 #  piecewise conditions
 def unimodal_function(b):
     """
@@ -624,10 +562,6 @@ def unimodal_function(b):
         return 1
     else:  # b > upper_bound
         return upper_bound * np.exp(-10 * (b - upper_bound)) + 0.1
-
-
-def get_days_in_year(year):
-    return 365 + calendar.isleap(year)
 
 
 def compute_economic_reward(wso, fertilizer, price_yield_ton=400.0, price_fertilizer_ton=300.0):

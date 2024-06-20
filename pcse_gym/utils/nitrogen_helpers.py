@@ -1,3 +1,4 @@
+import calendar
 from typing import Union
 import datetime
 import pcse
@@ -7,7 +8,6 @@ from pcse.input.csvweatherdataprovider import CSVWeatherDataProvider
 from pcse.input.nasapower import NASAPowerWeatherDataProvider
 
 from pcse_gym.envs.common_env import AgroManagementContainer, get_weather_data_provider
-from pcse_gym.envs.rewards import get_deposition_amount
 from pcse_gym.utils.weather_utils.weather_functions import generate_date_list
 
 mg_to_kg = 1e-6
@@ -110,3 +110,69 @@ def convert_year_to_n_concentration(year: int,
     no3_conc_r = no3_year * ((1 / mg_to_kg) / (1 / m2_to_ha)) / rain_year
 
     return nh4_conc_r, no3_conc_r
+
+
+def get_deposition_amount(year) -> tuple:
+    """Currently only supports amount from the Netherlands"""
+    if year is None or 1900 < year > 2030:
+        NO3 = 3
+        NH4 = 9
+    else:
+        ''' Linear functions of N deposition based on
+            data in the Netherlands from CLO (2022)'''
+        NO3 = 538.868 - 0.264 * year
+        NH4 = 697 - 0.339 * year
+
+    return NH4, NO3
+
+
+def get_disaggregated_deposition(year, start_date, end_date):
+    """
+    Function to linearly disaggregate annual N deposition amount
+    """
+
+    assert start_date < end_date
+
+    if start_date.year != end_date.year:
+        nh4_s, no3_s = get_disaggregated_deposition(start_date.year, start_date,
+                                                    datetime.date(year=start_date.year, month=12, day=31))
+        nh4_e, no3_e = get_disaggregated_deposition(end_date.year, datetime.date(year=end_date.year, month=1, day=1),
+                                                    end_date)
+        nh4_dis = nh4_s + nh4_e
+        no3_dis = no3_s + no3_e
+
+        return nh4_dis, no3_dis
+
+    date_range = (end_date - start_date).days
+
+    nh4_full, no3_full = get_deposition_amount(year)
+
+    daily_nh4 = nh4_full / get_days_in_year(year)
+    daily_no3 = no3_full / get_days_in_year(year)
+
+    nh4_dis = daily_nh4 * date_range
+    no3_dis = daily_no3 * date_range
+
+    return nh4_dis, no3_dis
+
+
+def get_days_in_year(year):
+    return 365 + calendar.isleap(year)
+
+
+def input_nue(n_input, year=None, start=None, end=None, n_seed=3.5):
+    if start is None or end is None:
+        nh4, no3 = get_deposition_amount(year)
+    else:
+        if year < 2500:
+            nh4, no3 = get_disaggregated_deposition(year=year, start_date=start, end_date=end)
+        else:
+            nh4, no3 = get_deposition_amount(year)
+    n_depo = nh4 + no3
+    return n_input + n_seed + n_depo
+
+
+def get_surplus_n(n_input, n_so, year=None, start=None, end=None, n_seed=3.5):
+    n_i = input_nue(n_input, year=year, start=start, end=end, n_seed=n_seed)
+
+    return n_i - n_so
