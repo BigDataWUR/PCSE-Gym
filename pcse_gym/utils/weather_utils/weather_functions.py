@@ -322,6 +322,12 @@ def evaluate_wind_vap_derivation():
 
     print(df_np.head())
 
+    wdp = pcse.db.NASAPowerWeatherDataProvider(52.0, 5.5)
+    date_range = generate_date_list(datetime.date(1984, 1, 1),
+                                    datetime.date(2022, 12, 31))
+
+
+
     ori_wind = df_np.WIND
     ori_vap = df_np.VAP
 
@@ -375,27 +381,61 @@ def histogram_check():
                                         datetime.date(2022, 12, 31))
         rain = [wdp(x).RAIN for x in date_range]
         vap = [wdp(x).VAP for x in date_range]
+        irrad = [wdp(x).IRRAD for x in date_range]
+        tmin = [wdp(x).TMIN for x in date_range]
+        tmax = [wdp(x).TMAX for x in date_range]
+
         # print(mean(wind))
         plt.hist(df.RAIN, bins=100)
-        plt.title('LARSWG')
-        plt.ylim((0, 100000))
+        plt.title('RAIN LARSWG')
+        # plt.ylim((0, 100000))
         plt.show()
 
         plt.hist(rain, bins=100)
-        plt.title('NASA power')
-        plt.ylim((0, 1000))
+        plt.title('RAIN NASA power')
+        # plt.ylim((0, 1000))
         plt.show()
 
         vap_wg = [estimate_vapour_pressure(x) * 10 for x in df.TMIN]
 
-        plt.hist(vap, bins=100)
-        plt.title('VAP NASAPOWER')
-        plt.ylim((0, 1000))
-        plt.show()
+        # plt.hist(vap, bins=100)
+        # plt.title('VAP NASAPOWER')
+        # # plt.ylim((0, 1000))
+        # plt.show()
+        #
+        # plt.hist(vap_wg, bins=100)
+        # plt.title('VAP LARSWG')
+        # # plt.ylim((0, 100000))
+        # plt.show()
+        #
+        # plt.hist(irrad, bins=100)
+        # plt.title('IRRAD NASAPOWER')
+        # # plt.ylim((0, 1000))
+        # plt.show()
+        #
+        # plt.hist(df.IRRAD, bins=100)
+        # plt.title('IRRAD LARSWG')
+        # # plt.ylim((0, 100000))
+        # plt.show()
+        #
+        # plt.hist(tmin, bins=100)
+        # plt.title('TMIN NASAPOWER')
+        # # plt.ylim((0, 1000))
+        # plt.show()
+        #
+        # plt.hist(df.TMIN, bins=100)
+        # plt.title('TMIN LARSWG')
+        # # plt.ylim((0, 100000))
+        # plt.show()
+        #
+        # plt.hist(tmax, bins=100)
+        # plt.title('TMAX NASAPOWER')
+        # # plt.ylim((0, 1000))
+        # plt.show()
 
-        plt.hist(vap_wg, bins=100)
-        plt.title('VAP LARSWG')
-        plt.ylim((0, 1000))
+        plt.hist(df.TMAX, bins=100)
+        plt.title('TMAX LARSWG')
+        # plt.ylim((0, 100000))
         plt.show()
 
 
@@ -424,9 +464,9 @@ def r_squared(y, y_hat):
     return 1 - (ss_res/ss_tot)
 
 
-larswg_to_pcse_csv('52.0-5.5WG.st')
-# nasapower_to_larswg((52.0, 5.5), co2=344.85)
-# evaluate_wind_vap_derivation()
-# evaluate_wind_vap_derivation()
-# histogram_check()
+if __name__ == '__main__':
+    larswg_to_pcse_csv('52.0-5.5WG.st')
+    # nasapower_to_larswg((52.0, 5.5), co2=344.85)
+    # evaluate_wind_vap_derivation()
+    # histogram_check()
 
