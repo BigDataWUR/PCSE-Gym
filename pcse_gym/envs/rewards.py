@@ -1,9 +1,9 @@
-import pcse_gym.utils.process_pcse_output as process_pcse
 import numpy as np
 
 from abc import ABC, abstractmethod
 
-from utils.nitrogen_helpers import input_nue
+from pcse_gym.utils.nitrogen_helpers import input_nue
+import pcse_gym.utils.process_pcse_output as process_pcse
 
 
 def reward_functions_without_baseline():

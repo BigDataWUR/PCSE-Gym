@@ -14,7 +14,7 @@ from .measure import MeasureOrNot
 from .sb3 import ZeroNitrogenEnvStorage, StableBaselinesWrapper
 from .rewards import Rewards, ActionsContainer
 from .rewards import reward_functions_with_baseline, reward_functions_end, calculate_nue
-from utils.nitrogen_helpers import get_surplus_n
+from pcse_gym.utils.nitrogen_helpers import get_surplus_n
 
 
 class WinterWheat(gym.Env):

@@ -15,7 +15,7 @@ from pcse_gym.utils.nitrogen_helpers import (calculate_year_n_deposition,
 from pcse_gym.utils.weather_utils.weather_functions import generate_date_list
 from pcse_gym.envs.common_env import AgroManagementContainer
 from tests import initialize_env as init_env
-from utils.nitrogen_helpers import get_deposition_amount, get_disaggregated_deposition
+from pcse_gym.utils.nitrogen_helpers import get_deposition_amount, get_disaggregated_deposition
 
 
 class TestNitrogenUtils(unittest.TestCase):
