@@ -5,9 +5,11 @@ import datetime
 import tests.initialize_env as init_env
 
 from pcse.input.nasapower import NASAPowerWeatherDataProvider
+
 from pcse_gym.utils.nitrogen_helpers import (calculate_year_n_deposition,
                                              convert_year_to_n_concentration,
-                                             calculate_day_n_deposition)
+                                             calculate_day_n_deposition,
+                                             get_aggregated_n_depo_days)
 from pcse_gym.utils.weather_utils.weather_functions import generate_date_list
 from tests import initialize_env as init_env
 from utils.nitrogen_helpers import get_deposition_amount, get_disaggregated_deposition
@@ -46,6 +48,11 @@ class TestNitrogenUtils(unittest.TestCase):
         self.assertEqual(nh4, 2.054742670516606)
         self.assertEqual(no3, 1.1753128075355042)
 
+        nh4, no3 = convert_year_to_n_concentration(4098, random_weather=True)
+
+        self.assertEqual(nh4, 2.054742670516606)
+        self.assertEqual(no3, 1.1753128075355042)
+
     def test_day_n_deposition(self):
         year = 2000
         self.env.overwrite_year(year)
@@ -63,6 +70,21 @@ class TestNitrogenUtils(unittest.TestCase):
 
         self.assertAlmostEqual(day_nh4_depo, 0.0014, 1)
         self.assertAlmostEqual(day_no3_depo, 0.0025, 1)
+
+    def test_n_deposition_aggregation(self):
+        year = 2000
+        wdp = NASAPowerWeatherDataProvider(52.0, 5.5)
+        timestep = 7
+
+        daily_dates = generate_date_list(datetime.date(year, 1, 1), datetime.date(year, 1, timestep+1))
+        rain = [wdp(day).RAIN * 10 for day in daily_dates]
+
+        site_params = {'NO3ConcR': 2, 'NH4ConcR': 1}
+
+        nh4_week_depo, no3_week_depo = get_aggregated_n_depo_days(timestep, rain, site_params)
+
+        self.assertAlmostEqual(nh4_week_depo, 0.1561, 1)
+        self.assertAlmostEqual(no3_week_depo,  0.31239, 1)
 
 
 class NitrogenUseEfficiency(unittest.TestCase):
