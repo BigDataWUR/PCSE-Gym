@@ -348,6 +348,7 @@ class WinterWheat(gym.Env):
     def overwrite_nitrogen_rain_concentration(self):
         # N concentration in rain for deposition
         nh4concr, no3concr = convert_year_to_n_concentration(self.sb3_env.agmt.crop_end_date.year,
+                                                             agmt=self.sb3_env.agmt,
                                                              random_weather=self.random_weather, )
 
         site_parameters = {'NH4ConcR': nh4concr, 'NO3ConcR': no3concr, }

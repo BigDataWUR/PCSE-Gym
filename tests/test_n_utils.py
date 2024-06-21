@@ -1,6 +1,8 @@
 import unittest
 import numpy as np
 import datetime
+import yaml
+import os
 
 import tests.initialize_env as init_env
 
@@ -11,6 +13,7 @@ from pcse_gym.utils.nitrogen_helpers import (calculate_year_n_deposition,
                                              calculate_day_n_deposition,
                                              get_aggregated_n_depo_days)
 from pcse_gym.utils.weather_utils.weather_functions import generate_date_list
+from pcse_gym.envs.common_env import AgroManagementContainer
 from tests import initialize_env as init_env
 from utils.nitrogen_helpers import get_deposition_amount, get_disaggregated_deposition
 
@@ -39,8 +42,8 @@ class TestNitrogenUtils(unittest.TestCase):
 
         nh4test, no3test = calculate_year_n_deposition(year, (52.0, 5.5), self.env.sb3_env.agmt, self.env.sb3_env._site_params)
 
-        self.assertAlmostEqual(nh4test, 14.913303197817111, 0)
-        self.assertAlmostEqual(no3test, 25.828005043906614, 0)
+        self.assertAlmostEqual(nh4test, 16.046101936865323, 0)
+        self.assertAlmostEqual(no3test, 9.178370307887013, 0)
 
     def test_n_concentration_conversion(self):
         nh4, no3 = convert_year_to_n_concentration(2000)
@@ -52,6 +55,17 @@ class TestNitrogenUtils(unittest.TestCase):
 
         self.assertEqual(nh4, 2.371330250564566)
         self.assertEqual(no3, 1.4242391655016677)
+
+    def test_n_concentration_conversion_with_agmt(self):
+        root = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
+        with open(os.path.join(root, 'pcse_gym', 'envs', 'configs', 'agro', 'wheat_cropcalendar.yaml'), 'r') as f:
+            agro_config = yaml.load(f, Loader=yaml.SafeLoader)
+        agmt = AgroManagementContainer(agro_config)
+
+        nh4, no3 = convert_year_to_n_concentration(2000, agmt)
+
+        self.assertEqual(nh4, 1.6990120381901193)
+        self.assertEqual(no3, 0.9240719849583664)
 
     def test_day_n_deposition(self):
         year = 2000

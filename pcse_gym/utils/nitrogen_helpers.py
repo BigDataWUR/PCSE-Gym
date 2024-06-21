@@ -102,13 +102,21 @@ def get_aggregated_n_depo_days(
 
 @functools.cache
 def convert_year_to_n_concentration(year: int,
+                                    agmt: AgroManagementContainer = None,
                                     loc: tuple = (52.0, 5.5),
                                     random_weather: bool = False) -> tuple[float, float]:
     wdp = get_weather_data_provider(loc, random_weather)
 
-    nh4_year, no3_year = get_deposition_amount(map_random_to_real_year(year) if random_weather else year)
-
-    daily_year_dates = generate_date_list(datetime.date(year, 1, 1), datetime.date(year, 12, 31))
+    if agmt is not None:
+        # calculate N deposition based on the length that the crop is in the soil
+        nh4_year, no3_year = get_disaggregated_deposition(map_random_to_real_year(year) if random_weather else year,
+                                                          agmt.crop_start_date,
+                                                          agmt.crop_end_date)
+        daily_year_dates = generate_date_list(agmt.crop_start_date, agmt.crop_end_date)
+    else:
+        # otherwise naively calculate for the year length
+        nh4_year, no3_year = get_deposition_amount(map_random_to_real_year(year) if random_weather else year)
+        daily_year_dates = generate_date_list(datetime.date(year, 1, 1), datetime.date(year, 12, 31))
 
     # Rain in the PCSE weather data provider is in cm, hence multiplied by 10 to make mm
     rain_year = sum([wdp(day).RAIN * 10 for day in daily_year_dates])
