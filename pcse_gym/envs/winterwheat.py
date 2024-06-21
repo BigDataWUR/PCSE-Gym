@@ -342,12 +342,15 @@ class WinterWheat(gym.Env):
         self.eval_nh4i = list_nh4i
         self.eval_no3i = list_no3i
 
-        # N deposition
-        # TODO detach from this function
+        site_parameters = {'NH4I': list_nh4i, 'NO3I': list_no3i, }
+        return site_parameters
+
+    def overwrite_nitrogen_rain_concentration(self):
+        # N concentration in rain for deposition
         nh4concr, no3concr = convert_year_to_n_concentration(self.sb3_env.agmt.crop_end_date.year,
                                                              random_weather=self.random_weather, )
 
-        site_parameters = {'NH4I': list_nh4i, 'NO3I': list_no3i, 'NH4ConcR': nh4concr, 'NO3ConcR': no3concr, }
+        site_parameters = {'NH4ConcR': nh4concr, 'NO3ConcR': no3concr, }
         return site_parameters
 
     def init_random_init_conditions_params(self):
@@ -402,10 +405,19 @@ class WinterWheat(gym.Env):
 
         return list_nh4i, list_no3i
 
-    def reset(self, seed=None, options=None, **kwargs):
+    def special_init_conditions(self):
         site_params = None
         if self.random_init and self.pcse_env == 2:
             site_params = self.overwrite_initial_conditions()
+            # for N deposition
+            site_params = site_params | self.overwrite_nitrogen_rain_concentration()
+        elif not self.random_init and self.pcse_env == 2:
+            site_params = self.overwrite_nitrogen_rain_concentration()
+
+        return site_params
+
+    def reset(self, seed=None, options=None, **kwargs):
+        site_params = self.special_init_conditions()
 
         if isinstance(self.years, list):
             year = self.np_random.choice(self.years)
