@@ -190,6 +190,8 @@ class WinterWheat(gym.Env):
             nvars = len(self.crop_features) + len(self.weather_features) * self.timestep
         if self.mask_binary:  # TODO: test with weather features
             nvars = nvars + len(self.po_features)
+        if self.pcse_env == 2:
+            nvars = nvars + 2  # NH4_depo and NO3_depo
         return nvars
 
     def step(self, action):

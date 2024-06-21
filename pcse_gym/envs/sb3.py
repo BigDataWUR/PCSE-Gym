@@ -310,6 +310,12 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
                         obs[i] = observation['crop_model'][feature][-1][0]
                 else:
                     obs[i] = observation['crop_model'][feature][-1]
+        if self.pcse_env == 2:
+            list_rain = [observation['weather']['RAIN'][d] for d in range(self.timestep)]
+            n_depos = aggregate_n_depo_days(self.timestep, list_rain, self._site_params)
+            for i, n_depo in enumerate(n_depos):
+                j = len(self.crop_features) + i
+                obs[j] = n_depo
 
         if not self.no_weather:
             # for i, feature in enumerate(self.action_features):
@@ -319,14 +325,6 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
                 for i, feature in enumerate(self.weather_features):
                     j = d * len(self.weather_features) + len(self.crop_features) + i
                     obs[j] = observation['weather'][feature][d]
-
-        if self.pcse_env == 2:
-            list_rain = [observation['weather']['RAIN'][d] for d in range(self.timestep)]
-            n_depos = aggregate_n_depo_days(self.timestep, list_rain, self._site_params)
-            for i, n_depo in enumerate(n_depos):
-                k = len(self.crop_features) + len(self.weather_features) * self.timestep + i
-                obs[k] = n_depo
-
         return obs
 
     def get_harvest_year(self):

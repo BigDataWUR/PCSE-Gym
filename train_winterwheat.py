@@ -97,7 +97,7 @@ def wrapper_vectorized_env(env_pcse_train, flag_po, flag_eval=False, multiproc=F
                             clip_obs=10., clip_reward=50., gamma=1)
 
 
-def get_hyperparams(agent, no_weather, flag_po, mask_binary):
+def get_hyperparams(agent, pcse_env, no_weather, flag_po, mask_binary):
     if agent == 'PPO':
         hyperparams = {'batch_size': 64, 'n_steps': 2048, 'learning_rate': 0.0002, 'ent_coef': 0.0,
                        'clip_range': 0.3,
@@ -105,7 +105,7 @@ def get_hyperparams(agent, no_weather, flag_po, mask_binary):
                        'policy_kwargs': {},
                        }
         if not no_weather:
-            hyperparams['policy_kwargs'] = get_policy_kwargs(n_crop_features=len(crop_features),
+            hyperparams['policy_kwargs'] = get_policy_kwargs(n_crop_features=len(crop_features) if pcse_env != 2 else len(crop_features)+2,
                                                              n_weather_features=len(weather_features),
                                                              n_action_features=len(action_features),
                                                              n_po_features=len(po_features) if flag_po else 0,
@@ -120,7 +120,7 @@ def get_hyperparams(agent, no_weather, flag_po, mask_binary):
                        'policy_kwargs': {},
                        }
         if not no_weather:
-            hyperparams['policy_kwargs'] = get_policy_kwargs(n_crop_features=len(crop_features),
+            hyperparams['policy_kwargs'] = get_policy_kwargs(n_crop_features=len(crop_features) if pcse_env != 2 else len(crop_features)+2,
                                                              n_weather_features=len(weather_features),
                                                              n_action_features=len(action_features),
                                                              n_po_features=len(po_features) if flag_po else 0,
@@ -134,7 +134,7 @@ def get_hyperparams(agent, no_weather, flag_po, mask_binary):
                        'policy_kwargs': {},
                        }
         if not no_weather:
-            hyperparams['policy_kwargs'] = get_policy_kwargs(n_crop_features=len(crop_features),
+            hyperparams['policy_kwargs'] = get_policy_kwargs(n_crop_features=len(crop_features) if pcse_env != 2 else len(crop_features)+2,
                                                              n_weather_features=len(weather_features),
                                                              n_action_features=len(action_features))
         hyperparams['policy_kwargs']['net_arch'] = dict(pi=[256, 256], vf=[256, 256])
@@ -145,7 +145,7 @@ def get_hyperparams(agent, no_weather, flag_po, mask_binary):
     if agent == 'DQN':
         hyperparams = {'exploration_fraction': 0.3, 'exploration_initial_eps': 1.0,
                        'exploration_final_eps': 0.001,
-                       'policy_kwargs': get_policy_kwargs(n_crop_features=len(crop_features),
+                       'policy_kwargs': get_policy_kwargs(n_crop_features=len(crop_features) if pcse_env != 2 else len(crop_features)+2,
                                                           n_weather_features=len(weather_features),
                                                           n_action_features=len(action_features))
                        }
@@ -227,7 +227,7 @@ def train(log_dir, n_steps,
     print('Using the StableBaselines3 framework')
     print(f'Train model {pcse_model_name} with {agent} algorithm and seed {seed}. Logdir: {log_dir}')
 
-    hyperparams = get_hyperparams(agent, no_weather, flag_po, mask_binary)
+    hyperparams = get_hyperparams(agent, pcse_model, no_weather, flag_po, mask_binary)
 
     # TODO register env initialization for robustness
     # register_cropgym_env = register_cropgym_envs()

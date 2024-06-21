@@ -1,4 +1,5 @@
 import calendar
+import functools
 from typing import Union
 import datetime
 import pcse
@@ -18,9 +19,11 @@ m2_to_ha = 1e-4
 def map_random_to_real_year(y_rand, test_year_start=1990, test_year_end=2022, train_year_start=4000,
                             train_year_end=5999):
     # This is a simple linear mapping to convert fake year into real year
-    assert y_rand in range(train_year_start, train_year_end + 1)
-    y_real = (test_year_start + (y_rand - train_year_start) * (test_year_end - test_year_start)
-              / (train_year_end - train_year_start))
+    if y_rand in range(train_year_start - 1, train_year_end + 1):
+        y_real = (test_year_start + (y_rand - train_year_start) * (test_year_end - test_year_start)
+                  / (train_year_end - train_year_start))
+    else:
+        y_real = y_rand
     return int(y_real)
 
 
@@ -97,7 +100,7 @@ def aggregate_n_depo_days(
     return aggregated_nh4_depo, aggregated_no3_depo
 
 
-
+@functools.cache
 def convert_year_to_n_concentration(year: int,
                                     loc: tuple = (52.0, 5.5),
                                     random_weather: bool = False) -> tuple[float, float]:
@@ -114,8 +117,6 @@ def convert_year_to_n_concentration(year: int,
     elif isinstance(wdp, CSVWeatherDataProvider):
         rain_year = sum([wdp(day).RAIN for day in daily_year_dates])
 
-    print(rain_year)
-
     # sanity check
     # deposition amount is kg / ha
     # rain is in mm ~ L/m2
@@ -127,6 +128,7 @@ def convert_year_to_n_concentration(year: int,
     return nh4_conc_r, no3_conc_r
 
 
+@functools.cache
 def get_deposition_amount(year) -> tuple:
     """Currently only supports amount from the Netherlands"""
     if year is None or 1900 < year > 2030:
