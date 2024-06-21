@@ -1,11 +1,17 @@
 import os
 import argparse
+import pickle
+from statistics import mean
 
 import gymnasium as gym
 import lib_programname
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 from datetime import datetime
+
+from stable_baselines3 import PPO
+from sb3_contrib import RecurrentPPO
 
 from torch.utils.tensorboard import SummaryWriter
 
@@ -38,15 +44,22 @@ def get_action_space(nitrogen_levels=7, po_features=[]):
     return space_return
 
 
-def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_default_crop_features(pcse_env=1),
+def initialize_env(pcse_env=1, po_features=[],
+                   crop_features=defaults.get_default_crop_features(pcse_env=1, minimal=True),
                    costs_nitrogen=10, reward='DEF', nitrogen_levels=7, action_multiplier=1.0, add_random=False,
                    years=defaults.get_default_train_years(), locations=defaults.get_default_location(), args_vrr=False,
-                   action_limit=0, noisy_measure=False, n_budget=0, framework='sb3', no_weather=False, args_measure=None):
+                   action_limit=0, noisy_measure=False, n_budget=0, no_weather=False, framework='sb3',
+                   mask_binary=False, random_weather=False,
+                   placeholder_val=-1.11, normalize=False, loc_code='NL', cost_measure='real', start_type='sowing',
+                   random_init=False, m_multiplier=1, measure_all=False, seed=None):
     if add_random:
         po_features.append('random'), crop_features.append('random')
     action_space = get_action_space(nitrogen_levels=nitrogen_levels, po_features=po_features)
     kwargs = dict(po_features=po_features, args_measure=po_features is not None, args_vrr=args_vrr,
-                  action_limit=action_limit, noisy_measure=noisy_measure, n_budget=n_budget, no_weather=no_weather)
+                  action_limit=action_limit, noisy_measure=noisy_measure, n_budget=n_budget, no_weather=no_weather,
+                  mask_binary=mask_binary, placeholder_val=placeholder_val, normalize=normalize, loc_code=loc_code,
+                  cost_measure=cost_measure, start_type=start_type, random_init=random_init, m_multiplier=m_multiplier,
+                  measure_all=measure_all, random_weather=random_weather,)
     if framework == 'sb3':
         env_return = WinterWheat(crop_features=crop_features,
                                  costs_nitrogen=costs_nitrogen,
@@ -55,8 +68,8 @@ def initialize_env(pcse_env=1, po_features=[], crop_features=defaults.get_defaul
                                  action_space=action_space,
                                  action_multiplier=action_multiplier,
                                  reward=reward,
-                                 **get_model_kwargs(pcse_env, locations),
-                                 **kwargs)
+                                 **get_model_kwargs(pcse_env, locations, start_type=kwargs.get('start_type', 'sowing')),
+                                 **kwargs, seed=seed)
     elif framework == 'rllib':
         from pcse_gym.utils.rllib_helpers import ww_lim, winterwheat_config_maker
         config = winterwheat_config_maker(crop_features=crop_features,
@@ -133,16 +146,16 @@ def evaluate_policy(policy, env, n_eval_episodes=1, framework='sb3'):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("checkpoint_path", type=str)
-    parser.add_argument("--step", type=int, default=400000)
+    parser.add_argument("--checkpoint_path", type=str)
+    parser.add_argument("--step", type=int, default=250000)
     parser.add_argument("-c", "--costs_nitrogen", type=float, default=10.0, help="Costs for nitrogen")
-    parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, GRU,"
-                                                                       "IndRNN, DiffNC, PosMLP, ATM or DQN")
-    parser.add_argument("-e", "--environment", type=int, default=1)
+    parser.add_argument("-a", "--agent", type=str, default="PPO", help="RL agent. PPO, RPPO, DQN")
+    parser.add_argument("-e", "--environment", type=int, default=2)
     parser.add_argument("-r", "--reward", type=str, default="DEF", help="Reward function. DEF, DEP, GRO, or ANE")
     parser.add_argument("-b", "--n_budget", type=int, default=0, help="Nitrogen budget. kg/ha")
     parser.add_argument("--action_limit", type=int, default=0, help="Limit fertilization frequency."
                                                                     "Recommended 4 times")
+    parser.add_argument("--random-weather", action='store_true', dest='random_weather')
     parser.add_argument("-m", "--measure", action='store_true')
     parser.add_argument("--no-measure", action='store_false', dest='measure')
     parser.add_argument("-l", "--location", type=str, default="NL", help="NL or LT.")
@@ -151,8 +164,8 @@ if __name__ == "__main__":
     parser.add_argument("--noisy-measure", action='store_true', dest='noisy_measure')
     parser.add_argument("--no-weather", action='store_true', dest='no_weather')
     parser.add_argument("--random_feature", action='store_true', dest='random_feature')
-    parser.set_defaults(measure=True, vrr=False, noisy_measure=False, framework='sb3', no_weather=False,
-                        random_feature=False)
+    parser.set_defaults(measure=False, vrr=False, noisy_measure=False, framework='sb3', no_weather=False,
+                        random_feature=False, random_weather=False)
     args = parser.parse_args()
 
     framework_path = "WOFOST_experiments"
@@ -172,25 +185,29 @@ if __name__ == "__main__":
 
     if args.location == "NL":
         """The Netherlands"""
-        eval_locations = [(52, 5.5), (51.5, 5), (52.5, 6.0)]
+        eval_locations = [(52, 5.5)]#, (51.5, 5), (52.5, 6.0)]
     elif args.location == "LT":
         """Lithuania"""
         eval_locations = [(55.0, 23.5), (55.0, 24.0), (55.5, 23.5)]
     else:
         parser.error("--location arg should be either LT or NL")
     if args.year is not None:
-        eval_year = args.year
+        if isinstance(args.year, int):
+            eval_year = [args.year]
+        else:
+            eval_year = args.year
     else:
-        eval_year = [2022, 2021]
-
-    crop_features = defaults.get_default_crop_features(pcse_env=args.environment, minimal=True)
+        # eval_year = [year for year in [*range(1990, 2024)] if year % 2 == 0]
+        eval_year = [*range(1990, 2024)]
+    crop_features = defaults.get_default_crop_features(pcse_env=args.environment, minimal=False)
     weather_features = defaults.get_default_weather_features()
     action_features = defaults.get_default_action_features()
 
     kwargs = {'args_vrr': args.vrr, 'action_limit': args.action_limit, 'noisy_measure': args.noisy_measure,
-              'n_budget': args.n_budget, 'framework': args.framework, 'no_weather': args.no_weather}
+              'n_budget': args.n_budget, 'framework': args.framework, 'no_weather': args.no_weather,
+              'random_weather': args.random_weather}
     if not args.measure:
-        action_spaces = gym.spaces.Discrete(7)
+        action_spaces = gym.spaces.Discrete(9)
     else:
         if args.environment:
             po_features = ['TAGP', 'LAI', 'NAVAIL', 'NuptakeTotal', 'SM']
@@ -209,8 +226,15 @@ if __name__ == "__main__":
         a_shape = [7] + [m_shape] * len(po_features)
         action_spaces = gym.spaces.MultiDiscrete(a_shape)
 
-    checkpoint_path = os.path.join(rootdir, "tensorboard_logs", framework_path, args.checkpoint_path, f'model-{args.step}')
-    stats_path = os.path.join(rootdir, "tensorboard_logs", framework_path, args.checkpoint_path, f'env-{args.step}.pkl')
+    checkpoint_folder = os.path.join(rootdir, "tensorboard_logs", framework_path, args.checkpoint_path)
+    model_file_to_load = os.listdir(checkpoint_folder)
+    model_zip_name = [a for a in model_file_to_load if a.endswith(".zip")][0]
+    env_pkl_name = [a for a in model_file_to_load if a.endswith(".pkl")][0]
+
+    checkpoint_path = os.path.join(rootdir, "tensorboard_logs", framework_path, args.checkpoint_path,
+                                   model_zip_name)
+    stats_path = os.path.join(rootdir, "tensorboard_logs", framework_path, args.checkpoint_path,
+                              env_pkl_name)
 
     agent = None
     if args.framework == 'rllib':
@@ -225,26 +249,42 @@ if __name__ == "__main__":
         pass
     if args.framework == 'sb3':
         from stable_baselines3 import PPO
+        from sb3_contrib import RecurrentPPO
         from stable_baselines3.common.vec_env import VecNormalize, DummyVecEnv, sync_envs_normalization
         from stable_baselines3.common.monitor import Monitor
 
-        env = initialize_env(**kwargs)
+        nitrogen_levels = 9  # 0 - 80 kg/ha
+        env = initialize_env(crop_features=crop_features,
+                             costs_nitrogen=args.costs_nitrogen,
+                             years=eval_year,
+                             locations=eval_locations,
+                             reward=args.reward,
+                             pcse_env=args.environment,
+                             nitrogen_levels=nitrogen_levels,
+                             **kwargs)
         env = ActionConstrainer(env, action_limit=args.action_limit, n_budget=args.n_budget)
         env = DummyVecEnv([lambda: env])
         env = VecNormalize.load(stats_path, env)
-        cust_objects = {"lr_schedule": lambda x: 0.0002, "clip_range": lambda x: 0.3,
+        cust_objects = {"lr_schedule": lambda x: 0.0001, "clip_range": lambda x: 0.4,
                         "action_space": action_spaces}
-        agent = PPO.load(checkpoint_path, custom_objects=cust_objects, device='cuda', print_system_info=True)
+        if args.agent == 'RPPO':
+            agent = RecurrentPPO.load(checkpoint_path, custom_objects=cust_objects, device='cuda', print_system_info=True)
+        elif args.agent == 'PPO':
+            agent = PPO.load(checkpoint_path, custom_objects=cust_objects, device='cuda', print_system_info=True)
         policy = agent
 
     evaluate_dir = os.path.join(evaluate_dir, args.checkpoint_path)
     writer = SummaryWriter(log_dir=evaluate_dir)
 
-    reward, fertilizer, result_model = {}, {}, {}
+    reward, fertilizer, result_model, WSO, NUE, profit = {}, {}, {}, {}, {}, {}
 
+    total_eval = len(eval_year) * len(eval_locations)
     print("evaluating environment with learned policy...")
-    for year in eval_year:
-        for test_location in eval_locations:
+    years_bar = tqdm(eval_year)
+    for iy, year in enumerate(years_bar, 1):
+        for il, test_location in enumerate(eval_locations, 1):
+            years_bar.set_description(f'Evaluating {year}, {str(test_location): <{10}} | '
+                                      f'{str(il + (len(eval_locations) * iy)): <{3}}/{total_eval}')
             if args.framework == 'sb3':
                 env.env_method('overwrite_year', year)
                 env.env_method('overwrite_location', test_location)
@@ -258,6 +298,9 @@ if __name__ == "__main__":
                 episode_rewards, episode_infos = evaluate_policy(policy=policy, env=env, framework=args.framework)
             my_key = (year, test_location)
             reward[my_key] = episode_rewards[0].item()
+            WSO[my_key] = list(episode_infos[0]['WSO'].values())[-1]
+            profit[my_key] = list(episode_infos[0]['profit'].values())[-1]
+            NUE[my_key] = list(episode_infos[0]['NUE'].values())[-1]
             if args.framework == 'sb3':
                 if env.unwrapped.envs[0].unwrapped.po_features:
                     episode_infos = eval.get_measure_graphs(episode_infos)
@@ -267,27 +310,40 @@ if __name__ == "__main__":
             fertilizer[my_key] = sum(episode_infos[0]['fertilizer'].values())
             writer.add_scalar(f'eval/reward-{my_key}', reward[my_key])
             writer.add_scalar(f'eval/nitrogen-{my_key}', fertilizer[my_key])
+            writer.add_scalar(f'eval/WSO-{my_key}', WSO[my_key])
+            writer.add_scalar(f'eval/profit-{my_key}', profit[my_key])
+            writer.add_scalar(f'eval/NUE-{my_key}', NUE[my_key])
             result_model[my_key] = episode_infos
+    else:
+        avg_rew = mean([x for x in reward.values()])
+        avg_nue = mean([x for x in NUE.values()])
+        avg_profit = mean([x for x in profit.values()])
+        avg_wso = mean([x for x in WSO.values()])
+        print(f'Avg. reward: {avg_rew:.4f}\n'
+              f'Avg. profit: {avg_profit:.4f}\n'
+              f'Avg. NUE: {avg_nue:.4f}\n'
+              f'Avg. WSO: {avg_wso:.4f}\n')
 
-    #measuring history
-    for year in eval_year:
-        for loc in eval_locations:
-            for var in env.unwrapped.envs[0].unwrapped.po_features:
-                fig, ax = plt.subplots(figsize=(12, 6))
-                measure_history_histogram(data=env.unwrapped.envs[0].unwrapped.measure_features.measure_freq,
-                                          crop_var=var, location=loc, year=year, axes=ax)
-                plt.tight_layout()
-                if not os.path.exists(os.path.join(rootdir, "plots", args.checkpoint_path,)):
-                    os.makedirs(os.path.join(rootdir, "plots", args.checkpoint_path))
-                plt.savefig(os.path.join(rootdir, "plots", args.checkpoint_path, f"{var}_{loc}_{year}.jpeg"))
-                writer.add_figure(f'figures/{var}_{loc}_{year}', fig)
-                plt.close()
+    # #measuring history
+    # for year in eval_year:
+    #     for loc in eval_locations:
+    #         for var in env.unwrapped.envs[0].unwrapped.po_features:
+    #             fig, ax = plt.subplots(figsize=(12, 6))
+    #             measure_history_histogram(data=env.unwrapped.envs[0].unwrapped.measure_features.measure_freq,
+    #                                       crop_var=var, location=loc, year=year, axes=ax)
+    #             plt.tight_layout()
+    #             if not os.path.exists(os.path.join(rootdir, "plots", args.checkpoint_path,)):
+    #                 os.makedirs(os.path.join(rootdir, "plots", args.checkpoint_path))
+    #             plt.savefig(os.path.join(rootdir, "plots", args.checkpoint_path, f"{var}_{loc}_{year}.jpeg"))
+    #             writer.add_figure(f'figures/{var}_{loc}_{year}', fig)
+    #             plt.close()
 
     if pcse_model:
-        variables = ['DVS', 'action', 'TWSO', 'reward', 'NAVAIL',
-                     'NuptakeTotal', 'fertilizer', 'val']
+        variables = ['DVS', 'action', 'WSO', 'reward',
+                     'fertilizer', 'val', 'IDWST', 'prob_measure',
+                     'NLOSSCUM', 'WC', 'Ndemand', 'NAVAIL', 'NuptakeTotal',
+                     'SM', 'TAGP', 'LAI', 'NO3', 'NH4']
         if env.unwrapped.envs[0].unwrapped.po_features: variables.append('measure')
-        if env.unwrapped.envs[0].unwrapped.reward_function == 'ANE': variables.append('moving_ANE')
     else:
         variables = ['action', 'WSO', 'reward', 'TNSOIL', 'val']
         if env.unwrapped.envs[0].unwrapped.po_features: variables.append('measure')
@@ -300,6 +356,10 @@ if __name__ == "__main__":
 
     keys_figure = [(a, b) for a in eval_year for b in eval_locations]
     results_figure = {filter_key: result_model[filter_key] for filter_key in keys_figure}
+
+    # pickle info for creating figures
+    with open(os.path.join(evaluate_dir, f'infos_{args.reward}.pkl'), 'wb') as f:
+        pickle.dump(results_figure, f)
 
     for i, variable in enumerate(variables):
         if variable not in results_figure[list(results_figure.keys())[0]][0].keys():
@@ -316,4 +376,3 @@ if __name__ == "__main__":
                            plot_average=True)
         writer.add_figure(f'figures/avg-{variable}', fig)
         plt.close()
-

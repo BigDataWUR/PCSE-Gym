@@ -1,6 +1,6 @@
 import os
 from collections import OrderedDict, defaultdict
-from datetime import timedelta
+from datetime import timedelta, date
 import gymnasium as gym
 import pandas as pd
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
@@ -15,6 +15,7 @@ import pcse_gym.envs.common_env as common_env
 import pcse_gym.utils.defaults as defaults
 import pcse_gym.utils.process_pcse_output as process_pcse
 from .rewards import Rewards
+from pcse_gym.utils.nitrogen_helpers import get_aggregated_n_depo_days
 
 
 def to_weather_info(days, weather_data, weather_variables):
@@ -82,7 +83,7 @@ class CustomFeatureExtractor(BaseFeaturesExtractor):
         return x
 
 
-def get_policy_kwargs(n_crop_features=len(defaults.get_wofost_default_crop_features()),
+def get_policy_kwargs(n_crop_features=len(defaults.get_wofost_default_crop_features(2)),
                       n_weather_features=len(defaults.get_default_weather_features()),
                       n_action_features=len(defaults.get_default_action_features()),
                       n_po_features=len(defaults.get_wofost_default_po_features()),
@@ -106,13 +107,20 @@ def get_config_dir():
     return config_dir
 
 
-def get_wofost_kwargs(config_dir=get_config_dir(), soil_file='ec3.CAB', agro_file='wheat_cropcalendar_sow.yaml'):
+def get_wofost_kwargs(config_dir=get_config_dir(), soil_file='arminda_soil.yaml', agro_file='wheat_cropcalendar.yaml',
+                      model_file='Wofost81_NWLP_MLWB_SNOMIN.conf', pcse_model=2):
+    if pcse_model == 2:
+        soil_params = yaml.safe_load(open(os.path.join(config_dir, 'soil', 'arminda_soil.yaml')))
+        site_params = yaml.safe_load(open(os.path.join(config_dir, 'site', 'arminda_site.yaml')))
+    else:
+        soil_params = pcse.input.CABOFileReader(os.path.join(config_dir, 'soil', 'ec3.CAB'))
+        site_params = pcse.util.WOFOST80SiteDataProvider(WAV=10, NAVAILI=10, PAVAILI=50, KAVAILI=100)
     wofost_kwargs = dict(
-        model_config=os.path.join(config_dir, 'Wofost81_NWLP_FD.conf'),
+        model_config=model_file,
         agro_config=os.path.join(config_dir, 'agro', agro_file),
-        crop_parameters=pcse.fileinput.YAMLCropDataProvider(fpath=os.path.join(config_dir, 'crop'), force_reload=True),
-        site_parameters=pcse.util.WOFOST80SiteDataProvider(WAV=10, NAVAILI=10, PAVAILI=50, KAVAILI=100),
-        soil_parameters=pcse.fileinput.CABOFileReader(os.path.join(config_dir, 'soil', soil_file))
+        crop_parameters=pcse.input.YAMLCropDataProvider(fpath=os.path.join(config_dir, 'crop'), force_reload=True),
+        site_parameters=site_params,
+        soil_parameters=soil_params,
     )
     return wofost_kwargs
 
@@ -129,29 +137,25 @@ def get_lintul_kwargs(config_dir=get_config_dir()):
 
 
 def get_model_kwargs(pcse_model, loc=defaults.get_default_location(), start_type='sowing'):
-    # TODO: possibly tidy up
     if not isinstance(loc, list):
         loc = [loc]
-    if (55.0, 23.5) in loc:
-        soil_file = 'babtai_lt.CAB'
-        if start_type == 'sowing':
-            agro_file = 'wheat_cropcalendar_sow_lt.yaml'
-        else:
-            agro_file = 'wheat_cropcalendar_emergence_lt.yaml'
-    else:
-        soil_file = 'ec2.CAB'
-        if start_type == 'sowing':
-            agro_file = 'wheat_cropcalendar_sow_nl.yaml'
-        else:
-            agro_file = 'wheat_cropcalendar_emergence_nl.yaml'
 
     if pcse_model == 0:
         return get_lintul_kwargs()
     elif pcse_model == 1:
-        print(f'using agro file {agro_file} and soil file {soil_file}')
-        return get_wofost_kwargs(soil_file=soil_file, agro_file=agro_file)
+        agro_file = 'wheat_cropcalendar_cn.yaml'
+        soil_file = 'ec_3.CAB'
+        model_file = 'Wofost81_NWLP_CWB_CNB.conf'
+        print(f'using agro file {agro_file} and soil file {soil_file} with WOFOST CN')
+        return get_wofost_kwargs(soil_file=soil_file, agro_file=agro_file, model_file=model_file, pcse_model=pcse_model)
+    elif pcse_model == 2:
+        model_file = 'Wofost81_NWLP_MLWB_SNOMIN.conf'
+        soil_file = 'arminda_soil.yaml'
+        agro_file = 'wheat_cropcalendar.yaml'
+        print(f'using agro file {agro_file} and soil file {soil_file} with WOFOST SNOMIN')
+        return get_wofost_kwargs(soil_file=soil_file, agro_file=agro_file, model_file=model_file, pcse_model=pcse_model)
     else:
-        raise Exception("Choose 0 or 1 for the environment")
+        raise Exception("Choose 0 or 1, or 2 for the environment")
 
 
 class StableBaselinesWrapper(common_env.PCSEEnv):
@@ -163,7 +167,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         action_space=gym.spaces.Box(0, np.inf, shape=(1,), action_multiplier=1.0 gives 1.0*x
     """
 
-    def __init__(self, crop_features=defaults.get_wofost_default_crop_features(),
+    def __init__(self, crop_features=defaults.get_wofost_default_crop_features(2),
                  weather_features=defaults.get_default_weather_features(),
                  action_features=defaults.get_default_action_features(), costs_nitrogen=10.0, timestep=7,
                  years=None, location=None, seed=0, action_space=gym.spaces.Box(0, np.inf, shape=(1,)),
@@ -179,8 +183,13 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         self.random_feature = False
         if 'random' in self.po_features:
             self.random_feature = True
-        self.seed = seed
-        self.rng = np.random.default_rng(seed=seed)
+        self.rng, self.seed = gym.utils.seeding.np_random(seed=seed)
+        if 'Lintul' in kwargs.get('model_config'):
+            self.pcse_env = 0
+        elif 'CNB' in kwargs.get('model_config'):
+            self.pcse_env = 1
+        elif 'SNOMIN' in kwargs.get('model_config'):
+            self.pcse_env = 2
         super().__init__(timestep=timestep, years=years, location=location, *args, **kwargs)
         self.action_space = action_space
         self.action_multiplier = action_multiplier
@@ -188,9 +197,21 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         self.rewards = Rewards(kwargs.get('reward_var'), self.timestep, self.costs_nitrogen)
         self.index_feature = OrderedDict()
         self.cost_measure = kwargs.get('cost_measure', 'real')
+        self.start_type = kwargs.get('start_type')
+
         for i, feature in enumerate(self.crop_features):
             if feature in self.po_features:
                 self.index_feature[feature] = i
+
+        cgm_kwargs = kwargs.get('model_config', '')
+        if 'lintul' in cgm_kwargs:
+            self.multiplier_amount = 1
+            print('Using Lintul!')
+        elif 'Wofost' in cgm_kwargs:
+            self.multiplier_amount = 1
+            print('Using Wofost!')
+        else:
+            self.multiplier_amount = 1
 
         super().reset(seed=seed)
 
@@ -201,12 +222,14 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
             nvars = len(self.crop_features) + len(self.weather_features) * self.timestep
         if self.mask_binary:
             nvars = nvars + len(self.po_features)
+        if self.pcse_env == 2:
+            nvars = nvars + 2  # NH4_depo and NO3_depo
         return gym.spaces.Box(-10, np.inf, shape=(nvars,))
 
     def _apply_action(self, action):
-        amount = action * self.action_multiplier
-        self._model._send_signal(signal=pcse.signals.apply_n, N_amount=amount * 10, N_recovery=0.7,
-                                 amount=amount, recovery=0.7)
+        action = action * self.action_multiplier
+        action = action * 10  # kg N / ha
+        return action
 
     def _get_reward(self):
         # Reward gets overwritten in step()
@@ -229,7 +252,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         # populate reward
         pcse_output = self.model.get_output()
         amount = action * self.action_multiplier
-        reward, growth = self.rewards.growth_storage_organ(pcse_output, amount)
+        reward, growth = self.rewards.growth_storage_organ(pcse_output, amount, self.multiplier_amount)
 
         # populate info
         crop_info = pd.DataFrame(pcse_output).set_index("day").fillna(value=np.nan)
@@ -242,16 +265,16 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         # start_date is beginning of the week
         # self.date is the end of the week (if timestep=7)
         info = update_info(info, 'action', start_date, action)
-        info = update_info(info, 'fertilizer', start_date, amount*10 if 'TWSO' in pcse_output[0].keys() else amount)
+        info = update_info(info, 'fertilizer', start_date, amount*10)
         info = update_info(info, 'reward', self.date, reward)
         if measure is not None:
             info = update_info(info, 'measure', start_date, measure)
         if self.random_feature:
-            info = update_info(info, 'random', self.date, observation[len(self.crop_features)]-1)
+            info = update_info(info, 'random', self.date, observation[len(self.crop_features)-1])
 
         if self.index_feature:
             if 'indexes' not in info.keys():
-                info['indexes'] = {}
+                info['indexes'] = OrderedDict()
             info['indexes'] = self.index_feature
 
         return observation, reward, terminated, truncated, info
@@ -261,8 +284,6 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
         obs = super().reset(seed=seed, options=options)
         if isinstance(obs, tuple):
             obs = obs[0]
-        # obs['actions'] = {'cumulative_nitrogen': 0.0}
-        # obs['actions'] = {'cumulative_measurement': 0.0}
         return self._observation(obs)
 
     def _observation(self, observation):
@@ -276,9 +297,25 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
 
         for i, feature in enumerate(self.crop_features):
             if feature == 'random':
-                obs[i] = self.rng.normal(0, 10)
+                obs[i] = np.clip(self.rng.normal(10, 10), 0.0, None)
             else:
-                obs[i] = observation['crop_model'][feature][-1]
+                # In WOFOST SNOMIN some variables are layered.
+                # Loop through some checks to grab correct obs
+                if feature in ['SM', 'NH4', 'NO3', 'WC']:
+                    if feature in ['NH4', 'NO3']:
+                        obs[i] = sum(observation['crop_model'][feature][-1])
+                    elif feature in ['SM', 'WC'] and self.pcse_env == 1:
+                        obs[i] = observation['crop_model'][feature][-1]
+                    else:
+                        obs[i] = observation['crop_model'][feature][-1][0]
+                else:
+                    obs[i] = observation['crop_model'][feature][-1]
+        if self.pcse_env == 2:
+            list_rain = [observation['weather']['RAIN'][d] for d in range(self.timestep)]
+            n_depos = get_aggregated_n_depo_days(self.timestep, list_rain, self._site_params)
+            for i, n_depo in enumerate(n_depos):
+                j = len(self.crop_features) + i
+                obs[j] = n_depo
 
         if not self.no_weather:
             # for i, feature in enumerate(self.action_features):
@@ -289,6 +326,14 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
                     j = d * len(self.weather_features) + len(self.crop_features) + i
                     obs[j] = observation['weather'][feature][d]
         return obs
+
+    def get_harvest_year(self):
+        if self.agmt.campaign_date.year < self.agmt.crop_end_date.year:
+            if date(self.date.year, 10, 1) < self.date < date(self.date.year, 12, 31):
+                return self.date.year + 1
+            else:
+                return self.date.year
+        return self.date.year
 
     @property
     def model(self):
@@ -352,15 +397,21 @@ class ZeroNitrogenEnvStorage:
         return episode_info
 
     def get_key(self, env):
-        year = env.date.year
+        ''' We label the year based on the harvest date. e.g. sow in Oct 2002, harvest in Aug 2003, means that
+            the labelled year is 2003'''
+        # year = env.date.year
+        year = env.get_harvest_year()
         location = env.loc
-        return f'{year}-{location}'
+        key = f'{year}-{location}'
+        assert 'None' not in key
+        return key
 
     def get_episode_output(self, env):
         key = self.get_key(env)
         if key not in self.results.keys():
             results = self.run_episode(env)
             self.results[key] = results
+        assert bool(self.results[key]), "key empty; check PCSE output"
         return self.results[key]
 
     @property

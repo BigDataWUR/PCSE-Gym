@@ -6,6 +6,34 @@ from collections import defaultdict
 def get_cumulative_variables():
     return ['fertilizer', 'reward']
 
+def get_ylim_dict(n=32):
+    def def_value():
+        return None
+
+    if n == 0:
+        n = 32
+
+    ylim = defaultdict(def_value)
+    ylim['WSO'] = [0, 10000]
+    ylim['TWSO'] = [0, 10000]
+    ylim['measure_SM'] = [0, n]
+    ylim['measure_TAGP'] = [0, n]
+    ylim['measure_random'] = [0, n]
+    ylim['measure_LAI'] = [0, n]
+    ylim['measure_NuptakeTotal'] = [0, n]
+    ylim['measure_NAVAIL'] = [0, n]
+    ylim['measure_SM'] = [0, n]
+    ylim['measure'] = [0, n]
+    ylim['prob_SM'] = [0, 1.0]
+    ylim['prob_TAGP'] = [0, 1.0]
+    ylim['prob_random'] = [0, 1.0]
+    ylim['prob_LAI'] = [0, 1.0]
+    ylim['prob_NuptakeTotal'] = [0, 1.0]
+    ylim['prob_NAVAIL'] = [0, 1.0]
+    ylim['prob_SM'] = [0, 1.0]
+    ylim['prob_measure'] = [0, 1.0]
+    return ylim
+
 def get_titles():
     def def_value(): return ("", "")
 
@@ -193,7 +221,7 @@ def doy_generator():
         yield current_value
 
 def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumulative_variables(), ax=None, ylim=None,
-                  put_legend=True, plot_average=False, plot_heatmap=False):
+                  put_legend=True, plot_average=False, pcse_env=2, plot_heatmap=False):
     titles = get_titles()
     xmax = 0
     xmin = 9999
@@ -217,8 +245,18 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
         if not plot_average:
             ax.step(x, y, label=label, where='post')
 
+    where = 'post'
 
     if plot_average:
+        # get top soil layer
+        if variable in ['NH4', 'NO3'] and pcse_env == 2:
+            for k, v in results_dict.items():
+                for key in v[0][variable].keys():
+                    results_dict[k][0][variable][key] = sum(results_dict[k][0][variable][key])
+        elif variable in ['SM', 'WC'] and pcse_env == 2:
+            for k, v in results_dict.items():
+                for key in v[0][variable].keys():
+                    results_dict[k][0][variable][key] = results_dict[k][0][variable][key][0]
         dataframes_list = []
         for label, results in results_dict.items():
             gen = doy_generator()  # restart the generator
@@ -231,16 +269,16 @@ def plot_variable(results_dict, variable='reward', cumulative_variables=get_cumu
         if variable in cumulative_variables: plot_df = plot_df.apply(np.cumsum, axis=0)
         if variable.startswith("measure"):
             plot_df.ffill(inplace=True)
-            ax.step(plot_df.index, plot_df.sum(axis=1), 'k-', where='post')
-            ax.fill_between(plot_df.index, plot_df.min(axis=1), plot_df.sum(axis=1), color='g', step='post')
+            ax.step(plot_df.index, plot_df.sum(axis=1), 'k-', where=where)
+            ax.fill_between(plot_df.index, plot_df.min(axis=1), plot_df.sum(axis=1), color='g', step=where)
         elif variable == 'action':
             plot_df.fillna(0, inplace=True)
-            ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where='post')
-            ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step='post')
+            ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where=where)
+            ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step=where)
         else:
             plot_df.ffill(axis=0, inplace=True)
-            ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where='post')
-            ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step='post')
+            ax.step(plot_df.index, plot_df.median(axis=1), 'k-', where=where)
+            ax.fill_between(plot_df.index, plot_df.quantile(0.25, axis=1), plot_df.quantile(0.75, axis=1), step=where)
 
     ax.axhline(y=0, color='lightgrey', zorder=1)
     ax.margins(x=0)
@@ -365,3 +403,82 @@ def plot_var_vs_freq_box(results_dict, variable='measure_LAI', ax=None, ylim=Non
     ax.set_ylabel(f'{variable} [{unit}] variance across years and locations')
 
     return ax
+
+def plot_var_vs_freq_scatter(results_dict, variable='measure_LAI', ax=None):
+
+    if variable.startswith('measure_'):
+        variable_type = 'm'
+    else:
+        variable_type = 'p'
+    # Function to find the nearest weekly date
+    def nearest_weekly_date(date, base_date):
+        days_difference = (date - base_date).days
+        nearest_weekly_difference = round(days_difference / 7) * 7
+        return base_date + pd.Timedelta(days=nearest_weekly_difference)
+
+    dataframes_list = []
+    for label, results in results_dict.items():
+        df = pd.DataFrame.from_dict(results[0][variable], orient='index', columns=[label])
+        df.index = df.index.map(lambda d: d.strftime('%m-%d'))
+        dataframes_list.append(df)
+
+    plot_measure = pd.concat(dataframes_list, axis=1)
+    plot_measure = plot_measure.sum(axis=1)
+
+    if variable_type == 'm':
+        variable = variable.replace("measure_","")
+    else:
+        variable = variable.replace("prob_", "")
+
+    dataframes_list = []
+    for label, results in results_dict.items():
+        df = pd.DataFrame.from_dict(results[0][variable], orient='index', columns=[label])
+        df.index = df.index.map(lambda d: d.strftime('%m-%d'))
+        dataframes_list.append(df)
+
+    plot_var = pd.concat(dataframes_list, axis=1)
+    plot_var = plot_var.std(ddof=0, axis=1)
+
+    plot_df = pd.concat([plot_var, plot_measure], axis=1)
+    plot_df.dropna(inplace=True)
+    plot_df = plot_df.rename(columns={0:'variance', 1: 'measure'})
+
+    plot_df['Date'] = plot_df.index
+
+    base_year = 2021  # placeholder non-leap year
+    base_date = pd.to_datetime(f'{base_year}-10-01')  # Starting date (1st of October)
+    plot_df['Date'] = pd.to_datetime(plot_df['Date'] + f'-{base_year}', format='%m-%d-%Y')
+
+    # Apply the function to assign each date to the nearest weekly date
+    plot_df['Nearest_Weekly_Date'] = plot_df['Date'].apply(lambda d: nearest_weekly_date(d, base_date))
+    result = plot_df.groupby('Nearest_Weekly_Date').agg({'variance': 'mean', 'measure': 'sum'})
+
+    # Convert the index back to MM-DD format
+    result.index = result.index.map(lambda d: d.strftime('%m-%d'))
+    result = result.sort_values(by=['variance'])
+
+    result['variance'] = (result['variance'] - result['variance'].min()) / (result['variance'].max() - result['variance'].min())
+
+    ax.scatter(result['variance'], result['measure'], edgecolor='black', alpha=0.7)
+
+    titles = get_titles()
+
+    ax.set_xticks(np.arange(min(result['variance']), max(result['variance'])+0.1, 0.1))
+
+    # ax.set_xticklabels(range(0, int(max(result['variance']))), rotation=315, fontsize=8)
+
+    name, unit = titles[variable]
+
+    ax.set_ylim([-1, 33])
+
+    if variable_type == 'm':
+        ax.set_title(f'{variable} variance vs measuring frequency', fontsize=10, fontweight='bold', color='green')
+        ax.set_ylabel(f'measuring frequency between test years', fontsize=8)
+    else:
+        ax.set_title(f'{variable} variance vs measuring probability', fontsize=10, fontweight='bold', color='green')
+        ax.set_ylabel(f'probability of measuring between test years', fontsize=8)
+
+    ax.set_xlabel(f'Normalized {variable} [{unit}] variance across test years', fontsize=8)
+
+    return ax
+
