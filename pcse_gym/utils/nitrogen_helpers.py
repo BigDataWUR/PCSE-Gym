@@ -105,6 +105,10 @@ def convert_year_to_n_concentration(year: int,
                                     agmt: AgroManagementContainer = None,
                                     loc: tuple = (52.0, 5.5),
                                     random_weather: bool = False) -> tuple[float, float]:
+    """
+    Function to calculate year in NL to N concentration in rain water
+    """
+
     wdp = get_weather_data_provider(loc, random_weather)
 
     if agmt is not None:
