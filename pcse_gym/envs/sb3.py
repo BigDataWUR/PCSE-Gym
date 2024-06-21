@@ -15,7 +15,7 @@ import pcse_gym.envs.common_env as common_env
 import pcse_gym.utils.defaults as defaults
 import pcse_gym.utils.process_pcse_output as process_pcse
 from .rewards import Rewards
-from pcse_gym.utils.nitrogen_helpers import aggregate_n_depo_days
+from pcse_gym.utils.nitrogen_helpers import get_aggregated_n_depo_days
 
 
 def to_weather_info(days, weather_data, weather_variables):
@@ -312,7 +312,7 @@ class StableBaselinesWrapper(common_env.PCSEEnv):
                     obs[i] = observation['crop_model'][feature][-1]
         if self.pcse_env == 2:
             list_rain = [observation['weather']['RAIN'][d] for d in range(self.timestep)]
-            n_depos = aggregate_n_depo_days(self.timestep, list_rain, self._site_params)
+            n_depos = get_aggregated_n_depo_days(self.timestep, list_rain, self._site_params)
             for i, n_depo in enumerate(n_depos):
                 j = len(self.crop_features) + i
                 obs[j] = n_depo

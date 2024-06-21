@@ -86,7 +86,7 @@ def calculate_day_n_deposition(
     return nh4_day_depo, no3_day_depo
 
 
-def aggregate_n_depo_days(
+def get_aggregated_n_depo_days(
     timestep: int,
     day_rain: list[float],
     site_params: dict,
@@ -110,12 +110,8 @@ def convert_year_to_n_concentration(year: int,
 
     daily_year_dates = generate_date_list(datetime.date(year, 1, 1), datetime.date(year, 12, 31))
 
-    rain_year = None
-
-    if isinstance(wdp, NASAPowerWeatherDataProvider):
-        rain_year = sum([wdp(day).RAIN * 10 for day in daily_year_dates])
-    elif isinstance(wdp, CSVWeatherDataProvider):
-        rain_year = sum([wdp(day).RAIN for day in daily_year_dates])
+    # Rain in the PCSE weather data provider is in cm, hence multiplied by 10 to make mm
+    rain_year = sum([wdp(day).RAIN * 10 for day in daily_year_dates])
 
     # sanity check
     # deposition amount is kg / ha
@@ -143,6 +139,7 @@ def get_deposition_amount(year) -> tuple:
     return NH4, NO3
 
 
+@functools.cache
 def get_disaggregated_deposition(year, start_date, end_date):
     """
     Function to linearly disaggregate annual N deposition amount

@@ -50,8 +50,8 @@ class TestNitrogenUtils(unittest.TestCase):
 
         nh4, no3 = convert_year_to_n_concentration(4098, random_weather=True)
 
-        self.assertEqual(nh4, 2.054742670516606)
-        self.assertEqual(no3, 1.1753128075355042)
+        self.assertEqual(nh4, 2.371330250564566)
+        self.assertEqual(no3, 1.4242391655016677)
 
     def test_day_n_deposition(self):
         year = 2000
